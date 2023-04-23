@@ -1,21 +1,14 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use std::{convert::Infallible, sync::Arc};
+use std::{sync::Arc, sync::Mutex};
 use warp::{http::Response, Filter};
 
 mod api;
+mod graphs;
+
 use crate::api::api_filter;
+use crate::graphs::Graphs;
 
 const VERSION: u32 = 0x00100;
-
-pub struct Graphs {
-    pub number: u32,
-}
-
-pub fn with_graphs(
-    graphs: Arc<Graphs>,
-) -> impl Filter<Extract = (Arc<Graphs>,), Error = Infallible> + Clone {
-    warp::any().map(move || graphs.clone())
-}
 
 #[tokio::main]
 async fn main() {
@@ -30,7 +23,7 @@ async fn main() {
             .header("Content-Type", "x-application-gral")
             .body(v)
     });
-    let the_graphs = Arc::new(Graphs { number: 17 });
+    let the_graphs = Arc::new(Mutex::new(Graphs { list: vec![] }));
     let apifilters = version.or(api_filter(the_graphs.clone()));
     warp::serve(apifilters)
         //.tls()
