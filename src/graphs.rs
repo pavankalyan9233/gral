@@ -67,4 +67,18 @@ impl Graph {
             edges_sealed: false,
         }))
     }
+
+    pub fn clear(&mut self) {
+        // TODO: implement by clearing most structures
+        self.vertices.clear();
+        self.exceptions.clear();
+        self.keys.clear();
+        self.vertex_data.clear();
+        self.vertex_data_offsets.clear();
+        self.edges.clear();
+        self.edge_data.clear();
+        self.vertices_sealed = false;
+        self.edges_sealed = false;
+        self.dropped = true;
+    }
 }

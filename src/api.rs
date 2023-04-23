@@ -13,7 +13,12 @@ pub fn api_filter(
         .and(with_graphs(graphs.clone()))
         .and(warp::body::bytes())
         .and_then(api_create);
-    create
+    let drop = warp::path!("v1" / "drop")
+        .and(warp::put())
+        .and(with_graphs(graphs.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_drop);
+    create.or(drop)
 }
 
 #[derive(Debug)]
@@ -73,5 +78,46 @@ async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>,
     v.write_u64::<BigEndian>(client_id).unwrap();
     v.write_u32::<BigEndian>(index).unwrap();
     v.write_u8(bits_for_hash).unwrap();
+    Ok(v)
+}
+
+async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
+    // Handle wrong length:
+    if bytes.len() != 12 {
+        return Err(warp::reject::custom(WrongBodyLength));
+    }
+
+    // Parse body and extract integers:
+    let mut reader = Cursor::new(bytes.to_vec());
+    let client_id = reader.read_u64::<BigEndian>().unwrap();
+    let graph_number = reader.read_u32::<BigEndian>().unwrap() as usize;
+
+    println!("Dropping graph with number {}!", graph_number);
+
+    let graph_arc: Arc<Mutex<Graph>>;
+
+    {
+        // Lock list of graphs via their mutex:
+        let graphs = graphs.lock().unwrap();
+        if graph_number as usize >= graphs.list.len() {
+            // TODO: handle out of bounds
+        }
+        graph_arc = graphs.list[graph_number].clone();
+    }
+
+    // Lock graph:
+    let mut graph = graph_arc.lock().unwrap();
+
+    // TODO: Handle already dropped!
+
+    graph.clear();
+    graph.dropped = true;
+
+    println!("Have dropped graph with number {}!", graph_number);
+
+    // Write response:
+    let mut v = Vec::new();
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u32::<BigEndian>(graph_number as u32).unwrap();
     Ok(v)
 }
