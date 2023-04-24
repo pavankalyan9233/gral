@@ -5,7 +5,7 @@ use warp::{http::Response, Filter};
 mod api;
 mod graphs;
 
-use crate::api::api_filter;
+use crate::api::{api_filter, handle_errors};
 use crate::graphs::Graphs;
 
 const VERSION: u32 = 0x00100;
@@ -24,7 +24,9 @@ async fn main() {
             .body(v)
     });
     let the_graphs = Arc::new(Mutex::new(Graphs { list: vec![] }));
-    let apifilters = version.or(api_filter(the_graphs.clone()));
+    let apifilters = version
+        .or(api_filter(the_graphs.clone()))
+        .recover(handle_errors);
     warp::serve(apifilters)
         //.tls()
         //.cert_path("tls/cert.pem")

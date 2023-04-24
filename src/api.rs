@@ -1,9 +1,10 @@
 use crate::graphs::{with_graphs, Graph, Graphs};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
+use std::convert::Infallible;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
-use warp::{reject, Filter, Rejection};
+use warp::{http::StatusCode, reject, Filter, Rejection};
 
 pub fn api_filter(
     graphs: Arc<Mutex<Graphs>>,
@@ -22,13 +23,23 @@ pub fn api_filter(
 }
 
 #[derive(Debug)]
-struct WrongBodyLength;
+struct WrongBodyLength {
+    pub found: usize,
+    pub expected: usize,
+}
 impl reject::Reject for WrongBodyLength {}
+
+#[derive(Debug)]
+struct GraphNotFound;
+impl reject::Reject for GraphNotFound {}
 
 async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
     if bytes.len() != 26 {
-        return Err(warp::reject::custom(WrongBodyLength));
+        return Err(warp::reject::custom(WrongBodyLength {
+            found: bytes.len(),
+            expected: 26,
+        }));
     }
 
     // Parse body and extract integers:
@@ -84,7 +95,10 @@ async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>,
 async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
     if bytes.len() != 12 {
-        return Err(warp::reject::custom(WrongBodyLength));
+        return Err(warp::reject::custom(WrongBodyLength {
+            found: bytes.len(),
+            expected: 12,
+        }));
     }
 
     // Parse body and extract integers:
@@ -120,4 +134,46 @@ async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, R
     v.write_u64::<BigEndian>(client_id).unwrap();
     v.write_u32::<BigEndian>(graph_number as u32).unwrap();
     Ok(v)
+}
+
+// This function receives a `Rejection` and is responsible to convert
+// this into a proper HTTP error with a body as designed.
+pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallible> {
+    let code;
+    let message: String;
+
+    if err.is_not_found() {
+        code = StatusCode::NOT_FOUND;
+        message = "NOT_FOUND".to_string();
+    } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+        // We can handle a specific error, here METHOD_NOT_ALLOWED,
+        // and render it however we want
+        code = StatusCode::METHOD_NOT_ALLOWED;
+        message = "METHOD_NOT_ALLOWED".to_string();
+    } else if let Some(wrong) = err.find::<WrongBodyLength>() {
+        code = StatusCode::BAD_REQUEST;
+        message = format!(
+            "Expected body size {} but found {}",
+            wrong.expected, wrong.found
+        );
+    } else {
+        // We should have expected this... Just log and say its a 500
+        eprintln!("unhandled rejection: {:?}", err);
+        code = StatusCode::INTERNAL_SERVER_ERROR;
+        message = "UNHANDLED_REJECTION".to_string();
+    }
+
+    let mut v = Vec::new();
+    v.write_u32::<BigEndian>(code.as_u16() as u32).unwrap();
+    if message.len() < 128 {
+        v.write_u8(message.len() as u8).unwrap();
+    } else {
+        v.write_u32::<BigEndian>((message.len() as u32) | 0x80000000)
+            .unwrap();
+    }
+    v.reserve(message.len());
+    for x in message.bytes() {
+        v.push(x);
+    }
+    Ok(warp::reply::with_status(v, code))
 }

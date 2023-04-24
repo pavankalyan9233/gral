@@ -63,8 +63,7 @@ Where it says `varlen`, we mean the following:
 Error bodies generally look like this (typically for HTTP 400..599):
 
 ```
-u64     client-id (or 0 if there is none)
-i32     error code, non-zero
+u32     error code, non-zero
 varlen  length of error message (can be 0 for empty)
 [u8]    error message in UTF-8
 ```
