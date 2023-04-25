@@ -12,33 +12,33 @@ pub struct Edge {
 pub struct Graph {
     // key is the hash of the vertex, value is the index, high bit
     // indicates a collision
-    vertices: HashMap<u64, u64>,
+    pub vertices: HashMap<u64, u64>,
 
     // key is the key of the vertex, value is the exceptional hash
-    exceptions: HashMap<String, u64>,
+    pub exceptions: HashMap<String, u64>,
 
     // Maps indices of vertices to their names, not necessarily used:
-    keys: Vec<String>,
+    pub keys: Vec<String>,
 
     // Additional data for vertices:
-    vertex_data: Vec<u8>,
-    vertex_data_offsets: Vec<u64>,
+    pub vertex_data: Vec<u8>,
+    pub vertex_data_offsets: Vec<u64>,
 
     // Edges as from/to tuples:
-    edges: Vec<Edge>,
+    pub edges: Vec<Edge>,
 
     // Additional data for vertices:
-    edge_data: Vec<u8>,
+    pub edge_data: Vec<u8>,
 
     // store keys?
-    store_keys: bool,
+    pub store_keys: bool,
 
     // dropped indicates that the graph is no longer there
     pub dropped: bool,
 
     // sealed?
-    vertices_sealed: bool,
-    edges_sealed: bool,
+    pub vertices_sealed: bool,
+    pub edges_sealed: bool,
 }
 
 pub struct Graphs {
@@ -74,6 +74,8 @@ impl Graph {
         self.exceptions.clear();
         self.keys.clear();
         self.vertex_data.clear();
+        self.vertex_data.push(0); // use first byte, so that all
+                                  // offsets in here are positive!
         self.vertex_data_offsets.clear();
         self.edges.clear();
         self.edge_data.clear();
