@@ -125,6 +125,20 @@ async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>,
     Ok(v)
 }
 
+fn get_graph(
+    graphs: &Arc<Mutex<Graphs>>,
+    graph_number: u32,
+) -> Result<Arc<Mutex<Graph>>, Rejection> {
+    // Lock list of graphs via their mutex:
+    let graphs = graphs.lock().unwrap();
+    if graph_number as usize >= graphs.list.len() {
+        return Err(warp::reject::custom(GraphNotFound {
+            number: graph_number,
+        }));
+    }
+    Ok(graphs.list[graph_number as usize].clone())
+}
+
 /// This async function implements the "drop graph" API call.
 async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
@@ -140,22 +154,11 @@ async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, R
     // fail! Therefore unwrap() is OK here.)
     let mut reader = Cursor::new(bytes.to_vec());
     let client_id = reader.read_u64::<BigEndian>().unwrap();
-    let graph_number = reader.read_u32::<BigEndian>().unwrap() as usize;
+    let graph_number = reader.read_u32::<BigEndian>().unwrap();
 
     println!("Dropping graph with number {}!", graph_number);
 
-    let graph_arc: Arc<Mutex<Graph>>;
-
-    {
-        // Lock list of graphs via their mutex:
-        let graphs = graphs.lock().unwrap();
-        if graph_number as usize >= graphs.list.len() {
-            return Err(warp::reject::custom(GraphNotFound {
-                number: graph_number as u32,
-            }));
-        }
-        graph_arc = graphs.list[graph_number].clone();
-    }
+    let graph_arc = get_graph(&graphs, graph_number)?;
 
     // Lock graph:
     let mut graph = graph_arc.lock().unwrap();
@@ -174,7 +177,7 @@ async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, R
     // Write response:
     let mut v = Vec::new();
     v.write_u64::<BigEndian>(client_id).unwrap();
-    v.write_u32::<BigEndian>(graph_number as u32).unwrap();
+    v.write_u32::<BigEndian>(graph_number).unwrap();
     Ok(v)
 }
 
@@ -201,6 +204,85 @@ fn get_varlen(c: &mut Cursor<Vec<u8>>) -> Result<u32, std::io::Error> {
     }
 }
 
+fn parse_vertex(
+    reader: &mut Cursor<Vec<u8>>,
+) -> Result<(Option<u64>, Option<String>, Option<Vec<u8>>), Rejection> {
+    let l = get_varlen(reader);
+    if l.is_err() {
+        return Err(warp::reject::custom(TooShortBodyLength {
+            found: reader.position() as usize,
+            expected_at_least: reader.position() as usize + 2,
+        }));
+    }
+    let l = l.unwrap();
+
+    let hash: Option<u64>;
+    let key: Option<String>;
+    match l {
+        0 => {
+            key = None;
+            let val = reader.read_u64::<BigEndian>();
+            if val.is_err() {
+                return Err(warp::reject::custom(TooShortBodyLength {
+                    found: reader.position() as usize,
+                    expected_at_least: reader.position() as usize + 2,
+                }));
+            }
+            hash = Some(val.unwrap());
+        }
+        _ => {
+            {
+                let v = reader.get_ref();
+                if (v.len() as u64) - reader.position() < l as u64 {
+                    return Err(warp::reject::custom(TooShortBodyLength {
+                        found: reader.position() as usize,
+                        expected_at_least: reader.position() as usize + l as usize,
+                    }));
+                }
+                let k = &v[(reader.position() as usize)..((reader.position() + l as u64) as usize)];
+
+                match str::from_utf8(k) {
+                    Ok(kk) => {
+                        key = Some(kk.to_string());
+                        hash = Some(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
+                    }
+                    Err(_) => {
+                        key = None;
+                        hash = None;
+                    }
+                }
+            }
+            reader.consume(l as usize);
+        }
+    }
+
+    // Before we move on with this, let's get the optional data:
+    let ld = get_varlen(reader);
+    if ld.is_err() {
+        return Err(warp::reject::custom(TooShortBodyLength {
+            found: reader.position() as usize,
+            expected_at_least: reader.position() as usize + 2,
+        }));
+    }
+    let ld = ld.unwrap(); // Length of data, 0 means none
+    let mut data: Option<Vec<u8>> = None;
+    if ld > 0 {
+        let v = reader.get_ref();
+        if (v.len() as u64) - reader.position() < ld as u64 {
+            return Err(warp::reject::custom(TooShortBodyLength {
+                found: reader.position() as usize,
+                expected_at_least: reader.position() as usize + ld as usize,
+            }));
+        }
+        data = Some(
+            (&v[(reader.position() as usize)..((reader.position() + l as u64) as usize)]).to_vec(),
+        );
+    }
+    reader.consume(ld as usize);
+
+    return Ok((hash, key, data));
+}
+
 async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
     if bytes.len() < 12 {
@@ -215,166 +297,80 @@ async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
     // fail! Therefore unwrap() is OK here.)
     let mut reader = Cursor::new(bytes.to_vec());
     let client_id = reader.read_u64::<BigEndian>().unwrap();
-    let graph_number = reader.read_u32::<BigEndian>().unwrap() as usize;
+    let graph_number = reader.read_u32::<BigEndian>().unwrap();
     let number = reader.read_u32::<BigEndian>().unwrap();
 
-    let graph_arc: Arc<Mutex<Graph>>;
-
-    {
-        // Lock list of graphs via their mutex:
-        let graphs = graphs.lock().unwrap();
-        if graph_number as usize >= graphs.list.len() {
-            return Err(warp::reject::custom(GraphNotFound {
-                number: graph_number as u32,
-            }));
-        }
-        graph_arc = graphs.list[graph_number].clone();
-    }
-
-    // Collect exceptions and rejections:
-    let mut rejected: Vec<u32> = vec![];
-    let mut exceptional: Vec<(u32, u64)> = vec![];
+    let graph_arc = get_graph(&graphs, graph_number)?;
 
     // Lock graph:
     let mut graph = graph_arc.lock().unwrap();
 
     if graph.dropped {
         return Err(warp::reject::custom(GraphNotFound {
-            number: graph_number as u32,
+            number: graph_number,
+        }));
+    }
+    if graph.vertices_sealed {
+        return Err(warp::reject::custom(GraphVerticesSealed {
+            number: graph_number,
         }));
     }
 
-    if graph.vertices_sealed {
-        return Err(warp::reject::custom(GraphVerticesSealed {
-            number: graph_number as u32,
-        }));
-    }
+    // Collect exceptions and rejections:
+    let mut rejected: Vec<u32> = vec![];
+    let mut exceptional: Vec<(u32, u64)> = vec![];
 
     let mut rng = rand::thread_rng();
 
     for i in 0..number {
-        let l = get_varlen(&mut reader);
-        if l.is_err() {
-            return Err(warp::reject::custom(TooShortBodyLength {
-                found: reader.position() as usize,
-                expected_at_least: reader.position() as usize + 2,
-            }));
-        }
-        let l = l.unwrap();
+        let (hash, key, data) = parse_vertex(&mut reader)?;
 
-        let hash: Option<u64>;
-        let key: Option<String>;
-        match l {
-            0 => {
-                key = None;
-                let val = reader.read_u64::<BigEndian>();
-                if val.is_err() {
-                    return Err(warp::reject::custom(TooShortBodyLength {
-                        found: reader.position() as usize,
-                        expected_at_least: reader.position() as usize + 2,
-                    }));
-                }
-                hash = Some(val.unwrap());
-            }
-            _ => {
-                {
-                    let v = reader.get_ref();
-                    if (v.len() as u64) - reader.position() < l as u64 {
-                        return Err(warp::reject::custom(TooShortBodyLength {
-                            found: reader.position() as usize,
-                            expected_at_least: reader.position() as usize + l as usize,
-                        }));
-                    }
-                    let k =
-                        &v[(reader.position() as usize)..((reader.position() + l as u64) as usize)];
-
-                    match str::from_utf8(k) {
-                        Ok(kk) => {
-                            key = Some(kk.to_string());
-                            hash = Some(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
+        match hash {
+            None => rejected.push(i),
+            Some(h) => {
+                // Now put the vertex into the graph, first detect a collision:
+                let index = graph.vertex_data_offsets.len();
+                let mut actual = h;
+                if graph.vertices.contains_key(&h) {
+                    if key.is_some() {
+                        // This is a collision, we create a random alternative
+                        // hash and report the collision:
+                        loop {
+                            actual = rng.gen::<u64>();
+                            if let Some(_) = graph.vertices.get_mut(&actual) {
+                                break;
+                            }
                         }
-                        Err(_) => {
-                            rejected.push(i);
-                            key = None;
-                            hash = None;
+                        let oi = graph.vertices.get_mut(&h).unwrap();
+                        *oi = *oi | 0x8000000;
+                        exceptional.push((i, actual));
+                        if graph.store_keys {
+                            graph.exceptions.insert(key.clone().unwrap(), actual);
                         }
+                    } else {
+                        // This is a duplicate hash without key, we must
+                        // reject this:
+                        rejected.push(i);
+                        continue;
                     }
                 }
-                reader.consume(l as usize);
-            }
-        }
-        // Now either hash is None and the entry was rejected, or
-        // hash is set and it was not rejected. In the latter case
-        // key might be None or set. The cursor is already advanced.
-
-        // Before we move on with this, let's get the optional data:
-        let ld = get_varlen(&mut reader);
-        if ld.is_err() {
-            return Err(warp::reject::custom(TooShortBodyLength {
-                found: reader.position() as usize,
-                expected_at_least: reader.position() as usize + 2,
-            }));
-        }
-        let ld = ld.unwrap(); // Length of data, 0 means none
-        let mut data: Option<Vec<u8>> = None;
-        if ld > 0 {
-            let v = reader.get_ref();
-            if (v.len() as u64) - reader.position() < ld as u64 {
-                return Err(warp::reject::custom(TooShortBodyLength {
-                    found: reader.position() as usize,
-                    expected_at_least: reader.position() as usize + ld as usize,
-                }));
-            }
-            data = Some(
-                (&v[(reader.position() as usize)..((reader.position() + l as u64) as usize)])
-                    .to_vec(),
-            );
-        }
-        reader.consume(ld as usize);
-
-        if let Some(h) = hash {
-            // Now put the vertex into the graph, first detect a collision:
-            let index = graph.vertex_data_offsets.len();
-            let mut actual = h;
-            if graph.vertices.contains_key(&h) {
-                if key.is_some() {
-                    // This is a collision, we create a random alternative
-                    // hash and report the collision:
-                    loop {
-                        actual = rng.gen::<u64>();
-                        if let Some(_) = graph.vertices.get_mut(&actual) {
-                            break;
-                        }
-                    }
-                    let oi = graph.vertices.get_mut(&h).unwrap();
-                    *oi = *oi | 0x8000000;
-                    exceptional.push((i, actual));
+                // Will succeed:
+                graph.vertices.insert(actual, index as u64);
+                if let Some(k) = key {
                     if graph.store_keys {
-                        graph.exceptions.insert(key.clone().unwrap(), actual);
+                        graph.keys.push(k.to_string());
+                    }
+                }
+                if let Some(d) = data {
+                    // Insert data:
+                    let pos = graph.vertex_data.len() as u64;
+                    graph.vertex_data_offsets.push(pos);
+                    for b in d.iter() {
+                        graph.vertex_data.push(*b);
                     }
                 } else {
-                    // This is a duplicate hash without key, we must
-                    // reject this:
-                    rejected.push(i);
-                    continue;
+                    graph.vertex_data_offsets.push(0);
                 }
-            }
-            // Will succeed:
-            graph.vertices.insert(actual, index as u64);
-            if let Some(k) = key {
-                if graph.store_keys {
-                    graph.keys.push(k.to_string());
-                }
-            }
-            if let Some(d) = data {
-                // Insert data:
-                let pos = graph.vertex_data.len() as u64;
-                graph.vertex_data_offsets.push(pos);
-                for b in d.iter() {
-                    graph.vertex_data.push(*b);
-                }
-            } else {
-                graph.vertex_data_offsets.push(0);
             }
         }
     }
