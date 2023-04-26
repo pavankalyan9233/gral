@@ -5,22 +5,44 @@ use std::sync::{Arc, Mutex};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
+#[derive(Eq, Hash, PartialEq, Clone, Copy)]
+pub struct VertexHash(u64);
+impl VertexHash {
+    pub fn new(x: u64) -> VertexHash {
+        VertexHash(x)
+    }
+    pub fn to_u64(&self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct VertexIndex(u64);
+impl VertexIndex {
+    pub fn new(x: u64) -> VertexIndex {
+        VertexIndex(x)
+    }
+    pub fn to_u64(&self) -> u64 {
+        self.0
+    }
+}
+
 pub struct Edge {
-    from: u64,        // index of vertex
-    to: u64,          // index of vertex
-    data_offset: u64, // offset into edge_data
+    from: VertexIndex, // index of vertex
+    to: VertexIndex,   // index of vertex
+    data_offset: u64,  // offset into edge_data
 }
 
 pub struct Graph {
     // key is the hash of the vertex, value is the index, high bit
     // indicates a collision
-    pub vertices: HashMap<u64, u64>,
+    pub hash_to_index: HashMap<VertexHash, VertexIndex>,
 
     // key is the key of the vertex, value is the exceptional hash
-    pub exceptions: HashMap<String, u64>,
+    pub exceptions: HashMap<String, VertexHash>,
 
     // Maps indices of vertices to their names, not necessarily used:
-    pub keys: Vec<String>,
+    pub index_to_key: Vec<String>,
 
     // Additional data for vertices:
     pub vertex_data: Vec<u8>,
@@ -31,6 +53,18 @@ pub struct Graph {
 
     // Additional data for vertices:
     pub edge_data: Vec<u8>,
+
+    // Maps indices of vertices to offsets in edges by from:
+    pub edge_index_by_from: Vec<u64>,
+
+    // Edge index by from:
+    pub edges_by_from: Vec<VertexIndex>,
+
+    // Maps indices of vertices to offsets in edge index by to:
+    pub edge_index_by_to: Vec<u64>,
+
+    // Edge index by to:
+    pub edges_by_to: Vec<VertexIndex>,
 
     // store keys?
     pub store_keys: bool,
@@ -56,13 +90,17 @@ pub fn with_graphs(
 impl Graph {
     pub fn new(store_keys: bool, _bits_for_hash: u8) -> Arc<Mutex<Graph>> {
         Arc::new(Mutex::new(Graph {
-            vertices: HashMap::new(),
+            hash_to_index: HashMap::new(),
             exceptions: HashMap::new(),
-            keys: vec![],
+            index_to_key: vec![],
             vertex_data: vec![0],
             vertex_data_offsets: vec![],
             edges: vec![],
             edge_data: vec![0],
+            edges_by_from: vec![],
+            edge_index_by_from: vec![],
+            edges_by_to: vec![],
+            edge_index_by_to: vec![],
             store_keys,
             dropped: false,
             vertices_sealed: false,
@@ -72,9 +110,9 @@ impl Graph {
 
     pub fn clear(&mut self) {
         // TODO: implement by clearing most structures
-        self.vertices.clear();
+        self.hash_to_index.clear();
         self.exceptions.clear();
-        self.keys.clear();
+        self.index_to_key.clear();
         self.vertex_data.clear();
         self.vertex_data.push(0); // use first byte, so that all
                                   // offsets in here are positive!
@@ -82,6 +120,10 @@ impl Graph {
         self.edges.clear();
         self.edge_data.clear();
         self.edge_data.push(0);
+        self.edge_index_by_from.clear();
+        self.edges_by_from.clear();
+        self.edge_index_by_to.clear();
+        self.edges_by_to.clear();
         self.vertices_sealed = false;
         self.edges_sealed = false;
         self.dropped = true;
@@ -90,31 +132,31 @@ impl Graph {
     pub fn insert_vertex(
         &mut self,
         i: u32,
-        hash: Option<u64>,
+        hash: Option<VertexHash>,
         key: Option<String>,
         data: Option<Vec<u8>>,
         rejected: &mut Vec<u32>,
-        exceptional: &mut Vec<(u32, u64)>,
+        exceptional: &mut Vec<(u32, VertexHash)>,
     ) {
         match hash {
             None => rejected.push(i),
             Some(h) => {
                 // First detect a collision:
-                let index = self.vertex_data_offsets.len();
+                let index = VertexIndex(self.vertex_data_offsets.len() as u64);
                 let mut actual = h;
-                if self.vertices.contains_key(&h) {
+                if self.hash_to_index.contains_key(&h) {
                     if key.is_some() {
                         // This is a collision, we create a random alternative
                         // hash and report the collision:
                         let mut rng = rand::thread_rng();
                         loop {
-                            actual = rng.gen::<u64>();
-                            if let Some(_) = self.vertices.get_mut(&actual) {
+                            actual = VertexHash(rng.gen::<u64>());
+                            if let Some(_) = self.hash_to_index.get_mut(&actual) {
                                 break;
                             }
                         }
-                        let oi = self.vertices.get_mut(&h).unwrap();
-                        *oi = *oi | 0x8000000;
+                        let oi = self.hash_to_index.get_mut(&h).unwrap();
+                        *oi = VertexIndex((*oi).0 | 0x800000000000000);
                         exceptional.push((i, actual));
                         if self.store_keys {
                             self.exceptions.insert(key.clone().unwrap(), actual);
@@ -127,10 +169,10 @@ impl Graph {
                     }
                 }
                 // Will succeed:
-                self.vertices.insert(actual, index as u64);
+                self.hash_to_index.insert(actual, index);
                 if let Some(k) = key {
                     if self.store_keys {
-                        self.keys.push(k.to_string());
+                        self.index_to_key.push(k.to_string());
                     }
                 }
                 if let Some(d) = data {
@@ -163,13 +205,13 @@ impl Graph {
         self.edges_sealed = true;
     }
 
-    pub fn hash_from_vertex_key(&self, k: &str) -> Option<u64> {
-        let hash = xxh3_64_with_seed(k.as_bytes(), 0xdeadbeefdeadbeef);
-        let index = self.vertices.get(&hash);
+    pub fn hash_from_vertex_key(&self, k: &str) -> Option<VertexHash> {
+        let hash = VertexHash(xxh3_64_with_seed(k.as_bytes(), 0xdeadbeefdeadbeef));
+        let index = self.hash_to_index.get(&hash);
         match index {
             None => None,
             Some(index) => {
-                if index & 0x8000000 != 0 {
+                if index.0 & 0x8000000000000000 != 0 {
                     // collision!
                     let kk = String::from(k);
                     let except = self.exceptions.get(&kk);
@@ -184,7 +226,21 @@ impl Graph {
         }
     }
 
-    pub fn insert_edge(&mut self, from: u64, to: u64, data: Option<Vec<u8>>) {
+    pub fn index_from_vertex_key(&self, k: &str) -> Option<VertexIndex> {
+        let hash: Option<VertexHash> = self.hash_from_vertex_key(k);
+        match hash {
+            None => None,
+            Some(vh) => {
+                let index = self.hash_to_index.get(&vh);
+                match index {
+                    None => None,
+                    Some(index) => Some(*index),
+                }
+            }
+        }
+    }
+
+    pub fn insert_edge(&mut self, from: VertexIndex, to: VertexIndex, data: Option<Vec<u8>>) {
         match data {
             None => {
                 self.edges.push(Edge {

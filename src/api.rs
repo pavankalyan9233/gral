@@ -1,4 +1,4 @@
-use crate::graphs::{with_graphs, Graph, Graphs};
+use crate::graphs::{with_graphs, Graph, Graphs, VertexHash, VertexIndex};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
 use std::convert::Infallible;
@@ -260,7 +260,7 @@ fn read_bytes_or_fail(reader: &mut Cursor<Vec<u8>>, l: u32) -> Result<&[u8], Rej
 
 fn parse_vertex(
     reader: &mut Cursor<Vec<u8>>,
-) -> Result<(Option<u64>, Option<String>, Option<Vec<u8>>), Rejection> {
+) -> Result<(Option<VertexHash>, Option<String>, Option<Vec<u8>>), Rejection> {
     let l = get_varlen(reader);
     if l.is_err() {
         return Err(warp::reject::custom(TooShortBodyLength {
@@ -270,7 +270,7 @@ fn parse_vertex(
     }
     let l = l.unwrap();
 
-    let hash: Option<u64>;
+    let hash: Option<VertexHash>;
     let key: Option<String>;
     match l {
         0 => {
@@ -282,7 +282,7 @@ fn parse_vertex(
                     expected_at_least: reader.position() as usize + 2,
                 }));
             }
-            hash = Some(val.unwrap());
+            hash = Some(VertexHash::new(val.unwrap()));
         }
         _ => {
             let k = read_bytes_or_fail(reader, l)?;
@@ -290,7 +290,7 @@ fn parse_vertex(
             match str::from_utf8(k) {
                 Ok(kk) => {
                     key = Some(kk.to_string());
-                    hash = Some(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
+                    hash = Some(VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef)));
                 }
                 Err(_) => {
                     key = None;
@@ -355,7 +355,7 @@ async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
 
     // Collect exceptions and rejections:
     let mut rejected: Vec<u32> = vec![];
-    let mut exceptional: Vec<(u32, u64)> = vec![];
+    let mut exceptional: Vec<(u32, VertexHash)> = vec![];
 
     for i in 0..number {
         let (hash, key, data) = parse_vertex(&mut reader)?;
@@ -374,7 +374,7 @@ async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
     }
     for (index, hash) in exceptional.iter() {
         v.write_u32::<BigEndian>(*index).unwrap();
-        v.write_u64::<BigEndian>(*hash).unwrap();
+        v.write_u64::<BigEndian>((*hash).to_u64()).unwrap();
     }
     Ok(v)
 }
@@ -430,7 +430,7 @@ async fn api_seal_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<V
 fn parse_edge(
     graph: &Graph,
     reader: &mut Cursor<Vec<u8>>,
-) -> Result<(Option<(u64, u64)>, Option<Vec<u8>>), Rejection> {
+) -> Result<(Option<(VertexIndex, VertexIndex)>, Option<Vec<u8>>), Rejection> {
     let l = get_varlen(reader);
     if l.is_err() {
         return Err(warp::reject::custom(TooShortBodyLength {
@@ -440,7 +440,7 @@ fn parse_edge(
     }
     let l = l.unwrap();
 
-    let from_hash: Option<u64>;
+    let from_index: Option<VertexIndex>;
     match l {
         0 => {
             let val = reader.read_u64::<BigEndian>();
@@ -450,15 +450,20 @@ fn parse_edge(
                     expected_at_least: reader.position() as usize + 2,
                 }));
             }
-            from_hash = Some(val.unwrap());
+            let hash = VertexHash::new(val.unwrap());
+            let index = graph.hash_to_index.get(&hash);
+            from_index = match index {
+                None => None,
+                Some(index) => Some(*index),
+            }
         }
         _ => {
             {
                 let k = read_bytes_or_fail(reader, l)?;
 
-                from_hash = match str::from_utf8(k) {
+                from_index = match str::from_utf8(k) {
                     Err(_) => None,
-                    Ok(kk) => graph.hash_from_vertex_key(kk),
+                    Ok(kk) => graph.index_from_vertex_key(kk),
                 }
             }
             reader.consume(l as usize);
@@ -473,7 +478,7 @@ fn parse_edge(
         }));
     }
     let l = l.unwrap();
-    let to_hash: Option<u64>;
+    let to_index: Option<VertexIndex>;
     match l {
         0 => {
             let val = reader.read_u64::<BigEndian>();
@@ -483,15 +488,20 @@ fn parse_edge(
                     expected_at_least: reader.position() as usize + 2,
                 }));
             }
-            to_hash = Some(val.unwrap());
+            let hash = VertexHash::new(val.unwrap());
+            let index = graph.hash_to_index.get(&hash);
+            to_index = match index {
+                None => None,
+                Some(index) => Some(*index),
+            }
         }
         _ => {
             {
                 let k = read_bytes_or_fail(reader, l)?;
 
-                to_hash = match str::from_utf8(k) {
+                to_index = match str::from_utf8(k) {
                     Err(_) => None,
-                    Ok(kk) => graph.hash_from_vertex_key(kk),
+                    Ok(kk) => graph.index_from_vertex_key(kk),
                 }
             }
             reader.consume(l as usize);
@@ -522,8 +532,8 @@ fn parse_edge(
     }
     reader.consume(ld as usize);
 
-    if from_hash.is_some() && to_hash.is_some() {
-        Ok((Some((from_hash.unwrap(), to_hash.unwrap())), data))
+    if from_index.is_some() && to_index.is_some() {
+        Ok((Some((from_index.unwrap(), to_index.unwrap())), data))
     } else {
         Ok((None, None))
     }
