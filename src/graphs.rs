@@ -1,3 +1,4 @@
+use rand::Rng;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
@@ -82,5 +83,81 @@ impl Graph {
         self.vertices_sealed = false;
         self.edges_sealed = false;
         self.dropped = true;
+    }
+
+    pub fn insert_vertex(
+        &mut self,
+        i: u32,
+        hash: Option<u64>,
+        key: Option<String>,
+        data: Option<Vec<u8>>,
+        rejected: &mut Vec<u32>,
+        exceptional: &mut Vec<(u32, u64)>,
+    ) {
+        match hash {
+            None => rejected.push(i),
+            Some(h) => {
+                // First detect a collision:
+                let index = self.vertex_data_offsets.len();
+                let mut actual = h;
+                if self.vertices.contains_key(&h) {
+                    if key.is_some() {
+                        // This is a collision, we create a random alternative
+                        // hash and report the collision:
+                        let mut rng = rand::thread_rng();
+                        loop {
+                            actual = rng.gen::<u64>();
+                            if let Some(_) = self.vertices.get_mut(&actual) {
+                                break;
+                            }
+                        }
+                        let oi = self.vertices.get_mut(&h).unwrap();
+                        *oi = *oi | 0x8000000;
+                        exceptional.push((i, actual));
+                        if self.store_keys {
+                            self.exceptions.insert(key.clone().unwrap(), actual);
+                        }
+                    } else {
+                        // This is a duplicate hash without key, we must
+                        // reject this:
+                        rejected.push(i);
+                        return;
+                    }
+                }
+                // Will succeed:
+                self.vertices.insert(actual, index as u64);
+                if let Some(k) = key {
+                    if self.store_keys {
+                        self.keys.push(k.to_string());
+                    }
+                }
+                if let Some(d) = data {
+                    // Insert data:
+                    let pos = self.vertex_data.len() as u64;
+                    self.vertex_data_offsets.push(pos);
+                    for b in d.iter() {
+                        self.vertex_data.push(*b);
+                    }
+                } else {
+                    self.vertex_data_offsets.push(0);
+                }
+            }
+        }
+    }
+
+    pub fn number_of_vertices(&self) -> u64 {
+        self.vertex_data_offsets.len() as u64
+    }
+
+    pub fn number_of_edges(&self) -> u64 {
+        self.edges.len() as u64
+    }
+
+    pub fn seal_vertices(&mut self) {
+        self.vertices_sealed = true;
+    }
+
+    pub fn seal_edges(&mut self) {
+        self.edges_sealed = true;
     }
 }

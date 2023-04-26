@@ -1,7 +1,6 @@
 use crate::graphs::{with_graphs, Graph, Graphs};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
-use rand::Rng;
 use std::convert::Infallible;
 use std::io::{BufRead, Cursor};
 use std::str;
@@ -29,7 +28,21 @@ pub fn api_filter(
         .and(with_graphs(graphs.clone()))
         .and(warp::body::bytes())
         .and_then(api_vertices);
-    create.or(drop).or(vertices)
+    let seal_vertices = warp::path!("v1" / "sealVertices")
+        .and(warp::post())
+        .and(with_graphs(graphs.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_seal_vertices);
+    let seal_edges = warp::path!("v1" / "sealEdges")
+        .and(warp::post())
+        .and(with_graphs(graphs.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_seal_edges);
+    create
+        .or(drop)
+        .or(vertices)
+        .or(seal_vertices)
+        .or(seal_edges)
 }
 
 /// An error object, which is used when the body size is unexpected.
@@ -62,6 +75,30 @@ struct GraphVerticesSealed {
     pub number: u32,
 }
 impl reject::Reject for GraphVerticesSealed {}
+
+/// An error object, which is used when a graph's vertices are not yet
+/// sealed and the client wants to seal the edges.
+#[derive(Debug)]
+struct GraphVerticesNotSealed {
+    pub number: u32,
+}
+impl reject::Reject for GraphVerticesNotSealed {}
+
+/// An error object, which is used when a graph's edges are already
+/// sealed and the client wants to seal them again.
+#[derive(Debug)]
+struct GraphEdgesSealed {
+    pub number: u32,
+}
+impl reject::Reject for GraphEdgesSealed {}
+
+/// An error object, which is used when a graph's edges are not yet
+/// sealed and the client wants to do something for which this is needed.
+#[derive(Debug)]
+struct GraphEdgesNotSealed {
+    pub number: u32,
+}
+impl reject::Reject for GraphEdgesNotSealed {}
 
 /// This async function implements the "create graph" API call.
 async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
@@ -286,9 +323,9 @@ fn parse_vertex(
 async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
     if bytes.len() < 12 {
-        return Err(warp::reject::custom(WrongBodyLength {
+        return Err(warp::reject::custom(TooShortBodyLength {
             found: bytes.len(),
-            expected: 12,
+            expected_at_least: 12,
         }));
     }
 
@@ -320,59 +357,9 @@ async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
     let mut rejected: Vec<u32> = vec![];
     let mut exceptional: Vec<(u32, u64)> = vec![];
 
-    let mut rng = rand::thread_rng();
-
     for i in 0..number {
         let (hash, key, data) = parse_vertex(&mut reader)?;
-
-        match hash {
-            None => rejected.push(i),
-            Some(h) => {
-                // Now put the vertex into the graph, first detect a collision:
-                let index = graph.vertex_data_offsets.len();
-                let mut actual = h;
-                if graph.vertices.contains_key(&h) {
-                    if key.is_some() {
-                        // This is a collision, we create a random alternative
-                        // hash and report the collision:
-                        loop {
-                            actual = rng.gen::<u64>();
-                            if let Some(_) = graph.vertices.get_mut(&actual) {
-                                break;
-                            }
-                        }
-                        let oi = graph.vertices.get_mut(&h).unwrap();
-                        *oi = *oi | 0x8000000;
-                        exceptional.push((i, actual));
-                        if graph.store_keys {
-                            graph.exceptions.insert(key.clone().unwrap(), actual);
-                        }
-                    } else {
-                        // This is a duplicate hash without key, we must
-                        // reject this:
-                        rejected.push(i);
-                        continue;
-                    }
-                }
-                // Will succeed:
-                graph.vertices.insert(actual, index as u64);
-                if let Some(k) = key {
-                    if graph.store_keys {
-                        graph.keys.push(k.to_string());
-                    }
-                }
-                if let Some(d) = data {
-                    // Insert data:
-                    let pos = graph.vertex_data.len() as u64;
-                    graph.vertex_data_offsets.push(pos);
-                    for b in d.iter() {
-                        graph.vertex_data.push(*b);
-                    }
-                } else {
-                    graph.vertex_data_offsets.push(0);
-                }
-            }
-        }
+        graph.insert_vertex(i, hash, key, data, &mut rejected, &mut exceptional)
     }
 
     // Write response:
@@ -389,6 +376,104 @@ async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
         v.write_u32::<BigEndian>(*index).unwrap();
         v.write_u64::<BigEndian>(*hash).unwrap();
     }
+    Ok(v)
+}
+
+/// This function seals the vertices of a graph.
+async fn api_seal_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
+    // Handle wrong length:
+    if bytes.len() != 12 {
+        return Err(warp::reject::custom(WrongBodyLength {
+            found: bytes.len(),
+            expected: 12,
+        }));
+    }
+
+    // Parse body and extract integers:
+    // (Note that we have checked the buffer length and so these cannot
+    // fail! Therefore unwrap() is OK here.)
+    let mut reader = Cursor::new(bytes.to_vec());
+    let client_id = reader.read_u64::<BigEndian>().unwrap();
+    let graph_number = reader.read_u32::<BigEndian>().unwrap();
+
+    let graph_arc = get_graph(&graphs, graph_number)?;
+
+    // Lock graph:
+    let mut graph = graph_arc.lock().unwrap();
+
+    if graph.dropped {
+        return Err(warp::reject::custom(GraphNotFound {
+            number: graph_number,
+        }));
+    }
+    if graph.vertices_sealed {
+        return Err(warp::reject::custom(GraphVerticesSealed {
+            number: graph_number,
+        }));
+    }
+
+    graph.seal_vertices();
+
+    // Write response:
+    let mut v = Vec::new();
+    // TODO: handle errors!
+    v.reserve(20);
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u32::<BigEndian>(graph_number).unwrap();
+    v.write_u64::<BigEndian>(graph.number_of_vertices())
+        .unwrap();
+    Ok(v)
+}
+
+/// This function seals the edges of a graph.
+async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
+    // Handle wrong length:
+    if bytes.len() != 12 {
+        return Err(warp::reject::custom(WrongBodyLength {
+            found: bytes.len(),
+            expected: 12,
+        }));
+    }
+
+    // Parse body and extract integers:
+    // (Note that we have checked the buffer length and so these cannot
+    // fail! Therefore unwrap() is OK here.)
+    let mut reader = Cursor::new(bytes.to_vec());
+    let client_id = reader.read_u64::<BigEndian>().unwrap();
+    let graph_number = reader.read_u32::<BigEndian>().unwrap();
+
+    let graph_arc = get_graph(&graphs, graph_number)?;
+
+    // Lock graph:
+    let mut graph = graph_arc.lock().unwrap();
+
+    if graph.dropped {
+        return Err(warp::reject::custom(GraphNotFound {
+            number: graph_number,
+        }));
+    }
+    if !graph.vertices_sealed {
+        return Err(warp::reject::custom(GraphVerticesNotSealed {
+            number: graph_number,
+        }));
+    }
+    if graph.edges_sealed {
+        return Err(warp::reject::custom(GraphEdgesSealed {
+            number: graph_number,
+        }));
+    }
+
+    graph.seal_edges();
+
+    // Write response:
+    let mut v = Vec::new();
+    // TODO: handle errors!
+    v.reserve(20);
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u32::<BigEndian>(graph_number).unwrap();
+    v.write_u64::<BigEndian>(graph.number_of_vertices())
+        .unwrap();
+    v.write_u64::<BigEndian>(graph.number_of_edges()).unwrap();
     Ok(v)
 }
 
@@ -428,6 +513,24 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
         code = StatusCode::FORBIDDEN;
         message = format!(
             "Graph with number {} has its vertices already sealed",
+            wrong.number
+        );
+    } else if let Some(wrong) = err.find::<GraphVerticesNotSealed>() {
+        code = StatusCode::FORBIDDEN;
+        message = format!(
+            "Graph with number {} does not yet have its vertices sealed",
+            wrong.number
+        );
+    } else if let Some(wrong) = err.find::<GraphEdgesSealed>() {
+        code = StatusCode::FORBIDDEN;
+        message = format!(
+            "Graph with number {} has its edges already sealed",
+            wrong.number
+        );
+    } else if let Some(wrong) = err.find::<GraphEdgesNotSealed>() {
+        code = StatusCode::FORBIDDEN;
+        message = format!(
+            "Graph with number {} does not yet have its edges sealed",
             wrong.number
         );
     } else {
