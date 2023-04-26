@@ -210,6 +210,7 @@ edge.
 
 ```
 u64      client-id
+u32      number of graph
 u32      number of edges in this batch
 
 and then repeated as often as the number of edges says:
