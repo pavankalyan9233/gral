@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use warp::Filter;
+use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 pub struct Edge {
     from: u64,        // index of vertex
@@ -58,10 +59,10 @@ impl Graph {
             vertices: HashMap::new(),
             exceptions: HashMap::new(),
             keys: vec![],
-            vertex_data: vec![],
+            vertex_data: vec![0],
             vertex_data_offsets: vec![],
             edges: vec![],
-            edge_data: vec![],
+            edge_data: vec![0],
             store_keys,
             dropped: false,
             vertices_sealed: false,
@@ -80,6 +81,7 @@ impl Graph {
         self.vertex_data_offsets.clear();
         self.edges.clear();
         self.edge_data.clear();
+        self.edge_data.push(0);
         self.vertices_sealed = false;
         self.edges_sealed = false;
         self.dropped = true;
@@ -159,5 +161,49 @@ impl Graph {
 
     pub fn seal_edges(&mut self) {
         self.edges_sealed = true;
+    }
+
+    pub fn hash_from_vertex_key(&self, k: &str) -> Option<u64> {
+        let hash = xxh3_64_with_seed(k.as_bytes(), 0xdeadbeefdeadbeef);
+        let index = self.vertices.get(&hash);
+        match index {
+            None => None,
+            Some(index) => {
+                if index & 0x8000000 != 0 {
+                    // collision!
+                    let kk = String::from(k);
+                    let except = self.exceptions.get(&kk);
+                    match except {
+                        Some(h) => Some(*h),
+                        None => Some(hash),
+                    }
+                } else {
+                    Some(hash)
+                }
+            }
+        }
+    }
+
+    pub fn insert_edge(&mut self, from: u64, to: u64, data: Option<Vec<u8>>) {
+        match data {
+            None => {
+                self.edges.push(Edge {
+                    from,
+                    to,
+                    data_offset: 0,
+                });
+            }
+            Some(v) => {
+                let offset = self.edge_data.len();
+                for b in v.iter() {
+                    self.edge_data.push(*b);
+                }
+                self.edges.push(Edge {
+                    from,
+                    to,
+                    data_offset: offset as u64,
+                });
+            }
+        }
     }
 }
