@@ -109,7 +109,6 @@ impl Graph {
     }
 
     pub fn clear(&mut self) {
-        // TODO: implement by clearing most structures
         self.hash_to_index.clear();
         self.exceptions.clear();
         self.index_to_key.clear();
@@ -203,6 +202,11 @@ impl Graph {
 
     pub fn seal_edges(&mut self) {
         self.edges_sealed = true;
+        // Idea:
+        //   Sort edges by from
+        //   Build edges_by_from and edge_index_by_from
+        //   Sort edges by to
+        //   Build edges_by_to and edge_index_by_to
     }
 
     pub fn hash_from_vertex_key(&self, k: &str) -> Option<VertexHash> {
