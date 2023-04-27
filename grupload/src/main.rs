@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+mod commands;
+
 const HELP: &str = "\
 grupload
 
@@ -17,6 +19,9 @@ COMMANDS:
   upload                create, upload and seal, return number
 
 OPTIONS:
+  --max-vertices NR     Maximal number of vertices (only for create) [default: 1000000]
+  --max-edges NR        Maximal number of edges (only for create) [default: 1000000]
+  --store-keys BOOL     Flag if gral should store the keys [default: true]
   --graph GRAPHNUMBER   Number of graph to use [default: 0]
   --vertices FILENAME   Vertex input file (jsonl) [default: 'vertices.jsonl']
   --edges FILENAME      Edge input file (jsonl) [default: 'edges.jsonl']
@@ -25,8 +30,11 @@ OPTIONS:
 ";
 
 #[derive(Debug)]
-struct GruploadArgs {
+pub struct GruploadArgs {
     command: String,
+    store_keys: bool,
+    max_vertices: u64,
+    max_edges: u64,
     graph_number: u32,
     vertex_file: std::path::PathBuf,
     edge_file: std::path::PathBuf,
@@ -42,12 +50,19 @@ fn main() {
         }
     };
 
+    println!("{:#?}", args);
+
     if args.command == "empty" {
         eprintln!("Error: no command given, see --help for a list of commands!!");
         std::process::exit(2);
     }
 
-    println!("{:#?}", args);
+    match args.command.as_str() {
+        "create" => crate::commands::create(&args),
+        _ => {
+            eprintln!("Error: command {} not yet implemented!", args.command);
+        }
+    }
 }
 
 fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
@@ -60,6 +75,11 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
     }
 
     let args = GruploadArgs {
+        store_keys: pargs.opt_value_from_str("--store-keys")?.unwrap_or(true),
+        max_vertices: pargs
+            .opt_value_from_str("--max-vertices")?
+            .unwrap_or(1000000),
+        max_edges: pargs.opt_value_from_str("--max-edges")?.unwrap_or(1000000),
         graph_number: pargs.opt_value_from_str("--graph")?.unwrap_or(0),
         vertex_file: pargs
             .opt_value_from_str("--vertices")?
