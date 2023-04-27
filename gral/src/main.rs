@@ -1,5 +1,6 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use std::{sync::Arc, sync::Mutex};
+use std::net::IpAddr;
+use std::sync::{Arc, Mutex};
 use warp::{http::Response, Filter};
 
 mod api;
@@ -38,13 +39,16 @@ async fn main() {
     let apifilters = version
         .or(api_filter(the_graphs.clone()))
         .recover(handle_errors);
-    let socketaddr: SocketAddr = args.bind_address.parse();
+    let ip_addr: IpAddr = args
+        .bind_addr
+        .parse()
+        .expect(format!("Could not parse bind address: {}", args.bind_addr).as_str());
     warp::serve(apifilters)
         //.tls()
         //.cert_path("tls/cert.pem")
         //.key_path("tls/key.pem")
         //.client_auth_required_path("tls/authca.pem")
         //.run(([0, 0, 0, 0], args.port))
-        .run((socketaddr, args.port))
+        .run((ip_addr, args.port))
         .await;
 }

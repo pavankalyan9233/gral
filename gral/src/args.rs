@@ -16,8 +16,8 @@ OPTIONS:
 
 #[derive(Debug)]
 pub struct GralArgs {
-    bind_addr: String,
-    port: i32,
+    pub bind_addr: String,
+    pub port: u16,
 }
 
 pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
