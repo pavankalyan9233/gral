@@ -2,11 +2,12 @@ use rand::Rng;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Infallible;
+//use std::io::Write;
 use std::sync::{Arc, Mutex};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy, Ord, PartialOrd)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
 pub struct VertexHash(u64);
 impl VertexHash {
     pub fn new(x: u64) -> VertexHash {
@@ -17,7 +18,7 @@ impl VertexHash {
     }
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
 pub struct VertexIndex(u64);
 impl VertexIndex {
     pub fn new(x: u64) -> VertexIndex {
@@ -28,13 +29,18 @@ impl VertexIndex {
     }
 }
 
+#[derive(Debug)]
 pub struct Edge {
     from: VertexIndex, // index of vertex
     to: VertexIndex,   // index of vertex
     data_offset: u64,  // offset into edge_data
 }
 
+#[derive(Debug)]
 pub struct Graph {
+    // List of hashes by index:
+    pub index_to_hash: Vec<VertexHash>,
+
     // key is the hash of the vertex, value is the index, high bit
     // indicates a collision
     pub hash_to_index: HashMap<VertexHash, VertexIndex>,
@@ -96,13 +102,14 @@ struct EdgeTemp {
 impl Graph {
     pub fn new(store_keys: bool, _bits_for_hash: u8) -> Arc<Mutex<Graph>> {
         Arc::new(Mutex::new(Graph {
+            index_to_hash: vec![],
             hash_to_index: HashMap::new(),
             exceptions: HashMap::new(),
             index_to_key: vec![],
-            vertex_data: vec![0],
+            vertex_data: vec![],
             vertex_data_offsets: vec![],
             edges: vec![],
-            edge_data: vec![0],
+            edge_data: vec![],
             edges_by_from: vec![],
             edge_index_by_from: vec![],
             edges_by_to: vec![],
@@ -119,12 +126,9 @@ impl Graph {
         self.exceptions.clear();
         self.index_to_key.clear();
         self.vertex_data.clear();
-        self.vertex_data.push(0); // use first byte, so that all
-                                  // offsets in here are positive!
         self.vertex_data_offsets.clear();
         self.edges.clear();
         self.edge_data.clear();
-        self.edge_data.push(0);
         self.edge_index_by_from.clear();
         self.edges_by_from.clear();
         self.edge_index_by_to.clear();
@@ -174,6 +178,7 @@ impl Graph {
                     }
                 }
                 // Will succeed:
+                self.index_to_hash.push(actual);
                 self.hash_to_index.insert(actual, index);
                 if let Some(k) = key {
                     if self.store_keys {
@@ -195,7 +200,7 @@ impl Graph {
     }
 
     pub fn number_of_vertices(&self) -> u64 {
-        self.vertex_data_offsets.len() as u64
+        self.index_to_hash.len() as u64
     }
 
     pub fn number_of_edges(&self) -> u64 {
@@ -203,14 +208,16 @@ impl Graph {
     }
 
     pub fn seal_vertices(&mut self) {
+        self.vertex_data_offsets.push(self.vertex_data.len() as u64);
         self.vertices_sealed = true;
     }
 
     pub fn seal_edges(&mut self) {
         self.edges_sealed = true;
         let mut tmp: Vec<EdgeTemp> = vec![];
-        let number = self.edges.len();
-        tmp.reserve(number);
+        let number_v = self.number_of_vertices() as usize;
+        let number_e = self.number_of_edges() as usize;
+        tmp.reserve(number_e);
         for e in self.edges.iter() {
             tmp.push(EdgeTemp {
                 from: e.from,
@@ -222,9 +229,9 @@ impl Graph {
             a.from.to_u64().cmp(&b.from.to_u64())
         });
         self.edge_index_by_from.clear();
-        self.edge_index_by_from.reserve(number + 1);
+        self.edge_index_by_from.reserve(number_v + 1);
         self.edges_by_from.clear();
-        self.edges_by_from.reserve(number);
+        self.edges_by_from.reserve(number_e);
         let mut cur_from = VertexIndex::new(0);
         let mut pos: u64 = 0; // position in self.edges_by_from where
                               // we currently write
@@ -243,17 +250,17 @@ impl Graph {
             self.edges_by_from.push(e.to);
             pos = pos + 1;
         }
-        while cur_from.to_u64() <= number as u64 {
-            self.edge_index_by_from.push(pos);
+        while cur_from.to_u64() < number_v as u64 {
             cur_from = VertexIndex::new(cur_from.to_u64() + 1);
+            self.edge_index_by_from.push(pos);
         }
 
         // Create lookup by to:
         tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering { a.to.to_u64().cmp(&b.to.to_u64()) });
         self.edge_index_by_to.clear();
-        self.edge_index_by_to.reserve(number + 1);
+        self.edge_index_by_to.reserve(number_v + 1);
         self.edges_by_to.clear();
-        self.edges_by_to.reserve(number);
+        self.edges_by_to.reserve(number_e);
         let mut cur_to = VertexIndex::new(0);
         pos = 0; // position in self.edges_by_to where we currently write
         self.edge_index_by_to.push(0);
@@ -271,10 +278,11 @@ impl Graph {
             self.edges_by_to.push(e.from);
             pos = pos + 1;
         }
-        while cur_to.to_u64() <= number as u64 {
-            self.edge_index_by_to.push(pos);
+        while cur_to.to_u64() < number_v as u64 {
             cur_to = VertexIndex::new(cur_to.to_u64() + 1);
+            self.edge_index_by_to.push(pos);
         }
+        let _ = self.dump_graph();
     }
 
     pub fn hash_from_vertex_key(&self, k: &str) -> Option<VertexHash> {
@@ -332,6 +340,44 @@ impl Graph {
                     data_offset: offset as u64,
                 });
             }
+        }
+    }
+
+    pub fn dump_graph(&self) {
+        println!("\nVertices:");
+        println!("{:<32} {:<16} {}", "key", "hash", "data size");
+        for i in 0..self.number_of_vertices() {
+            let k = if self.store_keys {
+                &self.index_to_key[i as usize]
+            } else {
+                "not stored"
+            };
+            println!(
+                "{:32} {:016x} {}",
+                k,
+                self.index_to_hash[i as usize].to_u64(),
+                self.vertex_data_offsets[i as usize + 1] - self.vertex_data_offsets[i as usize]
+            );
+        }
+        println!("\nEdges:");
+        println!(
+            "{:<15} {:<16} {:<15} {:16} {}",
+            "from index", "from hash", "to index", "to hash", "data size"
+        );
+        for i in 0..(self.number_of_edges() as usize) {
+            let size = if i == (self.number_of_edges() as usize - 1) {
+                self.edge_data.len() as u64 - self.edges[i].data_offset
+            } else {
+                self.edges[i + 1].data_offset - self.edges[i].data_offset
+            };
+            println!(
+                "{:>15} {:016x} {:>15} {:016x} {}",
+                self.edges[i].from.to_u64(),
+                self.index_to_hash[self.edges[i].from.to_u64() as usize].to_u64(),
+                self.edges[i].to.to_u64(),
+                self.index_to_hash[self.edges[i].to.to_u64() as usize].to_u64(),
+                size
+            );
         }
     }
 }
