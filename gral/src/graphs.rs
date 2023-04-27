@@ -1,11 +1,12 @@
 use rand::Rng;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Ord, PartialOrd)]
 pub struct VertexHash(u64);
 impl VertexHash {
     pub fn new(x: u64) -> VertexHash {
@@ -16,7 +17,7 @@ impl VertexHash {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy, Ord, PartialOrd)]
 pub struct VertexIndex(u64);
 impl VertexIndex {
     pub fn new(x: u64) -> VertexIndex {
@@ -85,6 +86,11 @@ pub fn with_graphs(
     graphs: Arc<Mutex<Graphs>>,
 ) -> impl Filter<Extract = (Arc<Mutex<Graphs>>,), Error = Infallible> + Clone {
     warp::any().map(move || graphs.clone())
+}
+
+struct EdgeTemp {
+    pub from: VertexIndex,
+    pub to: VertexIndex,
 }
 
 impl Graph {
@@ -202,11 +208,73 @@ impl Graph {
 
     pub fn seal_edges(&mut self) {
         self.edges_sealed = true;
-        // Idea:
-        //   Sort edges by from
-        //   Build edges_by_from and edge_index_by_from
-        //   Sort edges by to
-        //   Build edges_by_to and edge_index_by_to
+        let mut tmp: Vec<EdgeTemp> = vec![];
+        let number = self.edges.len();
+        tmp.reserve(number);
+        for e in self.edges.iter() {
+            tmp.push(EdgeTemp {
+                from: e.from,
+                to: e.to,
+            });
+        }
+        // Create lookup by from:
+        tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
+            a.from.to_u64().cmp(&b.from.to_u64())
+        });
+        self.edge_index_by_from.clear();
+        self.edge_index_by_from.reserve(number + 1);
+        self.edges_by_from.clear();
+        self.edges_by_from.reserve(number);
+        let mut cur_from = VertexIndex::new(0);
+        let mut pos: u64 = 0; // position in self.edges_by_from where
+                              // we currently write
+        self.edge_index_by_from.push(0);
+        // loop invariant: the start offset for cur_from has already been
+        // written into edge_index_by_from.
+        // loop invariant: pos == edges_by_from.len()
+        for e in self.edges.iter() {
+            if e.from != cur_from {
+                while cur_from < e.from {
+                    self.edge_index_by_from.push(pos);
+                    cur_from = VertexIndex::new(cur_from.to_u64() + 1);
+                }
+                self.edge_index_by_from.push(pos);
+            }
+            self.edges_by_from.push(e.to);
+            pos = pos + 1;
+        }
+        while cur_from.to_u64() <= number as u64 {
+            self.edge_index_by_from.push(pos);
+            cur_from = VertexIndex::new(cur_from.to_u64() + 1);
+        }
+
+        // Create lookup by to:
+        tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering { a.to.to_u64().cmp(&b.to.to_u64()) });
+        self.edge_index_by_to.clear();
+        self.edge_index_by_to.reserve(number + 1);
+        self.edges_by_to.clear();
+        self.edges_by_to.reserve(number);
+        let mut cur_to = VertexIndex::new(0);
+        pos = 0; // position in self.edges_by_to where we currently write
+        self.edge_index_by_to.push(0);
+        // loop invariant: the start offset for cur_to has already been
+        // written into edge_index_by_to.
+        // loop invariant: pos == edges_by_to.len()
+        for e in self.edges.iter() {
+            if e.to != cur_to {
+                while cur_to < e.to {
+                    self.edge_index_by_to.push(pos);
+                    cur_to = VertexIndex::new(cur_to.to_u64() + 1);
+                }
+                self.edge_index_by_to.push(pos);
+            }
+            self.edges_by_to.push(e.from);
+            pos = pos + 1;
+        }
+        while cur_to.to_u64() <= number as u64 {
+            self.edge_index_by_to.push(pos);
+            cur_to = VertexIndex::new(cur_to.to_u64() + 1);
+        }
     }
 
     pub fn hash_from_vertex_key(&self, k: &str) -> Option<VertexHash> {
