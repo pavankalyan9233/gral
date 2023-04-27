@@ -1,27 +1,26 @@
 #![allow(dead_code)]
 
 const HELP: &str = "\
-App
+grupload
+
 USAGE:
-  app [OPTIONS] --number NUMBER [INPUT]
+  grupload [OPTIONS]
+
 FLAGS:
   -h, --help            Prints help information
+
 OPTIONS:
-  --number NUMBER       Sets a number
-  --opt-number NUMBER   Sets an optional number
-  --width WIDTH         Sets width [default: 10]
-  --output PATH         Sets an output path
-ARGS:
-  <INPUT>
+  --vertices FILENAME   Vertex input file (jsonl) [default: 'vertices.jsonl']
+  --edges FILENAME      Edge input file (jsonl) [default: 'edges.jsonl']
+  --endpoint ENDPOINT   gral endpoint to send data to
+                        [default: 'http://localhost:9999']
 ";
 
 #[derive(Debug)]
-struct AppArgs {
-    number: u32,
-    opt_number: Option<u32>,
-    width: u32,
-    input: std::path::PathBuf,
-    output: Option<std::path::PathBuf>,
+struct GruploadArgs {
+    vertex_file: std::path::PathBuf,
+    edge_file: std::path::PathBuf,
+    endpoint: String,
 }
 
 fn main() {
@@ -36,7 +35,7 @@ fn main() {
     println!("{:#?}", args);
 }
 
-fn parse_args() -> Result<AppArgs, pico_args::Error> {
+fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
     let mut pargs = pico_args::Arguments::from_env();
 
     // Help has a higher priority and should be handled separately.
@@ -45,20 +44,17 @@ fn parse_args() -> Result<AppArgs, pico_args::Error> {
         std::process::exit(0);
     }
 
-    let args = AppArgs {
-        // Parses a required value that implements `FromStr`.
-        // Returns an error if not present.
-        number: pargs.value_from_str("--number")?,
-        // Parses an optional value that implements `FromStr`.
-        opt_number: pargs.opt_value_from_str("--opt-number")?,
-        // Parses an optional value from `&str` using a specified function.
-        width: pargs
-            .opt_value_from_fn("--width", parse_width)?
-            .unwrap_or(10),
-        // Parses an optional value from `&OsStr` using a specified function.
-        output: pargs.opt_value_from_os_str("--output", parse_path)?,
-        // Parses a required free-standing/positional argument.
-        input: pargs.free_from_str()?,
+    let args = GruploadArgs {
+        vertex_file: pargs
+            .opt_value_from_str("--vertices")?
+            .unwrap_or("vertices.jsonl".into()),
+        edge_file: pargs
+            .opt_value_from_str("--edges")?
+            .unwrap_or("edges.jsonl".into()),
+        endpoint: pargs
+            .opt_value_from_str("--endpoint")?
+            .unwrap_or("http://localhost:9999".into()),
+        // input: pargs.free_from_str()?,
     };
 
     // It's up to the caller what to do with the remaining arguments.
@@ -68,12 +64,4 @@ fn parse_args() -> Result<AppArgs, pico_args::Error> {
     }
 
     Ok(args)
-}
-
-fn parse_width(s: &str) -> Result<u32, &'static str> {
-    s.parse().map_err(|_| "not a number")
-}
-
-fn parse_path(s: &std::ffi::OsStr) -> Result<std::path::PathBuf, &'static str> {
-    Ok(s.into())
 }
