@@ -42,6 +42,11 @@ fn main() {
         }
     };
 
+    if args.command == "empty" {
+        eprintln!("Error: no command given, see --help for a list of commands!!");
+        std::process::exit(2);
+    }
+
     println!("{:#?}", args);
 }
 
@@ -65,7 +70,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         endpoint: pargs
             .opt_value_from_str("--endpoint")?
             .unwrap_or("http://localhost:9999".into()),
-        command: pargs.free_from_str()?,
+        command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 
     // It's up to the caller what to do with the remaining arguments.
