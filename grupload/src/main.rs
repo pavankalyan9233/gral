@@ -59,6 +59,8 @@ fn main() {
 
     match args.command.as_str() {
         "create" => crate::commands::create(&args),
+        "sealVertices" => crate::commands::seal_vertices(&args),
+        "sealEdges" => crate::commands::seal_edges(&args),
         _ => {
             eprintln!("Error: command {} not yet implemented!", args.command);
         }
