@@ -4,12 +4,20 @@ const HELP: &str = "\
 grupload
 
 USAGE:
-  grupload [OPTIONS]
+  grupload [OPTIONS] COMMAND
 
 FLAGS:
   -h, --help            Prints help information
 
+COMMANDS:
+  create                create a graph
+  vertices              upload vertices and seal them
+  edges                 upload edges and seal them
+  drop                  drop a graph
+  upload                create, upload and seal, return number
+
 OPTIONS:
+  --graph GRAPHNUMBER   Number of graph to use [default: 0]
   --vertices FILENAME   Vertex input file (jsonl) [default: 'vertices.jsonl']
   --edges FILENAME      Edge input file (jsonl) [default: 'edges.jsonl']
   --endpoint ENDPOINT   gral endpoint to send data to
@@ -18,6 +26,8 @@ OPTIONS:
 
 #[derive(Debug)]
 struct GruploadArgs {
+    command: String,
+    graph_number: u32,
     vertex_file: std::path::PathBuf,
     edge_file: std::path::PathBuf,
     endpoint: String,
@@ -45,6 +55,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
     }
 
     let args = GruploadArgs {
+        graph_number: pargs.opt_value_from_str("--graph")?.unwrap_or(0),
         vertex_file: pargs
             .opt_value_from_str("--vertices")?
             .unwrap_or("vertices.jsonl".into()),
@@ -54,7 +65,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         endpoint: pargs
             .opt_value_from_str("--endpoint")?
             .unwrap_or("http://localhost:9999".into()),
-        // input: pargs.free_from_str()?,
+        command: pargs.free_from_str()?,
     };
 
     // It's up to the caller what to do with the remaining arguments.

@@ -248,6 +248,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "bytes",
+ "pico-args",
  "rand",
  "tokio",
  "warp",
