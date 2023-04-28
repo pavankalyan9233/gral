@@ -26,6 +26,10 @@ pub fn create(args: &GruploadArgs) {
 
     // TODO handle and print error
     let status_code = resp.status();
+    if status_code != 200 {
+        handle_error(resp);
+        return;
+    }
     let body = resp.bytes().unwrap();
     let mut cursor = Cursor::new(&body);
     let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
