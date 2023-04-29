@@ -57,13 +57,15 @@ fn main() {
         std::process::exit(2);
     }
 
-    match args.command.as_str() {
+    let r = match args.command.as_str() {
         "create" => crate::commands::create(&args),
+        "vertices" => crate::commands::vertices(&args),
         "sealVertices" => crate::commands::seal_vertices(&args),
         "sealEdges" => crate::commands::seal_edges(&args),
-        _ => {
-            eprintln!("Error: command {} not yet implemented!", args.command);
-        }
+        _ => Err(format!("Command {} not implemented.", args.command)),
+    };
+    if let Err(s) = r {
+        eprintln!("Error: {}", s);
     }
 }
 
