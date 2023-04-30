@@ -41,8 +41,17 @@ pub struct GruploadArgs {
     endpoint: String,
 }
 
+fn upload(args: &mut GruploadArgs) -> Result<(), String> {
+    crate::commands::create(args)?;
+    crate::commands::vertices(args)?;
+    crate::commands::seal_vertices(args)?;
+    crate::commands::edges(args)?;
+    crate::commands::seal_edges(args)?;
+    Ok(())
+}
+
 fn main() {
-    let args = match parse_args() {
+    let mut args = match parse_args() {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Error: {}.", e);
@@ -58,11 +67,13 @@ fn main() {
     }
 
     let r = match args.command.as_str() {
-        "create" => crate::commands::create(&args),
+        "create" => crate::commands::create(&mut args),
         "vertices" => crate::commands::vertices(&args),
         "sealVertices" => crate::commands::seal_vertices(&args),
         "edges" => crate::commands::edges(&args),
         "sealEdges" => crate::commands::seal_edges(&args),
+        "dropGraph" => crate::commands::drop_graph(&args),
+        "upload" => upload(&mut args),
         _ => Err(format!("Command {} not implemented.", args.command)),
     };
     if let Err(s) = r {

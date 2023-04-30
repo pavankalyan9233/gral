@@ -79,7 +79,7 @@ pub fn handle_error(resp: &mut Response, ok: StatusCode) -> Result<(), String> {
     Err(format!("Error: code={}, {}", code, msg))
 }
 
-pub fn create(args: &GruploadArgs) -> Result<(), String> {
+pub fn create(args: &mut GruploadArgs) -> Result<(), String> {
     println!("Creating graph... {:?}", args);
     let client = reqwest::blocking::Client::new();
     let mut v: Vec<u8> = vec![];
@@ -109,6 +109,7 @@ pub fn create(args: &GruploadArgs) -> Result<(), String> {
         "Graph number: {}, bits per hash: {}",
         graph_number, bits_per_hash
     );
+    args.graph_number = graph_number; // Return number of graph
     return Ok(());
 }
 
@@ -387,5 +388,31 @@ pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
         "Graph number: {}, number of vertices: {}, number of edges: {}",
         graph_number, number_of_vertices, number_of_edges
     );
+    Ok(())
+}
+
+pub fn drop_graph(args: &GruploadArgs) -> Result<(), String> {
+    println!("Dropping graph {}... {:?}", args.graph_number, args);
+    let client = reqwest::blocking::Client::new();
+    let mut v: Vec<u8> = vec![];
+    let mut rng = rand::thread_rng();
+    let client_id = rng.gen::<u64>();
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u32::<BigEndian>(args.graph_number).unwrap();
+
+    let mut url = args.endpoint.clone();
+    url.push_str("/v1/dropGraph");
+    let mut resp = match client.put(url).body(v).send() {
+        Ok(resp) => resp,
+        Err(err) => panic!("Error: {}", err),
+    };
+    handle_error(&mut resp, status(200))?;
+
+    let body = resp.bytes().unwrap();
+    let mut cursor = Cursor::new(&body);
+    let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
+    let graph_number = cursor.read_u32::<BigEndian>().unwrap();
+
+    println!("Graph number: {} dropped.", graph_number,);
     Ok(())
 }

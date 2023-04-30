@@ -18,7 +18,7 @@ pub fn api_filter(
         .and(with_graphs(graphs.clone()))
         .and(warp::body::bytes())
         .and_then(api_create);
-    let drop = warp::path!("v1" / "drop")
+    let drop = warp::path!("v1" / "dropGraph")
         .and(warp::put())
         .and(with_graphs(graphs.clone()))
         .and(warp::body::bytes())
