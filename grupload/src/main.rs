@@ -61,6 +61,7 @@ fn main() {
         "create" => crate::commands::create(&args),
         "vertices" => crate::commands::vertices(&args),
         "sealVertices" => crate::commands::seal_vertices(&args),
+        "edges" => crate::commands::edges(&args),
         "sealEdges" => crate::commands::seal_edges(&args),
         _ => Err(format!("Command {} not implemented.", args.command)),
     };

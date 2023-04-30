@@ -247,6 +247,118 @@ pub fn seal_vertices(args: &GruploadArgs) -> Result<(), String> {
     Ok(())
 }
 
+pub fn edges(args: &GruploadArgs) -> Result<(), String> {
+    println!("Loading edges... {:?}", args);
+    let client = reqwest::blocking::Client::new();
+
+    let file = File::open(&args.edge_file);
+    if let Err(err) = file {
+        return Err(format!(
+            "Error reading file {}: {:?}",
+            args.edge_file.to_string_lossy(),
+            err
+        ));
+    }
+    let mut rng = rand::thread_rng();
+    let file = file.unwrap();
+    let iter = BufReader::new(file).lines();
+    let mut buf: Vec<u8> = vec![];
+    buf.reserve(1000000);
+    let mut client_id: u64 = 0;
+
+    let mut write_header = |buf: &mut Vec<u8>, client_id: &mut u64| {
+        buf.clear();
+        *client_id = rng.gen::<u64>();
+        buf.write_u64::<BigEndian>(*client_id).unwrap();
+        buf.write_u32::<BigEndian>(args.graph_number).unwrap();
+        buf.write_u32::<BigEndian>(0).unwrap();
+    };
+
+    let send_off = |buf: &mut Vec<u8>, count: u32| -> Result<(), String> {
+        let mut tmp = count;
+        for i in 1..=4 {
+            buf[16 - i] = (tmp & 0xff) as u8;
+            tmp >>= 8;
+        }
+        let mut url = args.endpoint.clone();
+        url.push_str("/v1/edges");
+        let mut resp = match client.post(url).body(buf.clone()).send() {
+            Ok(resp) => resp,
+            Err(err) => return Err(format!("Could not send off batch: {:?}", err)),
+        };
+        handle_error(&mut resp, status(200))?;
+
+        let mut body: Vec<u8> = vec![];
+        let _size = resp.read_to_end(&mut body).unwrap();
+        let mut cursor = Cursor::new(&body);
+        let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
+        let nr_rejected = cursor.read_u32::<BigEndian>().unwrap();
+        for _i in 0..nr_rejected {
+            let index = cursor.read_u32::<BigEndian>().unwrap();
+            let code = cursor.read_u32::<BigEndian>().unwrap();
+            println!("Index of rejected vertex: {}, code: {}", index, code);
+        }
+        Ok(())
+    };
+
+    write_header(&mut buf, &mut client_id);
+    let mut count: u32 = 0;
+    let mut overall: u64 = 0;
+    for line in iter {
+        let l = line.unwrap();
+        let v: Value = match serde_json::from_str(&l) {
+            Err(err) => return Err(format!("Cannot parse JSON: {:?}", err)),
+            Ok(val) => val,
+        };
+        let from = &v["_from"];
+        match from {
+            Value::String(f) => {
+                let to = &v["_to"];
+                match to {
+                    Value::String(t) => {
+                        put_varlen(&mut buf, f.len() as u32);
+                        for x in f.bytes() {
+                            buf.push(x);
+                        }
+                        put_varlen(&mut buf, t.len() as u32);
+                        for x in t.bytes() {
+                            buf.push(x);
+                        }
+                        buf.push(0); // no data for now
+                    }
+                    _ => {
+                        return Err(format!("JSON has no string as _to attribute:\n{}", l));
+                    }
+                }
+            }
+            _ => {
+                return Err(format!(
+                    "JSON is no object with a string _from attribute:\n{}",
+                    l
+                ));
+            }
+        }
+
+        count += 1;
+        if count >= 65536 || buf.len() > 900000 {
+            send_off(&mut buf, count)?;
+            write_header(&mut buf, &mut client_id);
+            overall += count as u64;
+            count = 0;
+        }
+    }
+    if count > 0 {
+        send_off(&mut buf, count)?;
+        overall += count as u64;
+    }
+
+    println!(
+        "Edges uploaded, graph number: {}, number of edges: {}",
+        args.graph_number, overall
+    );
+    Ok(())
+}
+
 pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
     println!("Sealing edges... {:?}", args);
     let client = reqwest::blocking::Client::new();
