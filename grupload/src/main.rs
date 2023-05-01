@@ -29,6 +29,7 @@ OPTIONS:
   --edges FILENAME      Edge input file (jsonl) [default: 'edges.jsonl']
   --endpoint ENDPOINT   gral endpoint to send data to
                         [default: 'http://localhost:9999']
+  --key-size NR         Size of keys in bytes in `randomize` [default: 32]
 ";
 
 #[derive(Debug)]
@@ -41,6 +42,7 @@ pub struct GruploadArgs {
     vertex_file: std::path::PathBuf,
     edge_file: std::path::PathBuf,
     endpoint: String,
+    key_size: u32,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -76,7 +78,7 @@ fn main() {
         "sealEdges" => crate::commands::seal_edges(&args),
         "dropGraph" => crate::commands::drop_graph(&args),
         "upload" => upload(&mut args),
-        "randomize" => crate::commands::randomie(&args),
+        "randomize" => crate::commands::randomize(&args),
         _ => Err(format!("Command {} not implemented.", args.command)),
     };
     if let Err(s) = r {
@@ -109,6 +111,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         endpoint: pargs
             .opt_value_from_str("--endpoint")?
             .unwrap_or("http://localhost:9999".into()),
+        key_size: pargs.opt_value_from_str("--key-size")?.unwrap_or(32),
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 
