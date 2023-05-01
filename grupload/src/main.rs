@@ -17,6 +17,8 @@ COMMANDS:
   edges                 upload edges and seal them
   drop                  drop a graph
   upload                create, upload and seal, return number
+  randomize             create a random graph with max-vertices vertices
+                        and max-edges edges
 
 OPTIONS:
   --max-vertices NR     Maximal number of vertices (only for create) [default: 1000000]
@@ -74,6 +76,7 @@ fn main() {
         "sealEdges" => crate::commands::seal_edges(&args),
         "dropGraph" => crate::commands::drop_graph(&args),
         "upload" => upload(&mut args),
+        "randomize" => crate::commands::randomie(&args),
         _ => Err(format!("Command {} not implemented.", args.command)),
     };
     if let Err(s) = r {
