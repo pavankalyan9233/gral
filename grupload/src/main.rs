@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::cmp::min;
+
 mod commands;
 
 const HELP: &str = "\
@@ -9,27 +11,32 @@ USAGE:
   grupload [OPTIONS] COMMAND
 
 FLAGS:
-  -h, --help            Prints help information
-
-COMMANDS:
-  create                create a graph
-  vertices              upload vertices and seal them
-  edges                 upload edges and seal them
-  drop                  drop a graph
-  upload                create, upload and seal, return number
-  randomize             create a random graph with max-vertices vertices
-                        and max-edges edges
-
-OPTIONS:
-  --max-vertices NR     Maximal number of vertices (only for create) [default: 1000000]
-  --max-edges NR        Maximal number of edges (only for create) [default: 1000000]
-  --store-keys BOOL     Flag if gral should store the keys [default: true]
-  --graph GRAPHNUMBER   Number of graph to use [default: 0]
-  --vertices FILENAME   Vertex input file (jsonl) [default: 'vertices.jsonl']
-  --edges FILENAME      Edge input file (jsonl) [default: 'edges.jsonl']
-  --endpoint ENDPOINT   gral endpoint to send data to
-                        [default: 'http://localhost:9999']
-  --key-size NR         Size of keys in bytes in `randomize` [default: 32]
+  -h, --help               Prints help information
+                          
+COMMANDS:                 
+  create                   create a graph
+  vertices                 upload vertices and seal them
+  edges                    upload edges and seal them
+  drop                     drop a graph
+  upload                   create, upload and seal, return number
+  randomize                create a random graph with max-vertices vertices
+                           and max-edges edges
+                          
+OPTIONS:                  
+  --max-vertices NR        Maximal number of vertices (only for create)
+                           [default: 1000000]
+  --max-edges NR           Maximal number of edges (only for create)
+                           [default: 1000000]
+  --store-keys BOOL        Flag if gral should store the keys [default: true]
+  --graph GRAPHNUMBER      Number of graph to use [default: 0]
+  --vertices FILENAME      Vertex input file (jsonl)
+                           [default: 'vertices.jsonl']
+  --edges FILENAME         Edge input file (jsonl) [default: 'edges.jsonl']
+  --endpoint ENDPOINT      gral endpoint to send data to
+                           [default: 'http://localhost:9999']
+  --key-size NR            Size of keys in bytes in `randomize` [default: 32]
+  --vertex-coll-name NAME  Name of the vertex collection (relevant for 
+                           `randomize`) [default: 'V']
 ";
 
 #[derive(Debug)]
@@ -43,6 +50,7 @@ pub struct GruploadArgs {
     edge_file: std::path::PathBuf,
     endpoint: String,
     key_size: u32,
+    vertex_coll_name: String,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -95,7 +103,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         std::process::exit(0);
     }
 
-    let args = GruploadArgs {
+    let mut args = GruploadArgs {
         store_keys: pargs.opt_value_from_str("--store-keys")?.unwrap_or(true),
         max_vertices: pargs
             .opt_value_from_str("--max-vertices")?
@@ -112,8 +120,13 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
             .opt_value_from_str("--endpoint")?
             .unwrap_or("http://localhost:9999".into()),
         key_size: pargs.opt_value_from_str("--key-size")?.unwrap_or(32),
+        vertex_coll_name: pargs
+            .opt_value_from_str("--vertex-coll-name")?
+            .unwrap_or("V".into()),
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
+
+    args.key_size = min(args.key_size, 64);
 
     // It's up to the caller what to do with the remaining arguments.
     let remaining = pargs.finish();

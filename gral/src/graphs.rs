@@ -282,7 +282,12 @@ impl Graph {
             cur_to = VertexIndex::new(cur_to.to_u64() + 1);
             self.edge_index_by_to.push(pos);
         }
-        let _ = self.dump_graph();
+        //let _ = self.dump_graph();
+        println!(
+            "Sealed graph with {} vertices and {} edges.",
+            self.index_to_hash.len(),
+            self.edges.len()
+        );
     }
 
     pub fn hash_from_vertex_key(&self, k: &str) -> Option<VertexHash> {

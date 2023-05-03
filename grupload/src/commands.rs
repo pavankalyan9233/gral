@@ -422,17 +422,24 @@ pub fn randomize(args: &GruploadArgs) -> Result<(), String> {
     let mut rng = rand::thread_rng();
     //let client_id = rng.gen::<u64>();
 
+    let cap = args.vertex_coll_name.len() + 1 + args.key_size as usize;
+
+    let make_id = |key: &str| -> String {
+        let mut id = String::with_capacity(cap);
+        id.push_str(&args.vertex_coll_name);
+        id.push('/');
+        id.push_str(key);
+        id
+    };
+
     // First create the vertices file:
     let file = File::create(&args.vertex_file).expect("Cannot create vertex file.");
-    let mut out = BufWriter::with_capacity(1024 * 1024, file);
+    let mut out = BufWriter::with_capacity(8 * 1024, file);
     for i in 0..args.max_vertices {
         let dig = digest(i.to_string());
-        let key = if args.key_size < 64 {
-            &dig[0..args.key_size as usize]
-        } else {
-            &dig[..]
-        };
-        let r = write!(out, "{{\"_key\":\"{}\"}}\n", key);
+        let key = &dig[0..args.key_size as usize];
+        let id = make_id(key);
+        let r = write!(out, "{{\"_key\":\"{}\",\"_id\":\"{}\"}}\n", key, id);
         if let Err(rr) = r {
             return Err(format!("Error during vertex write: {:?}", rr));
         }
@@ -449,18 +456,11 @@ pub fn randomize(args: &GruploadArgs) -> Result<(), String> {
     for _i in 0..args.max_edges {
         let f = rng.gen::<u64>() % args.max_vertices;
         let digf = digest(f.to_string());
-        let keyf = if args.key_size < 64 {
-            &digf[0..args.key_size as usize]
-        } else {
-            &digf[..]
-        };
+        let keyf = make_id(&digf[0..args.key_size as usize]);
+
         let t = rng.gen::<u64>() % args.max_vertices;
         let digt = digest(t.to_string());
-        let keyt = if args.key_size < 64 {
-            &digt[0..args.key_size as usize]
-        } else {
-            &digt[..]
-        };
+        let keyt = make_id(&digt[0..args.key_size as usize]);
         let r = write!(out, "{{\"_from\":\"{}\",\"_to\":\"{}\"}}\n", keyf, keyt);
         if let Err(rr) = r {
             return Err(format!("Error during edge write: {:?}", rr));
