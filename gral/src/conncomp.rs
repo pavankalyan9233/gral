@@ -37,6 +37,16 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
     );
     let mut counter: u64 = 0;
     for e in g.edges.iter() {
+        if counter % 1000000 == 0 {
+            println!(
+                "{:?} Have currently {} connected components with {} of {} edges processed.",
+                start.elapsed(),
+                nr_components,
+                counter,
+                nr_e
+            );
+        }
+        counter += 1;
         let a = e.from.to_u64();
         let b = e.to.to_u64();
         let mut c = mini[b as usize];
@@ -61,16 +71,6 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
         next[rep as usize] = first as i64;
         next[c as usize] = second;
         nr_components -= 1;
-        counter += 1;
-        if nr_components % 1000000 == 0 {
-            println!(
-                "{:?} Have currently {} connected components with {} of {} edges processed.",
-                start.elapsed(),
-                nr_components,
-                counter,
-                nr_e
-            );
-        }
     }
     println!(
         "{:?} Finished, found {} weakly connected components.",

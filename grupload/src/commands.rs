@@ -8,6 +8,7 @@ use sha256::digest;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Cursor, Read, Write};
 use std::str;
+use std::time::Duration;
 
 pub fn status(c: u16) -> StatusCode {
     StatusCode::from_u16(c).unwrap()
@@ -372,7 +373,12 @@ pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
 
     let mut url = args.endpoint.clone();
     url.push_str("/v1/sealEdges");
-    let mut resp = match client.post(url).body(v).send() {
+    let mut resp = match client
+        .post(url)
+        .body(v)
+        .timeout(Duration::new(3600, 0))
+        .send()
+    {
         Ok(resp) => resp,
         Err(err) => panic!("Error: {}", err),
     };
