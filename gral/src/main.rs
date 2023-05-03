@@ -5,6 +5,7 @@ use warp::{http::Response, Filter};
 
 mod api;
 mod args;
+mod conncomp;
 mod graphs;
 
 use crate::api::{api_filter, handle_errors};

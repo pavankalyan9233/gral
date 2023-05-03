@@ -1,3 +1,4 @@
+use crate::conncomp::weakly_connected_components;
 use crate::graphs::{with_graphs, Graph, Graphs, VertexHash, VertexIndex};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
@@ -640,6 +641,9 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
     }
 
     graph.seal_edges();
+
+    let (nr, _) = weakly_connected_components(&graph);
+    println!("Found {} weakly connected components.", nr);
 
     // Write response:
     let mut v = Vec::new();

@@ -31,9 +31,9 @@ impl VertexIndex {
 
 #[derive(Debug)]
 pub struct Edge {
-    from: VertexIndex, // index of vertex
-    to: VertexIndex,   // index of vertex
-    data_offset: u64,  // offset into edge_data
+    pub from: VertexIndex, // index of vertex
+    pub to: VertexIndex,   // index of vertex
+    pub data_offset: u64,  // offset into edge_data
 }
 
 #[derive(Debug)]
