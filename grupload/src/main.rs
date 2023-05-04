@@ -37,6 +37,7 @@ OPTIONS:
   --key-size NR            Size of keys in bytes in `randomize` [default: 32]
   --vertex-coll-name NAME  Name of the vertex collection (relevant for 
                            `randomize`) [default: 'V']
+  --threads NR             Number of threads to use [default: 1]
 ";
 
 #[derive(Debug)]
@@ -51,6 +52,7 @@ pub struct GruploadArgs {
     endpoint: String,
     key_size: u32,
     vertex_coll_name: String,
+    nr_threads: u32,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -123,6 +125,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         vertex_coll_name: pargs
             .opt_value_from_str("--vertex-coll-name")?
             .unwrap_or("V".into()),
+        nr_threads: pargs.opt_value_from_str("--threads")?.unwrap_or(1),
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 
