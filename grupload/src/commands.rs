@@ -270,8 +270,8 @@ fn vertices_one_thread(
     }
 
     println!(
-        "Vertices uploaded, graph number: {}, number of vertices: {}",
-        graph_number, overall
+        "Vertices uploaded range from {} to {}, graph number: {}, number of vertices: {}",
+        start, finish, graph_number, overall
     );
     Ok(())
 }
@@ -320,7 +320,11 @@ pub fn vertices(args: &GruploadArgs) -> Result<(), String> {
         }
     }
 
-    Ok(())
+    if !errors.is_empty() {
+        Err(errors)
+    } else {
+        Ok(())
+    }
 }
 
 pub fn seal_vertices(args: &GruploadArgs) -> Result<(), String> {
@@ -353,30 +357,26 @@ pub fn seal_vertices(args: &GruploadArgs) -> Result<(), String> {
     Ok(())
 }
 
-pub fn edges(args: &GruploadArgs) -> Result<(), String> {
-    println!("Loading edges... {:?}", args);
+pub fn edges_one_thread(
+    file_name: String,
+    graph_number: u32,
+    endpoint: String,
+    start: u64,
+    finish: u64,
+) -> Result<(), String> {
     let client = reqwest::blocking::Client::new();
-
-    let file = File::open(&args.edge_file);
-    if let Err(err) = file {
-        return Err(format!(
-            "Error reading file {}: {:?}",
-            args.edge_file.to_string_lossy(),
-            err
-        ));
-    }
     let mut rng = rand::thread_rng();
-    let file = file.unwrap();
-    let iter = BufReader::new(file).lines();
     let mut buf: Vec<u8> = vec![];
     buf.reserve(1000000);
     let mut client_id: u64 = 0;
+
+    // Two closures to do some work:
 
     let mut write_header = |buf: &mut Vec<u8>, client_id: &mut u64| {
         buf.clear();
         *client_id = rng.gen::<u64>();
         buf.write_u64::<BigEndian>(*client_id).unwrap();
-        buf.write_u32::<BigEndian>(args.graph_number).unwrap();
+        buf.write_u32::<BigEndian>(graph_number).unwrap();
         buf.write_u32::<BigEndian>(0).unwrap();
     };
 
@@ -386,7 +386,7 @@ pub fn edges(args: &GruploadArgs) -> Result<(), String> {
             buf[16 - i] = (tmp & 0xff) as u8;
             tmp >>= 8;
         }
-        let mut url = args.endpoint.clone();
+        let mut url = endpoint.clone();
         url.push_str("/v1/edges");
         let mut resp = match client.post(url).body(buf.clone()).send() {
             Ok(resp) => resp,
@@ -407,11 +407,69 @@ pub fn edges(args: &GruploadArgs) -> Result<(), String> {
         Ok(())
     };
 
+    let file = File::open(&file_name);
+    if let Err(err) = file {
+        return Err(format!("Error reading file {}: {:?}", file_name, err));
+    }
+    let file = file.unwrap();
+    let mut reader = BufReader::new(file);
+    let mut file_pos: u64 = 0;
+    if start > 0 {
+        let seek_res = reader.seek(SeekFrom::Start(start));
+        if let Err(err) = seek_res {
+            return Err(format!(
+                "Error seeking to start position {} in file {}: {:?}",
+                start, file_name, err
+            ));
+        }
+        file_pos = seek_res.unwrap();
+        // This thread is responsible for all lines after the first line
+        // which has its line end character at or behind position `start`.
+        // Therefore, we skip bytes until we see a line end. Note that this
+        // has the additional benefit of skipping over incomplete UTF-8
+        // code points!
+        loop {
+            let mut byte_buf: Vec<u8> = vec![0];
+            let b = reader.read_exact(&mut byte_buf);
+            if let Err(err) = b {
+                return Err(format!(
+                    "Error reading single bytes at start position {} in file {}: {:?}",
+                    start, file_name, err
+                ));
+            }
+            file_pos += 1;
+            if byte_buf[0] == '\n' as u8 {
+                break;
+            }
+        }
+    }
+
     write_header(&mut buf, &mut client_id);
     let mut count: u32 = 0;
     let mut overall: u64 = 0;
-    for line in iter {
-        let l = line.unwrap();
+    while file_pos <= finish {
+        // Note that we are supposed to read up to (and including) the
+        // first line whose line end character is at or behind position
+        // `finish` in the file.
+        let mut line = String::with_capacity(256);
+        let r = reader.read_line(&mut line);
+        match r {
+            Err(err) => {
+                return Err(format!(
+                    "Error reading lines from file {}: {:?}",
+                    file_name, err
+                ));
+            }
+            Ok(size) => {
+                if size == 0 {
+                    // EOF
+                    break;
+                }
+                file_pos += size as u64;
+            }
+        }
+        let l = line.trim_end();
+
         let v: Value = match serde_json::from_str(&l) {
             Err(err) => return Err(format!("Cannot parse JSON: {:?}", err)),
             Ok(val) => val,
@@ -459,10 +517,60 @@ pub fn edges(args: &GruploadArgs) -> Result<(), String> {
     }
 
     println!(
-        "Edges uploaded, graph number: {}, number of edges: {}",
-        args.graph_number, overall
+        "Edges uploaded range from {} to {}, graph number: {}, number of edges: {}",
+        start, finish, graph_number, overall
     );
     Ok(())
+}
+
+pub fn edges(args: &GruploadArgs) -> Result<(), String> {
+    println!("Loading edges... {:?}", args);
+
+    let meta = metadata(&args.edge_file);
+    if let Err(err) = meta {
+        return Err(format!("Could not find edge file: {:?}", err));
+    }
+    let total_size = meta.unwrap().len();
+    let chunk_size = total_size / (args.nr_threads as u64);
+    if chunk_size < 4096 {
+        // take care of very small files:
+        return edges_one_thread(
+            args.edge_file.to_str().unwrap().to_owned(),
+            args.graph_number,
+            args.endpoint.clone(),
+            0,
+            total_size,
+        );
+    }
+    let mut join: Vec<JoinHandle<Result<(), String>>> = vec![];
+    let mut s: u64 = 0;
+    for i in 0..(args.nr_threads) {
+        let start: u64 = s;
+        s += chunk_size;
+        let mut finish: u64 = s;
+        if i == args.nr_threads - 1 {
+            finish = total_size;
+        }
+        let file_name = args.edge_file.to_str().unwrap().to_owned();
+        let graph_number = args.graph_number;
+        let endpoint = args.endpoint.clone();
+        join.push(spawn(move || -> Result<(), String> {
+            edges_one_thread(file_name, graph_number, endpoint, start, finish)
+        }));
+    }
+    let mut errors = String::new();
+    for jh in join.into_iter() {
+        let r = jh.join().unwrap();
+        if let Err(msg) = r {
+            errors.push_str(&msg);
+            errors.push('.');
+        }
+    }
+    if !errors.is_empty() {
+        Err(errors)
+    } else {
+        Ok(())
+    }
 }
 
 pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
