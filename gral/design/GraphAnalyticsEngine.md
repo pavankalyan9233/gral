@@ -153,12 +153,16 @@ u32      number of exceptional hashes
 and then repeated as often as the number of rejected vertices says:
 
 u32      index of rejected vertex in input body
+varlen   length of key (0 not allowed)
+[u8]     bytes of key
 ...
 
 and then repeated as often as the number of exceptional hashes says:
 
 u32      index of key in body with an exceptional hash
 u64/u128 exceptional hash (bit width as negotiated)
+varlen   length of key (0 not allowed)
+[u8]     bytes of key
 ...
 
 or 400 BAD and error body as above. Duplicate keys are not a reason to
@@ -234,6 +238,8 @@ and then repeated as often as the number of rejected edges says:
 u32      index of rejected key in input body
 u32      error code: 1 for "from not found", 2 for "to not found", 3 for
          "both from and to not found"
+varlen   length of additional data (0 allowed for no data)
+[u8]     additional data of the rejected edge
 ...
 
 or 400 BAD and error body as above. Rejected edges are not a reason to
@@ -275,9 +281,33 @@ return 404 and an error body as described above.
 ### `POST /v1/weaklyConnectedComponents`
 
 Computes the weakly connected components of a graph. This call actually
-only triggers the computation and returns immediately. The client-id is
-used to identify the computation and can later be used to query
-progress.
+only triggers the computation and returns immediately.
+
+Body:
+
+```
+u64     client-id
+u32     number of graph
+```
+
+Response is 200 with this body:
+
+```
+u64     client-id
+u32     number of graph
+u64     computation-id
+```
+
+The computation-id identifies this particular computation.
+
+If the graph number is not found, we return 404 and an error body as
+described above.
+
+
+### `POST /v1/stronglyConnectedComponents`
+
+Computes the strongly connected components of a graph. This call actually
+only triggers the computation and returns immediately.
 
 Body:
 
@@ -339,7 +369,7 @@ If the computation is not found (via its client-id), the response is 404
 with an error body as described above.
 
 
-### `PUT /v1/eraseComputation`
+### `PUT /v1/dropComputation`
 
 Erase the results of a computation. One needs the client-id of the
 computation. This can also abort a computation. But then it is no
@@ -375,6 +405,9 @@ vertex a number which identifies the connected component it is in.
 Two vertices will have the same numeric result if and only if they are
 in the same weakly connected component.
 
+Note that we do not use a client-id here, since this is in fact just a
+GET with a body, so it is automatically idempotent.
+
 One sends a body like this:
 
 ```
@@ -401,10 +434,15 @@ u32      number of results for non-rejected vertices
 and then for each rejected vertex its index in the original input body:
 
 u32      index
+varlen   length of rejected key (or 0 for hash if hash was given)
+[u8]     bytes of rejected key (or hash if varlen was 0)
 ...
 
 and then for each vertex:
 
+varlen   length of key (or 0 if only hash given)
+[u8]     bytes of key (or hash if only hash given)
+varlen   length of data for this key
 [u8]     result data (depends on algorithm)
 ...
 ```
@@ -412,6 +450,8 @@ and then for each vertex:
 For example, the weakly connected components might return a
 
 ```
+varlen   length of key (or 0 if only hash known)
+[u8]     bytes of key (or hash if only hash known)
 u64      id of connected component
 ```
 
