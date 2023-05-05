@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Infallible;
 //use std::io::Write;
+use std::str;
 use std::sync::{Arc, Mutex};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
@@ -46,10 +47,10 @@ pub struct Graph {
     pub hash_to_index: HashMap<VertexHash, VertexIndex>,
 
     // key is the key of the vertex, value is the exceptional hash
-    pub exceptions: HashMap<String, VertexHash>,
+    pub exceptions: HashMap<Vec<u8>, VertexHash>,
 
     // Maps indices of vertices to their names, not necessarily used:
-    pub index_to_key: Vec<String>,
+    pub index_to_key: Vec<Vec<u8>>,
 
     // Additional data for vertices:
     pub vertex_data: Vec<u8>,
@@ -141,61 +142,46 @@ impl Graph {
     pub fn insert_vertex(
         &mut self,
         i: u32,
-        hash: Option<VertexHash>,
-        key: Option<String>,
-        data: Option<Vec<u8>>,
-        rejected: &mut Vec<u32>,
+        hash: VertexHash,
+        key: Vec<u8>,  // cannot be empty
+        data: Vec<u8>, // can be empty
         exceptional: &mut Vec<(u32, VertexHash)>,
+        exceptional_keys: &mut Vec<Vec<u8>>,
     ) {
-        match hash {
-            None => rejected.push(i),
-            Some(h) => {
-                // First detect a collision:
-                let index = VertexIndex(self.vertex_data_offsets.len() as u64);
-                let mut actual = h;
-                if self.hash_to_index.contains_key(&h) {
-                    if key.is_some() {
-                        // This is a collision, we create a random alternative
-                        // hash and report the collision:
-                        let mut rng = rand::thread_rng();
-                        loop {
-                            actual = VertexHash(rng.gen::<u64>());
-                            if let Some(_) = self.hash_to_index.get_mut(&actual) {
-                                break;
-                            }
-                        }
-                        let oi = self.hash_to_index.get_mut(&h).unwrap();
-                        *oi = VertexIndex((*oi).0 | 0x800000000000000);
-                        exceptional.push((i, actual));
-                        if self.store_keys {
-                            self.exceptions.insert(key.clone().unwrap(), actual);
-                        }
-                    } else {
-                        // This is a duplicate hash without key, we must
-                        // reject this:
-                        rejected.push(i);
-                        return;
-                    }
-                }
-                // Will succeed:
-                self.index_to_hash.push(actual);
-                self.hash_to_index.insert(actual, index);
-                if let Some(k) = key {
-                    if self.store_keys {
-                        self.index_to_key.push(k.to_string());
-                    }
-                }
-                if let Some(d) = data {
-                    // Insert data:
-                    let pos = self.vertex_data.len() as u64;
-                    self.vertex_data_offsets.push(pos);
-                    for b in d.iter() {
-                        self.vertex_data.push(*b);
-                    }
-                } else {
-                    self.vertex_data_offsets.push(0);
+        // First detect a collision:
+        let index = VertexIndex(self.vertex_data_offsets.len() as u64);
+        let mut actual = hash;
+        if self.hash_to_index.contains_key(&hash) {
+            // This is a collision, we create a random alternative
+            // hash and report the collision:
+            let mut rng = rand::thread_rng();
+            loop {
+                actual = VertexHash(rng.gen::<u64>());
+                if let Some(_) = self.hash_to_index.get_mut(&actual) {
+                    break;
                 }
             }
+            let oi = self.hash_to_index.get_mut(&hash).unwrap();
+            *oi = VertexIndex((*oi).0 | 0x800000000000000);
+            exceptional.push((i, actual));
+            exceptional_keys.push(key.clone());
+            if self.store_keys {
+                self.exceptions.insert(key.clone(), actual);
+            }
+        }
+        // Will succeed:
+        self.index_to_hash.push(actual);
+        self.hash_to_index.insert(actual, index);
+        if self.store_keys {
+            self.index_to_key.push(key.clone());
+        }
+        if !data.is_empty() {
+            // Insert data:
+            let pos = self.vertex_data.len() as u64;
+            self.vertex_data_offsets.push(pos);
+            self.vertex_data.extend_from_slice(&data);
+        } else {
+            self.vertex_data_offsets.push(0);
         }
     }
 
@@ -290,16 +276,15 @@ impl Graph {
         );
     }
 
-    pub fn hash_from_vertex_key(&self, k: &str) -> Option<VertexHash> {
-        let hash = VertexHash(xxh3_64_with_seed(k.as_bytes(), 0xdeadbeefdeadbeef));
+    pub fn hash_from_vertex_key(&self, k: &[u8]) -> Option<VertexHash> {
+        let hash = VertexHash(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
         let index = self.hash_to_index.get(&hash);
         match index {
             None => None,
             Some(index) => {
                 if index.0 & 0x8000000000000000 != 0 {
                     // collision!
-                    let kk = String::from(k);
-                    let except = self.exceptions.get(&kk);
+                    let except = self.exceptions.get(k);
                     match except {
                         Some(h) => Some(*h),
                         None => Some(hash),
@@ -311,7 +296,7 @@ impl Graph {
         }
     }
 
-    pub fn index_from_vertex_key(&self, k: &str) -> Option<VertexIndex> {
+    pub fn index_from_vertex_key(&self, k: &[u8]) -> Option<VertexIndex> {
         let hash: Option<VertexHash> = self.hash_from_vertex_key(k);
         match hash {
             None => None,
@@ -325,26 +310,21 @@ impl Graph {
         }
     }
 
-    pub fn insert_edge(&mut self, from: VertexIndex, to: VertexIndex, data: Option<Vec<u8>>) {
-        match data {
-            None => {
-                self.edges.push(Edge {
-                    from,
-                    to,
-                    data_offset: 0,
-                });
-            }
-            Some(v) => {
-                let offset = self.edge_data.len();
-                for b in v.iter() {
-                    self.edge_data.push(*b);
-                }
-                self.edges.push(Edge {
-                    from,
-                    to,
-                    data_offset: offset as u64,
-                });
-            }
+    pub fn insert_edge(&mut self, from: VertexIndex, to: VertexIndex, data: Vec<u8>) {
+        if data.is_empty() {
+            self.edges.push(Edge {
+                from,
+                to,
+                data_offset: 0,
+            });
+        } else {
+            let offset = self.edge_data.len();
+            self.edge_data.extend_from_slice(&data);
+            self.edges.push(Edge {
+                from,
+                to,
+                data_offset: offset as u64,
+            });
         }
     }
 
@@ -355,11 +335,19 @@ impl Graph {
             let k = if self.store_keys {
                 &self.index_to_key[i as usize]
             } else {
-                "not stored"
+                "not stored".as_bytes()
             };
+            let kkk: &str;
+            let kk = str::from_utf8(k);
+            if kk.is_err() {
+                kkk = "non-UTF8-bytes";
+            } else {
+                kkk = kk.unwrap();
+            }
+
             println!(
                 "{:32} {:016x} {}",
-                k,
+                kkk,
                 self.index_to_hash[i as usize].to_u64(),
                 self.vertex_data_offsets[i as usize + 1] - self.vertex_data_offsets[i as usize]
             );

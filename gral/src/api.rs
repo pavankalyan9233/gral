@@ -107,6 +107,12 @@ struct GraphEdgesNotSealed {
 }
 impl reject::Reject for GraphEdgesNotSealed {}
 
+/// An error object, which is used if a vertex with an empty key was
+/// presented. The whole batch is rejected in this case.
+#[derive(Debug)]
+struct KeyMustNotBeEmpty {}
+impl reject::Reject for KeyMustNotBeEmpty {}
+
 /// This async function implements the "create graph" API call.
 async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
@@ -248,6 +254,14 @@ fn get_varlen(c: &mut Cursor<Vec<u8>>) -> Result<u32, std::io::Error> {
     }
 }
 
+fn put_varlen(v: &mut Vec<u8>, l: u32) {
+    if l <= 0x7f {
+        v.write_u8(l as u8).unwrap();
+    } else {
+        v.write_u32::<BigEndian>(l | 0x80000000).unwrap();
+    };
+}
+
 fn read_bytes_or_fail(reader: &mut Cursor<Vec<u8>>, l: u32) -> Result<&[u8], Rejection> {
     let v = reader.get_ref();
     if (v.len() as u64) - reader.position() < l as u64 {
@@ -259,9 +273,7 @@ fn read_bytes_or_fail(reader: &mut Cursor<Vec<u8>>, l: u32) -> Result<&[u8], Rej
     Ok(&v[(reader.position() as usize)..((reader.position() + l as u64) as usize)])
 }
 
-fn parse_vertex(
-    reader: &mut Cursor<Vec<u8>>,
-) -> Result<(Option<VertexHash>, Option<String>, Option<Vec<u8>>), Rejection> {
+fn parse_vertex(reader: &mut Cursor<Vec<u8>>) -> Result<(VertexHash, Vec<u8>, Vec<u8>), Rejection> {
     let l = get_varlen(reader);
     if l.is_err() {
         return Err(warp::reject::custom(TooShortBodyLength {
@@ -271,36 +283,15 @@ fn parse_vertex(
     }
     let l = l.unwrap();
 
-    let hash: Option<VertexHash>;
-    let key: Option<String>;
-    match l {
-        0 => {
-            key = None;
-            let val = reader.read_u64::<BigEndian>();
-            if val.is_err() {
-                return Err(warp::reject::custom(TooShortBodyLength {
-                    found: reader.position() as usize,
-                    expected_at_least: reader.position() as usize + 2,
-                }));
-            }
-            hash = Some(VertexHash::new(val.unwrap()));
-        }
-        _ => {
-            let k = read_bytes_or_fail(reader, l)?;
-
-            match str::from_utf8(k) {
-                Ok(kk) => {
-                    key = Some(kk.to_string());
-                    hash = Some(VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef)));
-                }
-                Err(_) => {
-                    key = None;
-                    hash = None;
-                }
-            }
-            reader.consume(l as usize);
-        }
+    if l == 0 {
+        return Err(warp::reject::custom(KeyMustNotBeEmpty {}));
     }
+
+    let k = read_bytes_or_fail(reader, l)?;
+    let mut key: Vec<u8> = vec![];
+    key.extend_from_slice(k);
+    let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
+    reader.consume(l as usize);
 
     // Before we move on with this, let's get the optional data:
     let ld = get_varlen(reader);
@@ -311,10 +302,11 @@ fn parse_vertex(
         }));
     }
     let ld = ld.unwrap(); // Length of data, 0 means none
-    let mut data: Option<Vec<u8>> = None;
+
+    let mut data: Vec<u8> = vec![];
     if ld > 0 {
         let k = read_bytes_or_fail(reader, ld)?;
-        data = Some(k.to_vec());
+        data.extend_from_slice(k);
     }
     reader.consume(ld as usize);
 
@@ -355,27 +347,37 @@ async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
     }
 
     // Collect exceptions and rejections:
-    let mut rejected: Vec<u32> = vec![];
     let mut exceptional: Vec<(u32, VertexHash)> = vec![];
+    let mut exceptional_keys: Vec<Vec<u8>> = vec![];
 
     for i in 0..number {
         let (hash, key, data) = parse_vertex(&mut reader)?;
-        graph.insert_vertex(i, hash, key, data, &mut rejected, &mut exceptional)
+        // Whole batch is rejected, if there is an empty key or the input
+        // is too short! Note that previous vertices might already have
+        // been inserted! This is allowed according to the API!
+        graph.insert_vertex(i, hash, key, data, &mut exceptional, &mut exceptional_keys)
     }
 
     // Write response:
     let mut v = Vec::new();
     // TODO: handle errors!
-    v.reserve(16 + rejected.len() * 8 + exceptional.len() * 12);
-    v.write_u64::<BigEndian>(client_id).unwrap();
-    v.write_u32::<BigEndian>(rejected.len() as u32).unwrap();
-    v.write_u32::<BigEndian>(exceptional.len() as u32).unwrap();
-    for r in rejected.iter() {
-        v.write_u32::<BigEndian>(*r).unwrap();
+
+    // Compute sum of length of keys:
+    let mut total_sum = 0;
+    for k in exceptional_keys.iter() {
+        total_sum += k.len();
     }
+
+    assert_eq!(exceptional.len(), exceptional_keys.len());
+
+    v.reserve(12 + exceptional.len() * (12 + 4) + total_sum);
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u32::<BigEndian>(exceptional.len() as u32).unwrap();
     for (index, hash) in exceptional.iter() {
         v.write_u32::<BigEndian>(*index).unwrap();
         v.write_u64::<BigEndian>((*hash).to_u64()).unwrap();
+        put_varlen(&mut v, exceptional_keys[*index as usize].len() as u32);
+        v.extend_from_slice(&exceptional_keys[*index as usize]);
     }
     Ok(v)
 }
@@ -431,7 +433,7 @@ async fn api_seal_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<V
 fn parse_edge(
     graph: &Graph,
     reader: &mut Cursor<Vec<u8>>,
-) -> Result<(Option<(VertexIndex, VertexIndex)>, Option<Vec<u8>>), Rejection> {
+) -> Result<(Option<(VertexIndex, VertexIndex)>, Vec<u8>), Rejection> {
     let l = get_varlen(reader);
     if l.is_err() {
         return Err(warp::reject::custom(TooShortBodyLength {
@@ -461,11 +463,7 @@ fn parse_edge(
         _ => {
             {
                 let k = read_bytes_or_fail(reader, l)?;
-
-                from_index = match str::from_utf8(k) {
-                    Err(_) => None,
-                    Ok(kk) => graph.index_from_vertex_key(kk),
-                }
+                from_index = graph.index_from_vertex_key(k);
             }
             reader.consume(l as usize);
         }
@@ -499,11 +497,7 @@ fn parse_edge(
         _ => {
             {
                 let k = read_bytes_or_fail(reader, l)?;
-
-                to_index = match str::from_utf8(k) {
-                    Err(_) => None,
-                    Ok(kk) => graph.index_from_vertex_key(kk),
-                }
+                to_index = graph.index_from_vertex_key(k);
             }
             reader.consume(l as usize);
         }
@@ -518,7 +512,7 @@ fn parse_edge(
         }));
     }
     let ld = ld.unwrap(); // Length of data, 0 means none
-    let mut data: Option<Vec<u8>> = None;
+    let mut data: Vec<u8> = vec![];
     if ld > 0 {
         let v = reader.get_ref();
         if (v.len() as u64) - reader.position() < ld as u64 {
@@ -527,8 +521,8 @@ fn parse_edge(
                 expected_at_least: reader.position() as usize + ld as usize,
             }));
         }
-        data = Some(
-            (&v[(reader.position() as usize)..((reader.position() + l as u64) as usize)]).to_vec(),
+        data.extend_from_slice(
+            &v[(reader.position() as usize)..((reader.position() + l as u64) as usize)],
         );
     }
     reader.consume(ld as usize);
@@ -536,7 +530,7 @@ fn parse_edge(
     if from_index.is_some() && to_index.is_some() {
         Ok((Some((from_index.unwrap(), to_index.unwrap())), data))
     } else {
-        Ok((None, None))
+        Ok((None, data))
     }
 }
 
@@ -713,6 +707,9 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
             "Graph with number {} does not yet have its edges sealed",
             wrong.number
         );
+    } else if let Some(_) = err.find::<KeyMustNotBeEmpty>() {
+        code = StatusCode::BAD_REQUEST;
+        message = "Key must not be empty, whole batch rejected".to_string();
     } else {
         // We should have expected this... Just log and say its a 500
         eprintln!("unhandled rejection: {:?}", err);

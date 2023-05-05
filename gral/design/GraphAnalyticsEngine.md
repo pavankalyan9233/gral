@@ -138,24 +138,26 @@ u32      number of vertices in this batch
 and then repeated as often as the number of vertices says:
 
 varlen   length of key (0 not allowed)
-[u8]     key (as many bytes as varlen suggested)
+[u8]     key (as many bytes as varlen suggested), arbitrary byte
+         sequence allowed
 varlen   length of additional data (0 allowed for no data)
-[u8]     additional data
+[u8]     additional data, arbitrary byte sequence allowed
 ...
+
+If any key is empty, the whole batch is rejected. Vertices before the
+one with the empty key might already have been inserted.
+
+Note that the implementation is free to not detect duplicate keys! In
+particular, in the case that keys are not stored at all, it might not
+even be possible to detect duplicate keys. It is perfectly legal to only
+detect this as a hash collision and assign a second invented exceptional
+hash to the second occurrence of a key!
 
 Response is 200 OK and with the following body:
 
 ```
 u64      client-id
-u32      number of rejected vertices
 u32      number of exceptional hashes
-
-and then repeated as often as the number of rejected vertices says:
-
-u32      index of rejected vertex in input body
-varlen   length of key (0 not allowed)
-[u8]     bytes of key
-...
 
 and then repeated as often as the number of exceptional hashes says:
 
@@ -467,7 +469,7 @@ Body:
 
 ```
 u64     client-id
-u32     number of graph [redundent, but we leave it in for now]
+u32     number of graph
 ```
 
 If all is well, 200 is returned with this body:
@@ -481,6 +483,80 @@ If the graph is not found, 404 is returned with an error body as
 described above.
 
 
+### `PUT /v1/dumpVertices`
+
+Dump out the vertices of a graph in batches. Since this is essentially
+a GET request with body, we do not use a client-id. The request is
+automatically idempotent. It is allowed to return a smaller amount
+of data than requested, both w.r.t. number of vertices and number of bytes.
+
+Body:
+
+```
+u32    number of graph
+u64    start index to dump
+u32    batch size limit in number of vertices (will be adhered to)
+u32    batch size limit in bytes (might overshoot by one vertex)
+```
+
+If all is well, 200 is returned with this body:
+
+```
+u32    number of graph [redundent, but we leave it in for now]
+u64    start index of this batch
+u64    final index of this batch plus 1
+u64    total number of vertices in the graph
+```
+
+and then for each vertex:
+
+```
+varlen  length of key (or 0 if only hash known)
+[u8]    bytes of key (or hash if only hash known)
+varlen  length of additional data (0 allowed for no additional data)
+[u8]    bytes of additional data
+...
+```
+
+
+### `PUT /v1/dumpEdges`
+
+Dump out the edges of a graph in batches. Since this is essentially
+a GET request with body, we do not use a client-id. The request is
+automatically idempotent. It is allowed to return a smaller amount
+of data than requested, both w.r.t. number of edges and number of bytes.
+
+Body:
+
+```
+u32    number of graph
+u64    start index to dump
+u32    batch size limit in number of edges (will be adhered to)
+u32    batch size limit in bytes (might overshoot by one edge)
+```
+
+If all is well, 200 is returned with this body:
+
+```
+u32    number of graph [redundent, but we leave it in for now]
+u64    start index of this batch
+u64    final index of this batch plus 1
+u64    total number of edges in the graph
+```
+
+and then for each vertex:
+
+```
+varlen  length of from (or 0 if only hash known)
+[u8]    bytes of from (or hash if only hash known)
+varlen  length of to (or 0 if only hash known)
+[u8]    bytes of to (or hash if only hash known)
+varlen  length of additional data (0 allowed for no additional data)
+[u8]    bytes of additional data
+...
+```
+
+
 ## Sharding
 
 Should we ever want to put a distributed system behind this API, we
@@ -492,7 +568,7 @@ still do it!) and we can send edges to both the shard of its from and
 its to entry. We end up with a distributed "smart graph" without the
 client seeing anything of this.
 
-Since all communication is over keys, we can always compute the hash
-of the key and thus derive the shard.
+Since all communication is over keys (or indeed hashes), we can always
+compute the hash of the key and thus derive the shard.
 
 

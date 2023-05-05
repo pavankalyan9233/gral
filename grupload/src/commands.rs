@@ -47,6 +47,14 @@ fn put_varlen(v: &mut Vec<u8>, l: u32) {
     };
 }
 
+fn read_bytes_or_fail(reader: &mut Cursor<Vec<u8>>, l: u32) -> Result<&[u8], String> {
+    let v = reader.get_ref();
+    if (v.len() as u64) - reader.position() < l as u64 {
+        return Err("input too short".to_string());
+    }
+    Ok(&v[(reader.position() as usize)..((reader.position() + l as u64) as usize)])
+}
+
 pub fn handle_error(resp: &mut Response, ok: StatusCode) -> Result<(), String> {
     if resp.status() == ok {
         return Ok(());
@@ -157,18 +165,20 @@ fn vertices_one_thread(
 
         let mut body: Vec<u8> = vec![];
         let _size = resp.read_to_end(&mut body).unwrap();
-        let mut cursor = Cursor::new(&body);
+        let mut cursor = Cursor::new(body);
+        // TODO: error handling if input is too short!
         let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
-        let nr_rejected = cursor.read_u32::<BigEndian>().unwrap();
         let nr_exceptional = cursor.read_u32::<BigEndian>().unwrap();
-        for _i in 0..nr_rejected {
-            let index = cursor.read_u32::<BigEndian>().unwrap();
-            println!("Index of rejected vertex: {}", index);
-        }
         for _i in 0..nr_exceptional {
             let index = cursor.read_u32::<BigEndian>().unwrap();
             let hash = cursor.read_u64::<BigEndian>().unwrap();
-            println!("Index of exceptional hash: {}, hash: {:x}", index, hash);
+            let l = get_varlen(&mut cursor).unwrap();
+            let k = read_bytes_or_fail(&mut cursor, l).unwrap();
+            let kk = str::from_utf8(k).unwrap();
+            println!(
+                "Key of exceptional hash: {}, index: {}, hash: {:x}",
+                kk, index, hash
+            );
         }
         Ok(())
     };
@@ -396,13 +406,20 @@ pub fn edges_one_thread(
 
         let mut body: Vec<u8> = vec![];
         let _size = resp.read_to_end(&mut body).unwrap();
-        let mut cursor = Cursor::new(&body);
+        let mut cursor = Cursor::new(body);
+        // TODO: error handling if input is too short!
         let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
         let nr_rejected = cursor.read_u32::<BigEndian>().unwrap();
         for _i in 0..nr_rejected {
             let index = cursor.read_u32::<BigEndian>().unwrap();
             let code = cursor.read_u32::<BigEndian>().unwrap();
-            println!("Index of rejected vertex: {}, code: {}", index, code);
+            let l = get_varlen(&mut cursor).unwrap();
+            let k = read_bytes_or_fail(&mut cursor, l).unwrap();
+            let kk = str::from_utf8(k).unwrap();
+            println!(
+                "Index of rejected vertex: {}, code: {}, data: {:?}",
+                index, code, kk
+            );
         }
         Ok(())
     };
