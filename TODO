@@ -1,0 +1,10 @@
+ - Implement connected components with proper API to trigger computation
+ - Implement connected components result output
+ - Implement graph dump
+ - End to end test
+ - coverage?
+ - Tune randomize (parallelization)
+ - Tune receive in gral
+ - go to SSL, in particular implement in grupload
+ - Add metrics (rust-prometheus crate)
+ - error handling for server responses in client
