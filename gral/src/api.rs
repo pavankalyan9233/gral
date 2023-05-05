@@ -1,3 +1,4 @@
+use crate::computations::{with_computations, Computations};
 use crate::conncomp::weakly_connected_components;
 use crate::graphs::{with_graphs, Graph, Graphs, VertexHash, VertexIndex};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -13,6 +14,7 @@ use xxhash_rust::xxh3::xxh3_64_with_seed;
 /// To this end, it relies on the following async functions below.
 pub fn api_filter(
     graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let create = warp::path!("v1" / "create")
         .and(warp::post())
@@ -44,12 +46,20 @@ pub fn api_filter(
         .and(with_graphs(graphs.clone()))
         .and(warp::body::bytes())
         .and_then(api_seal_edges);
+    let weakly_connected_components = warp::path!("v1" / "weaklyConnectedComponents")
+        .and(warp::post())
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_weakly_connected_components);
+
     create
         .or(drop)
         .or(vertices)
         .or(seal_vertices)
         .or(edges)
         .or(seal_edges)
+        .or(weakly_connected_components)
 }
 
 /// An error object, which is used when the body size is unexpected.
@@ -648,6 +658,62 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
     v.write_u64::<BigEndian>(graph.number_of_vertices())
         .unwrap();
     v.write_u64::<BigEndian>(graph.number_of_edges()).unwrap();
+    Ok(v)
+}
+
+/// This function seals the edges of a graph.
+async fn api_weakly_connected_components(
+    graphs: Arc<Mutex<Graphs>>,
+    _computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<Vec<u8>, Rejection> {
+    // Handle wrong length:
+    if bytes.len() != 12 {
+        return Err(warp::reject::custom(WrongBodyLength {
+            found: bytes.len(),
+            expected: 12,
+        }));
+    }
+
+    // Parse body and extract integers:
+    // (Note that we have checked the buffer length and so these cannot
+    // fail! Therefore unwrap() is OK here.)
+    let mut reader = Cursor::new(bytes.to_vec());
+    let client_id = reader.read_u64::<BigEndian>().unwrap();
+    let graph_number = reader.read_u32::<BigEndian>().unwrap();
+
+    let graph_arc = get_graph(&graphs, graph_number)?;
+
+    // Lock graph:
+    let graph = graph_arc.lock().unwrap();
+
+    if graph.dropped {
+        return Err(warp::reject::custom(GraphNotFound {
+            number: graph_number,
+        }));
+    }
+    if !graph.vertices_sealed {
+        return Err(warp::reject::custom(GraphVerticesNotSealed {
+            number: graph_number,
+        }));
+    }
+    if graph.edges_sealed {
+        return Err(warp::reject::custom(GraphEdgesSealed {
+            number: graph_number,
+        }));
+    }
+
+    let (nr, _) = weakly_connected_components(&graph);
+    println!("Found {} weakly connected components.", nr);
+
+    // Write response:
+    let mut v = Vec::new();
+    // TODO: handle errors!
+    v.reserve(20);
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u32::<BigEndian>(graph_number).unwrap();
+    v.write_u64::<BigEndian>(graph.number_of_vertices())
+        .unwrap();
     Ok(v)
 }
 

@@ -5,11 +5,13 @@ use warp::{http::Response, Filter};
 
 mod api;
 mod args;
+mod computations;
 mod conncomp;
 mod graphs;
 
 use crate::api::{api_filter, handle_errors};
 use crate::args::parse_args;
+use crate::computations::Computations;
 use crate::graphs::Graphs;
 
 const VERSION: u32 = 0x00100;
@@ -37,8 +39,10 @@ async fn main() {
             .body(v)
     });
     let the_graphs = Arc::new(Mutex::new(Graphs { list: vec![] }));
+    let the_computations = Arc::new(Mutex::new(Computations::new()));
+
     let apifilters = version
-        .or(api_filter(the_graphs.clone()))
+        .or(api_filter(the_graphs.clone(), the_computations.clone()))
         .recover(handle_errors);
     let ip_addr: IpAddr = args
         .bind_addr
