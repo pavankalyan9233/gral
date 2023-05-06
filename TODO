@@ -1,4 +1,3 @@
- - Implement connected components with proper API to trigger computation
  - Implement connected components result output
  - Implement graph dump
  - End to end test
