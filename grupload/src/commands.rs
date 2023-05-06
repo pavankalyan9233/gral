@@ -747,3 +747,44 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
     );
     Ok(())
 }
+
+pub fn progress(args: &GruploadArgs) -> Result<(), String> {
+    println!(
+        "Getting progress of computation {} for graph {}... {:?}",
+        args.comp_id, args.graph_number, args
+    );
+    let client = reqwest::blocking::Client::new();
+    let mut v: Vec<u8> = vec![];
+    v.write_u32::<BigEndian>(args.graph_number).unwrap();
+    v.write_u64::<BigEndian>(args.comp_id).unwrap();
+
+    let mut url = args.endpoint.clone();
+    url.push_str("/v1/getProgress");
+    let mut resp = match client.put(url).body(v).send() {
+        Ok(resp) => resp,
+        Err(err) => panic!("Error: {}", err),
+    };
+    handle_error(&mut resp, status(200))?;
+
+    let body = resp.bytes().unwrap();
+    let mut cursor = Cursor::new(&body);
+    let graph_number = cursor.read_u32::<BigEndian>().unwrap();
+    let comp_id = cursor.read_u64::<BigEndian>().unwrap();
+    let total_progress = cursor.read_u32::<BigEndian>().unwrap();
+    let progress = cursor.read_u32::<BigEndian>().unwrap();
+    let l = get_varlen(&mut cursor).unwrap();
+    let mut w: Vec<u64> = vec![];
+    for _i in 0..(l / 8) {
+        w.push(cursor.read_u64::<BigEndian>().unwrap());
+    }
+    println!(
+        "Computation progress for {}: graph number: {}, finished {} out of {}.",
+        comp_id, graph_number, progress, total_progress
+    );
+    if progress == total_progress {
+        for x in w.iter() {
+            println!("  {}", x);
+        }
+    }
+    Ok(())
+}

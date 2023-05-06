@@ -774,10 +774,10 @@ async fn api_get_progress(
     bytes: Bytes,
 ) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
-    if bytes.len() != 20 {
+    if bytes.len() != 12 {
         return Err(warp::reject::custom(WrongBodyLength {
             found: bytes.len(),
-            expected: 20,
+            expected: 12,
         }));
     }
 
@@ -785,7 +785,6 @@ async fn api_get_progress(
     // (Note that we have checked the buffer length and so these cannot
     // fail! Therefore unwrap() is OK here.)
     let mut reader = Cursor::new(bytes.to_vec());
-    let client_id = reader.read_u64::<BigEndian>().unwrap();
     let graph_number = reader.read_u32::<BigEndian>().unwrap();
     let comp_id = reader.read_u64::<BigEndian>().unwrap();
 
@@ -801,8 +800,7 @@ async fn api_get_progress(
             // Write response:
             let mut v = Vec::new();
             // TODO: handle errors!
-            v.reserve(20);
-            v.write_u64::<BigEndian>(client_id).unwrap();
+            v.reserve(256);
             v.write_u32::<BigEndian>(graph_number).unwrap();
             v.write_u64::<BigEndian>(comp_id).unwrap();
             v.write_u32::<BigEndian>(1).unwrap();

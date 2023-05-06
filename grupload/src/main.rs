@@ -22,6 +22,7 @@ COMMANDS:
   randomize                create a random graph with max-vertices vertices
                            and max-edges edges
   compute                  trigger a computation
+  progress                 get progress information
                           
 OPTIONS:                  
   --max-vertices NR        Maximal number of vertices (only for create)
@@ -40,6 +41,7 @@ OPTIONS:
                            `randomize`) [default: 'V']
   --threads NR             Number of threads to use [default: 1]
   --algorithm NAME         Name of algorithm to trigger [default: 'wcc']
+  --comp-id ID             Computation id [default: 0]
 ";
 
 #[derive(Debug)]
@@ -56,6 +58,7 @@ pub struct GruploadArgs {
     vertex_coll_name: String,
     nr_threads: u32,
     algorithm: String,
+    comp_id: u64,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -93,6 +96,7 @@ fn main() {
         "upload" => upload(&mut args),
         "randomize" => crate::commands::randomize(&args),
         "compute" => crate::commands::compute(&args),
+        "progress" => crate::commands::progress(&args),
         _ => Err(format!("Command {} not implemented.", args.command)),
     };
     if let Err(s) = r {
@@ -133,6 +137,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         algorithm: pargs
             .opt_value_from_str("--algorithm")?
             .unwrap_or("wcc".into()),
+        comp_id: pargs.opt_value_from_str("--comp-id")?.unwrap_or(0),
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 

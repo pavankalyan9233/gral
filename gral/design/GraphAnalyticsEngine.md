@@ -340,7 +340,6 @@ of the computation.
 Body:
 
 ```
-u64     client-id
 u32     number of graph [redundent, but we leave it in for now]
 u64     computation-id
 ```
@@ -349,7 +348,6 @@ If the computation is found (via its client-id), the response is 200
 with this body:
 
 ```
-u64     client-id
 u32     number of graph
 u64     computation-id
 u32     total progress (a number which indicates which progress number
@@ -358,6 +356,8 @@ u32     total progress (a number which indicates which progress number
 u32     progress so far (as number from 0 to "total progress")
 varlen  length of result, will be 0 if there is not yet a result
 [u8]    bytes of result as many as given in varlen
+        In most cases, this will be a short list of u64, so the length
+        will be a multiple of 8.
 ```
 
 For example, the `weaklyConnectedComponents` algorithm could report the
