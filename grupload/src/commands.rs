@@ -729,7 +729,7 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
             return Err(format!("Unknown algorithm {} triggered.", args.algorithm));
         }
     }
-    let mut resp = match client.put(url).body(v).send() {
+    let mut resp = match client.post(url).body(v).send() {
         Ok(resp) => resp,
         Err(err) => panic!("Error: {}", err),
     };
