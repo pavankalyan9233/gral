@@ -1,5 +1,7 @@
- - Implement connected components result output
+ - Implement result output
  - Implement graph dump
+ - drop graph removes results and cancels computations
+ - drop computations
  - End to end test
  - coverage?
  - Tune randomize (parallelization)
@@ -7,3 +9,4 @@
  - go to SSL, in particular implement in grupload
  - Add metrics (rust-prometheus crate)
  - error handling for server responses in client
+ - strongly connected components
