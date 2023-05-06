@@ -21,6 +21,7 @@ COMMANDS:
   upload                   create, upload and seal, return number
   randomize                create a random graph with max-vertices vertices
                            and max-edges edges
+  compute                  trigger a computation
                           
 OPTIONS:                  
   --max-vertices NR        Maximal number of vertices (only for create)
@@ -38,6 +39,7 @@ OPTIONS:
   --vertex-coll-name NAME  Name of the vertex collection (relevant for 
                            `randomize`) [default: 'V']
   --threads NR             Number of threads to use [default: 1]
+  --algorithm NAME         Name of algorithm to trigger [default: 'wcc']
 ";
 
 #[derive(Debug)]
@@ -53,6 +55,7 @@ pub struct GruploadArgs {
     key_size: u32,
     vertex_coll_name: String,
     nr_threads: u32,
+    algorithm: String,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -89,6 +92,7 @@ fn main() {
         "dropGraph" => crate::commands::drop_graph(&args),
         "upload" => upload(&mut args),
         "randomize" => crate::commands::randomize(&args),
+        "compute" => crate::commands::compute(&args),
         _ => Err(format!("Command {} not implemented.", args.command)),
     };
     if let Err(s) = r {
@@ -126,6 +130,9 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
             .opt_value_from_str("--vertex-coll-name")?
             .unwrap_or("V".into()),
         nr_threads: pargs.opt_value_from_str("--threads")?.unwrap_or(1),
+        algorithm: pargs
+            .opt_value_from_str("--algorithm")?
+            .unwrap_or("wcc".into()),
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 

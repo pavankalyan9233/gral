@@ -4,11 +4,9 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 //use std::io::Write;
 use std::str;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
-
-use crate::computations::Computations;
 
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
 pub struct VertexHash(u64);
@@ -88,7 +86,7 @@ pub struct Graph {
 }
 
 pub struct Graphs {
-    pub list: Vec<Arc<Mutex<Graph>>>,
+    pub list: Vec<Arc<RwLock<Graph>>>,
 }
 
 pub fn with_graphs(
@@ -103,8 +101,8 @@ struct EdgeTemp {
 }
 
 impl Graph {
-    pub fn new(store_keys: bool, _bits_for_hash: u8) -> Arc<Mutex<Graph>> {
-        Arc::new(Mutex::new(Graph {
+    pub fn new(store_keys: bool, _bits_for_hash: u8) -> Arc<RwLock<Graph>> {
+        Arc::new(RwLock::new(Graph {
             index_to_hash: vec![],
             hash_to_index: HashMap::new(),
             exceptions: HashMap::new(),

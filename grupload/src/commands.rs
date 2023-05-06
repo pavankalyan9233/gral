@@ -707,3 +707,43 @@ pub fn randomize(args: &GruploadArgs) -> Result<(), String> {
         Ok(())
     }
 }
+
+pub fn compute(args: &GruploadArgs) -> Result<(), String> {
+    println!(
+        "Triggering computation {} for graph {}... {:?}",
+        args.algorithm, args.graph_number, args
+    );
+    let client = reqwest::blocking::Client::new();
+    let mut v: Vec<u8> = vec![];
+    let mut rng = rand::thread_rng();
+    let client_id = rng.gen::<u64>();
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u32::<BigEndian>(args.graph_number).unwrap();
+
+    let mut url = args.endpoint.clone();
+    match args.algorithm.as_str() {
+        "wcc" => {
+            url.push_str("/v1/weaklyConnectedComponents");
+        }
+        _ => {
+            return Err(format!("Unknown algorithm {} triggered.", args.algorithm));
+        }
+    }
+    let mut resp = match client.put(url).body(v).send() {
+        Ok(resp) => resp,
+        Err(err) => panic!("Error: {}", err),
+    };
+    handle_error(&mut resp, status(200))?;
+
+    let body = resp.bytes().unwrap();
+    let mut cursor = Cursor::new(&body);
+    let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
+    let graph_number = cursor.read_u32::<BigEndian>().unwrap();
+    let comp_id = cursor.read_u64::<BigEndian>().unwrap();
+
+    println!(
+        "{}: graph number: {}, computation number: {}.",
+        args.algorithm, graph_number, comp_id
+    );
+    Ok(())
+}

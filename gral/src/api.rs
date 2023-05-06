@@ -1,4 +1,4 @@
-use crate::computations::{with_computations, ComputationResult, Computations};
+use crate::computations::{with_computations, Computation, Computations};
 use crate::conncomp::weakly_connected_components;
 use crate::graphs::{with_graphs, Graph, Graphs, VertexHash, VertexIndex};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -7,7 +7,7 @@ use rand::Rng;
 use std::convert::Infallible;
 use std::io::{BufRead, Cursor};
 use std::str;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use warp::{http::StatusCode, reject, Filter, Rejection};
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
@@ -53,6 +53,11 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_weakly_connected_components);
+    let get_progress = warp::path!("v1" / "getProgress")
+        .and(warp::put())
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_get_progress);
 
     create
         .or(drop)
@@ -61,6 +66,7 @@ pub fn api_filter(
         .or(edges)
         .or(seal_edges)
         .or(weakly_connected_components)
+        .or(get_progress)
 }
 
 /// An error object, which is used when the body size is unexpected.
@@ -124,6 +130,11 @@ impl reject::Reject for GraphEdgesNotSealed {}
 struct KeyMustNotBeEmpty {}
 impl reject::Reject for KeyMustNotBeEmpty {}
 
+/// An error object, which is used if a computation is not found.
+#[derive(Debug)]
+struct ComputationNotFound {}
+impl reject::Reject for ComputationNotFound {}
+
 /// This async function implements the "create graph" API call.
 async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
@@ -159,7 +170,7 @@ async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>,
         // Lock graph mutex:
         let dropped: bool;
         {
-            let gg = g.lock().unwrap();
+            let gg = g.read().unwrap();
             dropped = gg.dropped;
         }
         if dropped {
@@ -189,7 +200,7 @@ async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>,
 fn get_graph(
     graphs: &Arc<Mutex<Graphs>>,
     graph_number: u32,
-) -> Result<Arc<Mutex<Graph>>, Rejection> {
+) -> Result<Arc<RwLock<Graph>>, Rejection> {
     // Lock list of graphs via their mutex:
     let graphs = graphs.lock().unwrap();
     if graph_number as usize >= graphs.list.len() {
@@ -222,7 +233,7 @@ async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, R
     let graph_arc = get_graph(&graphs, graph_number)?;
 
     // Lock graph:
-    let mut graph = graph_arc.lock().unwrap();
+    let mut graph = graph_arc.write().unwrap();
 
     if graph.dropped {
         return Err(warp::reject::custom(GraphNotFound {
@@ -344,7 +355,7 @@ async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
     let graph_arc = get_graph(&graphs, graph_number)?;
 
     // Lock graph:
-    let mut graph = graph_arc.lock().unwrap();
+    let mut graph = graph_arc.write().unwrap();
 
     if graph.dropped {
         return Err(warp::reject::custom(GraphNotFound {
@@ -412,8 +423,8 @@ async fn api_seal_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<V
 
     let graph_arc = get_graph(&graphs, graph_number)?;
 
-    // Lock graph:
-    let mut graph = graph_arc.lock().unwrap();
+    // Write lock graph:
+    let mut graph = graph_arc.write().unwrap();
 
     if graph.dropped {
         return Err(warp::reject::custom(GraphNotFound {
@@ -565,10 +576,9 @@ async fn api_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, 
 
     let graph_arc = get_graph(&graphs, graph_number)?;
 
-    // Lock graph:
-    let mut graph = graph_arc.lock().unwrap();
-
-    check_graph(&graph, graph_number, false)?;
+    // Write lock graph:
+    let mut graph = graph_arc.write().unwrap();
+    check_write_graph(&graph, graph_number, false)?;
 
     // Collect rejections:
     let mut rejected: Vec<u32> = vec![];
@@ -612,26 +622,9 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
 
     let graph_arc = get_graph(&graphs, graph_number)?;
 
-    // Lock graph:
-    let mut graph = graph_arc.lock().unwrap();
-
-    check_graph(&graph, graph_number, false)?;
-
-    if graph.dropped {
-        return Err(warp::reject::custom(GraphNotFound {
-            number: graph_number,
-        }));
-    }
-    if !graph.vertices_sealed {
-        return Err(warp::reject::custom(GraphVerticesNotSealed {
-            number: graph_number,
-        }));
-    }
-    if graph.edges_sealed {
-        return Err(warp::reject::custom(GraphEdgesSealed {
-            number: graph_number,
-        }));
-    }
+    // Write lock graph:
+    let mut graph = graph_arc.write().unwrap();
+    check_write_graph(&graph, graph_number, false)?;
 
     graph.seal_edges();
 
@@ -650,42 +643,65 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
     Ok(v)
 }
 
-pub struct WeaklyConnectedComponentsResult {
-    pub graph: Arc<Mutex<Graph>>,
-    pub components: Vec<u64>,
+pub struct WeaklyConnectedComponentsComputation {
+    pub graph: Arc<RwLock<Graph>>,
+    pub components: Option<Vec<u64>>,
+    pub shall_stop: bool,
+    pub number: u64,
 }
 
-impl ComputationResult for WeaklyConnectedComponentsResult {
-    fn dump_result(&self, hashes: &Vec<VertexHash>, out: &mut Vec<u8>) -> Result<(), String> {
-        let g = self.graph.lock().unwrap();
-        if g.store_keys {
-            for i in hashes.iter() {
-                let index = g.hash_to_index.get(i);
-                if let Some(ind) = index {
-                    put_varlen(out, g.index_to_key[ind.to_u64() as usize].len() as u32);
-                    out.extend_from_slice(&(g.index_to_key[ind.to_u64() as usize]));
-                    put_varlen(out, 8);
-                    out.write_u64::<BigEndian>(self.components[ind.to_u64() as usize])
-                        .unwrap();
+impl Computation for WeaklyConnectedComponentsComputation {
+    fn is_ready(&self) -> bool {
+        self.components.is_some()
+    }
+    fn cancel(&mut self) {
+        self.shall_stop = true;
+    }
+    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String> {
+        out.write_u8(8).unwrap();
+        out.write_u64::<BigEndian>(self.number).unwrap();
+        Ok(())
+    }
+    fn dump_vertex_results(
+        &self,
+        hashes: &Vec<VertexHash>,
+        out: &mut Vec<u8>,
+    ) -> Result<(), String> {
+        let comps = self.components.as_ref();
+        match comps {
+            None => Err("Computation not yet finished.".to_string()),
+            Some(result) => {
+                let g = self.graph.read().unwrap();
+                if g.store_keys {
+                    for i in hashes.iter() {
+                        let index = g.hash_to_index.get(i);
+                        if let Some(ind) = index {
+                            put_varlen(out, g.index_to_key[ind.to_u64() as usize].len() as u32);
+                            out.extend_from_slice(&(g.index_to_key[ind.to_u64() as usize]));
+                            put_varlen(out, 8);
+                            out.write_u64::<BigEndian>(result[ind.to_u64() as usize])
+                                .unwrap();
+                        }
+                    }
+                } else {
+                    for i in hashes.iter() {
+                        let index = g.hash_to_index.get(i);
+                        if let Some(ind) = index {
+                            put_varlen(out, std::mem::size_of::<VertexHash>() as u32);
+                            out.write_u64::<BigEndian>(i.to_u64()).unwrap();
+                            put_varlen(out, 8);
+                            out.write_u64::<BigEndian>(result[ind.to_u64() as usize])
+                                .unwrap();
+                        }
+                    }
                 }
-            }
-        } else {
-            for i in hashes.iter() {
-                let index = g.hash_to_index.get(i);
-                if let Some(ind) = index {
-                    put_varlen(out, std::mem::size_of::<VertexHash>() as u32);
-                    out.write_u64::<BigEndian>(i.to_u64()).unwrap();
-                    put_varlen(out, 8);
-                    out.write_u64::<BigEndian>(self.components[ind.to_u64() as usize])
-                        .unwrap();
-                }
+                Ok(())
             }
         }
-        Ok(())
     }
 }
 
-/// This function seals the edges of a graph.
+/// This function triggers the computation of the weakly connected components
 async fn api_weakly_connected_components(
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
@@ -708,21 +724,39 @@ async fn api_weakly_connected_components(
 
     let graph_arc = get_graph(&graphs, graph_number)?;
 
-    // Lock graph:
-    let graph = graph_arc.lock().unwrap();
+    {
+        // Check graph:
+        let graph = graph_arc.read().unwrap();
+        check_read_graph(&graph, graph_number, true)?;
+    }
 
-    check_graph(&graph, graph_number, true)?;
-
-    let (nr, components) = weakly_connected_components(&graph);
-    println!("Found {} weakly connected components.", nr);
-    let mut rng = rand::thread_rng();
-    let comp_id = rng.gen::<u64>();
-    let mut comps = computations.lock().unwrap();
-    let res = Box::new(WeaklyConnectedComponentsResult {
+    let comp_arc = Arc::new(Mutex::new(WeaklyConnectedComponentsComputation {
         graph: graph_arc.clone(),
-        components,
+        components: None,
+        shall_stop: false,
+        number: 0,
+    }));
+
+    let mut rng = rand::thread_rng();
+    let mut comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        loop {
+            comp_id = rng.gen::<u64>();
+            if !comps.list.contains_key(&comp_id) {
+                break;
+            }
+        }
+        comps.list.insert(comp_id, comp_arc.clone());
+    }
+    let _join_handle = std::thread::spawn(move || {
+        let graph = graph_arc.read().unwrap();
+        let (nr, components) = weakly_connected_components(&graph);
+        println!("Found {} weakly connected components.", nr);
+        let mut comp = comp_arc.lock().unwrap();
+        comp.components = Some(components);
+        comp.number = nr;
     });
-    comps.results.insert(comp_id, res);
 
     // Write response:
     let mut v = Vec::new();
@@ -730,9 +764,58 @@ async fn api_weakly_connected_components(
     v.reserve(20);
     v.write_u64::<BigEndian>(client_id).unwrap();
     v.write_u32::<BigEndian>(graph_number).unwrap();
-    v.write_u64::<BigEndian>(graph.number_of_vertices())
-        .unwrap();
+    v.write_u64::<BigEndian>(comp_id).unwrap();
     Ok(v)
+}
+
+/// This function seals the edges of a graph.
+async fn api_get_progress(
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<Vec<u8>, Rejection> {
+    // Handle wrong length:
+    if bytes.len() != 20 {
+        return Err(warp::reject::custom(WrongBodyLength {
+            found: bytes.len(),
+            expected: 20,
+        }));
+    }
+
+    // Parse body and extract integers:
+    // (Note that we have checked the buffer length and so these cannot
+    // fail! Therefore unwrap() is OK here.)
+    let mut reader = Cursor::new(bytes.to_vec());
+    let client_id = reader.read_u64::<BigEndian>().unwrap();
+    let graph_number = reader.read_u32::<BigEndian>().unwrap();
+    let comp_id = reader.read_u64::<BigEndian>().unwrap();
+
+    let comps = computations.lock().unwrap();
+    let comp_arc = comps.list.get(&comp_id);
+    match comp_arc {
+        None => {
+            return Err(warp::reject::custom(ComputationNotFound {}));
+        }
+        Some(comp_arc) => {
+            let comp = comp_arc.lock().unwrap();
+
+            // Write response:
+            let mut v = Vec::new();
+            // TODO: handle errors!
+            v.reserve(20);
+            v.write_u64::<BigEndian>(client_id).unwrap();
+            v.write_u32::<BigEndian>(graph_number).unwrap();
+            v.write_u64::<BigEndian>(comp_id).unwrap();
+            v.write_u32::<BigEndian>(1).unwrap();
+            if comp.is_ready() {
+                v.write_u32::<BigEndian>(1).unwrap();
+                comp.dump_result(&mut v).unwrap();
+            } else {
+                v.write_u32::<BigEndian>(0).unwrap();
+                v.write_u8(0).unwrap();
+            }
+            Ok(v)
+        }
+    }
 }
 
 // This function receives a `Rejection` and is responsible to convert
@@ -794,6 +877,9 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
     } else if let Some(_) = err.find::<KeyMustNotBeEmpty>() {
         code = StatusCode::BAD_REQUEST;
         message = "Key must not be empty, whole batch rejected".to_string();
+    } else if let Some(_) = err.find::<ComputationNotFound>() {
+        code = StatusCode::NOT_FOUND;
+        message = "Computation with given id does not exist".to_string();
     } else {
         // We should have expected this... Just log and say its a 500
         eprintln!("unhandled rejection: {:?}", err);
@@ -816,8 +902,39 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
     Ok(warp::reply::with_status(v, code))
 }
 
-fn check_graph(
-    graph: &MutexGuard<Graph>,
+fn check_write_graph(
+    graph: &RwLockWriteGuard<Graph>,
+    graph_number: u32,
+    edges_must_be_sealed: bool,
+) -> Result<(), Rejection> {
+    if graph.dropped {
+        return Err(warp::reject::custom(GraphNotFound {
+            number: graph_number,
+        }));
+    }
+    if !graph.vertices_sealed {
+        return Err(warp::reject::custom(GraphVerticesNotSealed {
+            number: graph_number,
+        }));
+    }
+    if edges_must_be_sealed {
+        if !graph.edges_sealed {
+            return Err(warp::reject::custom(GraphEdgesNotSealed {
+                number: graph_number,
+            }));
+        }
+    } else {
+        if graph.edges_sealed {
+            return Err(warp::reject::custom(GraphEdgesSealed {
+                number: graph_number,
+            }));
+        }
+    }
+    Ok(())
+}
+
+fn check_read_graph(
+    graph: &RwLockReadGuard<Graph>,
     graph_number: u32,
     edges_must_be_sealed: bool,
 ) -> Result<(), Rejection> {
