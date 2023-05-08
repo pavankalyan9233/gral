@@ -23,6 +23,7 @@ COMMANDS:
                            and max-edges edges
   compute                  trigger a computation
   progress                 get progress information
+  vertexresults            dump results of a computation for all vertices
                           
 OPTIONS:                  
   --max-vertices NR        Maximal number of vertices (only for create)
@@ -42,6 +43,7 @@ OPTIONS:
   --threads NR             Number of threads to use [default: 1]
   --algorithm NAME         Name of algorithm to trigger [default: 'wcc']
   --comp-id ID             Computation id [default: 0]
+  --output FILENAME        Output file for data dump [default: 'output.jsonl']
 ";
 
 #[derive(Debug)]
@@ -59,6 +61,7 @@ pub struct GruploadArgs {
     nr_threads: u32,
     algorithm: String,
     comp_id: u64,
+    output_file: std::path::PathBuf,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -97,6 +100,7 @@ fn main() {
         "randomize" => crate::commands::randomize(&args),
         "compute" => crate::commands::compute(&args),
         "progress" => crate::commands::progress(&args),
+        "vertexresults" => crate::commands::vertex_results(&args),
         _ => Err(format!("Command {} not implemented.", args.command)),
     };
     if let Err(s) = r {
@@ -138,6 +142,9 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
             .opt_value_from_str("--algorithm")?
             .unwrap_or("wcc".into()),
         comp_id: pargs.opt_value_from_str("--comp-id")?.unwrap_or(0),
+        output_file: pargs
+            .opt_value_from_str("--output")?
+            .unwrap_or("output_jsonl".into()),
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 

@@ -1,4 +1,4 @@
- - Implement result output
+ - Implement result output in client
  - Implement graph dump
  - drop graph removes results and cancels computations
  - drop computations

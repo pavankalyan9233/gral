@@ -126,7 +126,7 @@ pub fn create(args: &mut GruploadArgs) -> Result<(), String> {
 }
 
 fn vertices_one_thread(
-    file_name: String,
+    file_name: &std::path::PathBuf,
     graph_number: u32,
     endpoint: String,
     start: u64,
@@ -185,7 +185,11 @@ fn vertices_one_thread(
 
     let file = File::open(&file_name);
     if let Err(err) = file {
-        return Err(format!("Error reading file {}: {:?}", file_name, err));
+        return Err(format!(
+            "Error reading file {}: {:?}",
+            file_name.to_str().unwrap(),
+            err
+        ));
     }
     let file = file.unwrap();
     let mut reader = BufReader::new(file);
@@ -195,7 +199,9 @@ fn vertices_one_thread(
         if let Err(err) = seek_res {
             return Err(format!(
                 "Error seeking to start position {} in file {}: {:?}",
-                start, file_name, err
+                start,
+                file_name.to_str().unwrap(),
+                err
             ));
         }
         file_pos = seek_res.unwrap();
@@ -210,7 +216,9 @@ fn vertices_one_thread(
             if let Err(err) = b {
                 return Err(format!(
                     "Error reading single bytes at start position {} in file {}: {:?}",
-                    start, file_name, err
+                    start,
+                    file_name.to_str().unwrap(),
+                    err
                 ));
             }
             file_pos += 1;
@@ -233,7 +241,8 @@ fn vertices_one_thread(
             Err(err) => {
                 return Err(format!(
                     "Error reading lines from file {}: {:?}",
-                    file_name, err
+                    file_name.to_str().unwrap(),
+                    err
                 ));
             }
             Ok(size) => {
@@ -298,7 +307,7 @@ pub fn vertices(args: &GruploadArgs) -> Result<(), String> {
     if chunk_size < 4096 {
         // take care of very small files:
         return vertices_one_thread(
-            args.vertex_file.to_str().unwrap().to_owned(),
+            &args.vertex_file,
             args.graph_number,
             args.endpoint.clone(),
             0,
@@ -314,11 +323,11 @@ pub fn vertices(args: &GruploadArgs) -> Result<(), String> {
         if i == args.nr_threads - 1 {
             finish = total_size;
         }
-        let file_name = args.vertex_file.to_str().unwrap().to_owned();
+        let file_name = args.vertex_file.clone();
         let graph_number = args.graph_number;
         let endpoint = args.endpoint.clone();
         join.push(spawn(move || -> Result<(), String> {
-            vertices_one_thread(file_name, graph_number, endpoint, start, finish)
+            vertices_one_thread(&file_name, graph_number, endpoint, start, finish)
         }));
     }
     let mut errors = String::new();
@@ -787,4 +796,235 @@ pub fn progress(args: &GruploadArgs) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn vertex_results_one_thread(
+    file_name: &std::path::PathBuf,
+    graph_number: u32,
+    endpoint: String,
+    start: u64,
+    finish: u64,
+    _output_file: &std::path::PathBuf,
+) -> Result<(), String> {
+    // Some preparations:
+    let client = reqwest::blocking::Client::new();
+    let mut rng = rand::thread_rng();
+    let mut buf: Vec<u8> = vec![];
+    buf.reserve(1000000);
+    let mut client_id: u64 = 0;
+
+    // Two closures to do some work:
+
+    let mut write_header = |buf: &mut Vec<u8>, client_id: &mut u64| {
+        buf.clear();
+        *client_id = rng.gen::<u64>();
+        buf.write_u64::<BigEndian>(*client_id).unwrap();
+        buf.write_u32::<BigEndian>(graph_number).unwrap();
+        buf.write_u32::<BigEndian>(0).unwrap();
+    };
+
+    let send_off = |buf: &mut Vec<u8>, count: u32| -> Result<(), String> {
+        let mut tmp = count;
+        for i in 1..=4 {
+            buf[16 - i] = (tmp & 0xff) as u8;
+            tmp >>= 8;
+        }
+        let mut url = endpoint.clone();
+        url.push_str("/v1/vertices");
+        let mut resp = match client.post(url).body(buf.clone()).send() {
+            Ok(resp) => resp,
+            Err(err) => return Err(format!("Could not send off batch: {:?}", err)),
+        };
+        handle_error(&mut resp, status(200))?;
+
+        let mut body: Vec<u8> = vec![];
+        let _size = resp.read_to_end(&mut body).unwrap();
+        let mut cursor = Cursor::new(body);
+        // TODO: error handling if input is too short!
+        let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
+        let nr_exceptional = cursor.read_u32::<BigEndian>().unwrap();
+        for _i in 0..nr_exceptional {
+            let index = cursor.read_u32::<BigEndian>().unwrap();
+            let hash = cursor.read_u64::<BigEndian>().unwrap();
+            let l = get_varlen(&mut cursor).unwrap();
+            let k = read_bytes_or_fail(&mut cursor, l).unwrap();
+            let kk = str::from_utf8(k).unwrap();
+            println!(
+                "Key of exceptional hash: {}, index: {}, hash: {:x}",
+                kk, index, hash
+            );
+        }
+        Ok(())
+    };
+
+    let file = File::open(&file_name);
+    if let Err(err) = file {
+        return Err(format!(
+            "Error reading file {}: {:?}",
+            file_name.to_string_lossy(),
+            err
+        ));
+    }
+    let file = file.unwrap();
+    let mut reader = BufReader::new(file);
+    let mut file_pos: u64 = 0;
+    if start > 0 {
+        let seek_res = reader.seek(SeekFrom::Start(start));
+        if let Err(err) = seek_res {
+            return Err(format!(
+                "Error seeking to start position {} in file {}: {:?}",
+                start,
+                file_name.to_string_lossy(),
+                err
+            ));
+        }
+        file_pos = seek_res.unwrap();
+        // This thread is responsible for all lines after the first line
+        // which has its line end character at or behind position `start`.
+        // Therefore, we skip bytes until we see a line end. Note that this
+        // has the additional benefit of skipping over incomplete UTF-8
+        // code points!
+        loop {
+            let mut byte_buf: Vec<u8> = vec![0];
+            let b = reader.read_exact(&mut byte_buf);
+            if let Err(err) = b {
+                return Err(format!(
+                    "Error reading single bytes at start position {} in file {}: {:?}",
+                    start,
+                    file_name.to_string_lossy(),
+                    err
+                ));
+            }
+            file_pos += 1;
+            if byte_buf[0] == '\n' as u8 {
+                break;
+            }
+        }
+    }
+
+    write_header(&mut buf, &mut client_id);
+    let mut count: u32 = 0;
+    let mut overall: u64 = 0;
+    while file_pos <= finish {
+        // Note that we are supposed to read up to (and including) the
+        // first line whose line end character is at or behind position
+        // `finish` in the file.
+        let mut line = String::with_capacity(256);
+        let r = reader.read_line(&mut line);
+        match r {
+            Err(err) => {
+                return Err(format!(
+                    "Error reading lines from file {}: {:?}",
+                    file_name.to_string_lossy(),
+                    err
+                ));
+            }
+            Ok(size) => {
+                if size == 0 {
+                    // EOF
+                    break;
+                }
+                file_pos += size as u64;
+            }
+        }
+        let l = line.trim_end();
+        let v: Value = match serde_json::from_str(&l) {
+            Err(err) => return Err(format!("Cannot parse JSON: {:?}", err)),
+            Ok(val) => val,
+        };
+        let id = &v["_id"];
+        match id {
+            Value::String(i) => {
+                put_varlen(&mut buf, i.len() as u32);
+                for x in i.bytes() {
+                    buf.push(x);
+                }
+                buf.push(0); // no data for now
+            }
+            _ => {
+                return Err(format!(
+                    "JSON is no object with a string _id attribute:\n{}",
+                    l
+                ));
+            }
+        }
+
+        count += 1;
+        if count >= 65536 || buf.len() > 900000 {
+            send_off(&mut buf, count)?;
+            write_header(&mut buf, &mut client_id);
+            overall += count as u64;
+            count = 0;
+        }
+    }
+    if count > 0 {
+        send_off(&mut buf, count)?;
+        overall += count as u64;
+    }
+
+    println!(
+        "Vertices uploaded range from {} to {}, graph number: {}, number of vertices: {}",
+        start, finish, graph_number, overall
+    );
+    Ok(())
+}
+
+pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
+    println!("Querying results for vertices... {:?}", args);
+
+    let meta = metadata(&args.vertex_file);
+    if let Err(err) = meta {
+        return Err(format!("Could not find vertex file: {:?}", err));
+    }
+    let total_size = meta.unwrap().len();
+    let chunk_size = total_size / (args.nr_threads as u64);
+    if chunk_size < 4096 {
+        // take care of very small files:
+        return vertex_results_one_thread(
+            &args.vertex_file,
+            args.graph_number,
+            args.endpoint.clone(),
+            0,
+            total_size,
+            &args.output_file,
+        );
+    }
+    let mut join: Vec<JoinHandle<Result<(), String>>> = vec![];
+    let mut s: u64 = 0;
+    for i in 0..(args.nr_threads) {
+        let start: u64 = s;
+        s += chunk_size;
+        let mut finish: u64 = s;
+        if i == args.nr_threads - 1 {
+            finish = total_size;
+        }
+        let file_name = args.vertex_file.clone();
+        let graph_number = args.graph_number;
+        let endpoint = args.endpoint.clone();
+        let output_file = args.output_file.clone();
+        join.push(spawn(move || -> Result<(), String> {
+            vertex_results_one_thread(
+                &file_name,
+                graph_number,
+                endpoint,
+                start,
+                finish,
+                &output_file,
+            )
+        }));
+    }
+    let mut errors = String::new();
+    for jh in join.into_iter() {
+        let r = jh.join().unwrap();
+        if let Err(msg) = r {
+            errors.push_str(&msg);
+            errors.push('.');
+        }
+    }
+
+    if !errors.is_empty() {
+        Err(errors)
+    } else {
+        Ok(())
+    }
 }
