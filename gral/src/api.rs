@@ -1,13 +1,14 @@
 use crate::computations::{with_computations, Computation, Computations};
 use crate::conncomp::weakly_connected_components;
-use crate::graphs::{with_graphs, Graph, Graphs, VertexHash, VertexIndex};
+use crate::graphs::{with_graphs, Graph, Graphs, KeyOrHash, VertexHash, VertexIndex};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
 use rand::Rng;
 use std::convert::Infallible;
 use std::io::{BufRead, Cursor};
+use std::ops::Deref;
 use std::str;
-use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, Mutex, RwLock};
 use warp::{http::StatusCode, reject, Filter, Rejection};
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
@@ -58,6 +59,12 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_progress);
+    let get_results_by_vertices = warp::path!("v1" / "getResultsByVertices")
+        .and(warp::put())
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_get_results_by_vertices);
 
     create
         .or(drop)
@@ -67,6 +74,7 @@ pub fn api_filter(
         .or(seal_edges)
         .or(weakly_connected_components)
         .or(get_progress)
+        .or(get_results_by_vertices)
 }
 
 /// An error object, which is used when the body size is unexpected.
@@ -132,8 +140,24 @@ impl reject::Reject for KeyMustNotBeEmpty {}
 
 /// An error object, which is used if a computation is not found.
 #[derive(Debug)]
-struct ComputationNotFound {}
+struct ComputationNotFound {
+    pub comp_id: u64,
+}
 impl reject::Reject for ComputationNotFound {}
+
+/// An error object, which is used if a computation is not yet finished.
+#[derive(Debug)]
+struct ComputationNotYetFinished {
+    pub comp_id: u64,
+}
+impl reject::Reject for ComputationNotYetFinished {}
+
+/// A general error type for internal errors like out of memory:
+#[derive(Debug)]
+struct InternalError {
+    pub msg: String,
+}
+impl reject::Reject for InternalError {}
 
 /// This async function implements the "create graph" API call.
 async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
@@ -209,6 +233,22 @@ fn get_graph(
         }));
     }
     Ok(graphs.list[graph_number as usize].clone())
+}
+
+fn get_computation(
+    computations: &Arc<Mutex<Computations>>,
+    comp_id: u64,
+) -> Result<Arc<Mutex<dyn Computation + Send + 'static>>, Rejection> {
+    let comps = computations.lock().unwrap();
+    let comp = comps.list.get(&comp_id);
+    match comp {
+        None => {
+            return Err(warp::reject::custom(ComputationNotFound { comp_id }));
+        }
+        Some(c) => {
+            return Ok(c.clone());
+        }
+    }
 }
 
 /// This async function implements the "drop graph" API call.
@@ -295,6 +335,19 @@ fn read_bytes_or_fail(reader: &mut Cursor<Vec<u8>>, l: u32) -> Result<&[u8], Rej
     Ok(&v[(reader.position() as usize)..((reader.position() + l as u64) as usize)])
 }
 
+fn put_key_or_hash(out: &mut Vec<u8>, koh: &KeyOrHash) {
+    match koh {
+        KeyOrHash::Hash(h) => {
+            put_varlen(out, 0);
+            out.write_u64::<BigEndian>(h.to_u64()).unwrap();
+        }
+        KeyOrHash::Key(k) => {
+            put_varlen(out, k.len() as u32);
+            out.extend_from_slice(&k);
+        }
+    }
+}
+
 fn parse_vertex(reader: &mut Cursor<Vec<u8>>) -> Result<(VertexHash, Vec<u8>, Vec<u8>), Rejection> {
     let l = get_varlen(reader);
     if l.is_err() {
@@ -335,6 +388,38 @@ fn parse_vertex(reader: &mut Cursor<Vec<u8>>) -> Result<(VertexHash, Vec<u8>, Ve
     return Ok((hash, key, data));
 }
 
+// parse_key reads a varlen and a key, or a hash if the length was 0.
+// If a key was read, the hash is computed.
+fn parse_key_or_hash(reader: &mut Cursor<Vec<u8>>) -> Result<KeyOrHash, Rejection> {
+    let l = get_varlen(reader);
+    if l.is_err() {
+        return Err(warp::reject::custom(TooShortBodyLength {
+            found: reader.position() as usize,
+            expected_at_least: reader.position() as usize + 2,
+        }));
+    }
+    let l = l.unwrap();
+    if l == 0 {
+        let u = reader.read_u64::<BigEndian>();
+        match u {
+            Err(_) => {
+                return Err(warp::reject::custom(TooShortBodyLength {
+                    found: reader.position() as usize,
+                    expected_at_least: reader.position() as usize + 8,
+                }));
+            }
+            Ok(uu) => {
+                return Ok(KeyOrHash::Hash(VertexHash::new(uu)));
+            }
+        }
+    } else {
+        let k = read_bytes_or_fail(reader, l)?;
+        let key = k.to_vec();
+        reader.consume(l as usize);
+        return Ok(KeyOrHash::Key(key));
+    }
+}
+
 async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
     if bytes.len() < 16 {
@@ -368,7 +453,7 @@ async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
         }));
     }
 
-    // Collect exceptions and rejections:
+    // Collect exceptions:
     let mut exceptional: Vec<(u32, VertexHash)> = vec![];
     let mut exceptional_keys: Vec<Vec<u8>> = vec![];
 
@@ -578,7 +663,7 @@ async fn api_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, 
 
     // Write lock graph:
     let mut graph = graph_arc.write().unwrap();
-    check_write_graph(&graph, graph_number, false)?;
+    check_graph(graph.deref(), graph_number, false)?;
 
     // Collect rejections:
     let mut rejected: Vec<u32> = vec![];
@@ -624,7 +709,7 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
 
     // Write lock graph:
     let mut graph = graph_arc.write().unwrap();
-    check_write_graph(&graph, graph_number, false)?;
+    check_graph(graph.deref(), graph_number, false)?;
 
     graph.seal_edges();
 
@@ -654,6 +739,9 @@ impl Computation for WeaklyConnectedComponentsComputation {
     fn cancel(&mut self) {
         self.shall_stop = true;
     }
+    fn algorithm_id(&self) -> u32 {
+        return 1;
+    }
     fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String> {
         out.write_u8(8).unwrap();
         out.write_u64::<BigEndian>(self.number).unwrap();
@@ -661,38 +749,33 @@ impl Computation for WeaklyConnectedComponentsComputation {
     }
     fn dump_vertex_results(
         &self,
-        hashes: &Vec<VertexHash>,
+        comp_id: u64,
+        kohs: &Vec<KeyOrHash>,
         out: &mut Vec<u8>,
-    ) -> Result<(), String> {
+    ) -> Result<(), Rejection> {
         let comps = self.components.as_ref();
         match comps {
-            None => Err("Computation not yet finished.".to_string()),
+            None => {
+                return Err(warp::reject::custom(ComputationNotYetFinished { comp_id }));
+            }
             Some(result) => {
                 let g = self.graph.read().unwrap();
-                if g.store_keys {
-                    for i in hashes.iter() {
-                        let index = g.hash_to_index.get(i);
-                        if let Some(ind) = index {
-                            put_varlen(out, g.index_to_key[ind.to_u64() as usize].len() as u32);
-                            out.extend_from_slice(&(g.index_to_key[ind.to_u64() as usize]));
-                            put_varlen(out, 8);
-                            out.write_u64::<BigEndian>(result[ind.to_u64() as usize])
-                                .unwrap();
+                for koh in kohs.iter() {
+                    let index = g.index_from_key_or_hash(koh);
+                    match index {
+                        None => {
+                            put_key_or_hash(out, koh);
+                            out.write_u8(0).unwrap();
                         }
-                    }
-                } else {
-                    for i in hashes.iter() {
-                        let index = g.hash_to_index.get(i);
-                        if let Some(ind) = index {
-                            put_varlen(out, std::mem::size_of::<VertexHash>() as u32);
-                            out.write_u64::<BigEndian>(i.to_u64()).unwrap();
-                            put_varlen(out, 8);
-                            out.write_u64::<BigEndian>(result[ind.to_u64() as usize])
+                        Some(i) => {
+                            put_key_or_hash(out, koh);
+                            out.write_u8(8).unwrap();
+                            out.write_u64::<BigEndian>(result[i.to_u64() as usize])
                                 .unwrap();
                         }
                     }
                 }
-                Ok(())
+                return Ok(());
             }
         }
     }
@@ -724,7 +807,7 @@ async fn api_weakly_connected_components(
     {
         // Check graph:
         let graph = graph_arc.read().unwrap();
-        check_read_graph(&graph, graph_number, true)?;
+        check_graph(graph.deref(), graph_number, true)?;
     }
 
     let comp_arc = Arc::new(Mutex::new(WeaklyConnectedComponentsComputation {
@@ -789,7 +872,7 @@ async fn api_get_progress(
     let comp_arc = comps.list.get(&comp_id);
     match comp_arc {
         None => {
-            return Err(warp::reject::custom(ComputationNotFound {}));
+            return Err(warp::reject::custom(ComputationNotFound { comp_id }));
         }
         Some(comp_arc) => {
             let comp = comp_arc.lock().unwrap();
@@ -811,6 +894,58 @@ async fn api_get_progress(
             Ok(v)
         }
     }
+}
+
+// The following function implements
+async fn api_get_results_by_vertices(
+    graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<Vec<u8>, Rejection> {
+    // Handle wrong length:
+    if bytes.len() < 16 {
+        return Err(warp::reject::custom(TooShortBodyLength {
+            found: bytes.len(),
+            expected_at_least: 16,
+        }));
+    }
+
+    // Parse body and extract integers:
+    // (Note that we have checked the buffer length and so these cannot
+    // fail! Therefore unwrap() is OK here.)
+    let mut reader = Cursor::new(bytes.to_vec());
+    let comp_id = reader.read_u64::<BigEndian>().unwrap();
+    let graph_number = reader.read_u32::<BigEndian>().unwrap();
+    let number = reader.read_u32::<BigEndian>().unwrap();
+
+    let graph_arc = get_graph(&graphs, graph_number)?;
+    let computation_arc = get_computation(&computations, comp_id)?;
+
+    // Lock graph:
+    let graph = graph_arc.read().unwrap();
+    check_graph(graph.deref(), graph_number, true)?;
+
+    let mut input: Vec<KeyOrHash> = vec![];
+    input.reserve(number as usize);
+    for _i in 0..number {
+        let key_or_hash = parse_key_or_hash(&mut reader)?;
+        input.push(key_or_hash);
+    }
+
+    // Write response:
+    let mut v = Vec::new();
+    // TODO: handle errors!
+    v.reserve(1024 * 1024);
+    v.write_u64::<BigEndian>(comp_id).unwrap();
+    v.write_u32::<BigEndian>(graph_number).unwrap();
+    v.write_u32::<BigEndian>(number).unwrap();
+
+    // Now lock computation:
+    let computation = computation_arc.lock().unwrap();
+    v.write_u32::<BigEndian>(computation.algorithm_id())
+        .unwrap();
+    computation.dump_vertex_results(comp_id, &input, &mut v)?;
+    Ok(v)
 }
 
 // This function receives a `Rejection` and is responsible to convert
@@ -872,9 +1007,15 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
     } else if let Some(_) = err.find::<KeyMustNotBeEmpty>() {
         code = StatusCode::BAD_REQUEST;
         message = "Key must not be empty, whole batch rejected".to_string();
-    } else if let Some(_) = err.find::<ComputationNotFound>() {
+    } else if let Some(wrong) = err.find::<ComputationNotFound>() {
         code = StatusCode::NOT_FOUND;
-        message = "Computation with given id does not exist".to_string();
+        message = format!("Computation with id {} does not exist", wrong.comp_id);
+    } else if let Some(wrong) = err.find::<ComputationNotYetFinished>() {
+        code = StatusCode::SERVICE_UNAVAILABLE;
+        message = format!("Computation with id {} does not exist", wrong.comp_id);
+    } else if let Some(wrong) = err.find::<InternalError>() {
+        code = StatusCode::INTERNAL_SERVER_ERROR;
+        message = wrong.msg.clone();
     } else {
         // We should have expected this... Just log and say its a 500
         eprintln!("unhandled rejection: {:?}", err);
@@ -884,52 +1025,13 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
 
     let mut v = Vec::new();
     v.write_u32::<BigEndian>(code.as_u16() as u32).unwrap();
-    if message.len() < 128 {
-        v.write_u8(message.len() as u8).unwrap();
-    } else {
-        v.write_u32::<BigEndian>((message.len() as u32) | 0x80000000)
-            .unwrap();
-    }
-    v.reserve(message.len());
-    for x in message.bytes() {
-        v.push(x);
-    }
+    put_varlen(&mut v, message.len() as u32);
+    v.extend_from_slice(message.as_bytes());
     Ok(warp::reply::with_status(v, code))
 }
 
-fn check_write_graph(
-    graph: &RwLockWriteGuard<Graph>,
-    graph_number: u32,
-    edges_must_be_sealed: bool,
-) -> Result<(), Rejection> {
-    if graph.dropped {
-        return Err(warp::reject::custom(GraphNotFound {
-            number: graph_number,
-        }));
-    }
-    if !graph.vertices_sealed {
-        return Err(warp::reject::custom(GraphVerticesNotSealed {
-            number: graph_number,
-        }));
-    }
-    if edges_must_be_sealed {
-        if !graph.edges_sealed {
-            return Err(warp::reject::custom(GraphEdgesNotSealed {
-                number: graph_number,
-            }));
-        }
-    } else {
-        if graph.edges_sealed {
-            return Err(warp::reject::custom(GraphEdgesSealed {
-                number: graph_number,
-            }));
-        }
-    }
-    Ok(())
-}
-
-fn check_read_graph(
-    graph: &RwLockReadGuard<Graph>,
+fn check_graph(
+    graph: &Graph,
     graph_number: u32,
     edges_must_be_sealed: bool,
 ) -> Result<(), Rejection> {

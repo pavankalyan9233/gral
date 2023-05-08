@@ -430,15 +430,11 @@ results, we get this body back:
 ```
 u64      computation-id
 u32      number of graph
-u32      number of rejected vertices
-u32      number of results for non-rejected vertices
-
-and then for each rejected vertex its index in the original input body:
-
-u32      index
-varlen   length of rejected key (or 0 for hash if hash was given)
-[u8]     bytes of rejected key (or hash if varlen was 0)
-...
+u32      number of results for vertices (including rejected)
+u32      id of type of computation:
+         1: weakly connected components
+         2: strongly connected components
+         ...
 
 and then for each vertex:
 
@@ -446,7 +442,11 @@ varlen   length of key (or 0 if only hash given)
 [u8]     bytes of key (or hash if only hash given)
 varlen   length of data for this key
 [u8]     result data (depends on algorithm)
-...
+         (For weakly/strongly connected components it is just one u64
+          per vertex.)
+
+if a vertex key or hash was rejected (not found), the length of the
+result is 0.
 ```
 
 For example, the weakly connected components might return a
@@ -454,10 +454,24 @@ For example, the weakly connected components might return a
 ```
 varlen   length of key (or 0 if only hash known)
 [u8]     bytes of key (or hash if only hash known)
+varlen   8
 u64      id of connected component
 ```
 
-for each vertex.
+for each vertex or
+
+```
+varlen   length of key (or 0 if only hash known)
+[u8]     bytes of key (or hash if only hash known)
+varlen   0
+```
+
+if the vertex was rejected i.e. not found.
+
+If the computation with the given id is not found at all, we return a
+status code of `404 NOT FOUND`, and if the computation is found but not yet
+finished, we return `503 SERVICE_UNAVAILABLE` and an error body as
+described above.
 
 
 ### `PUT /v1/dropGraph`

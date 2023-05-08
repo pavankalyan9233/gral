@@ -2,11 +2,11 @@
  - Implement graph dump
  - drop graph removes results and cancels computations
  - drop computations
+ - go to SSL, in particular implement in grupload
  - End to end test
  - coverage?
+ - strongly connected components
+ - Add metrics (rust-prometheus crate)
  - Tune randomize (parallelization)
  - Tune receive in gral
- - go to SSL, in particular implement in grupload
- - Add metrics (rust-prometheus crate)
  - error handling for server responses in client
- - strongly connected components

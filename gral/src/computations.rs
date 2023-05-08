@@ -3,17 +3,19 @@ use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use warp::Filter;
 
-use crate::graphs::VertexHash;
+use crate::graphs::KeyOrHash;
 
 pub trait Computation {
     fn is_ready(&self) -> bool;
     fn cancel(&mut self);
     fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String>;
+    fn algorithm_id(&self) -> u32;
     fn dump_vertex_results(
         &self,
-        hashes: &Vec<VertexHash>,
+        comp_id: u64,
+        hashes: &Vec<KeyOrHash>,
         out: &mut Vec<u8>,
-    ) -> Result<(), String>;
+    ) -> Result<(), warp::Rejection>;
 }
 
 pub struct Computations {

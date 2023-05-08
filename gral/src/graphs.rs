@@ -100,6 +100,11 @@ struct EdgeTemp {
     pub to: VertexIndex,
 }
 
+pub enum KeyOrHash {
+    Key(Vec<u8>),
+    Hash(VertexHash),
+}
+
 impl Graph {
     pub fn new(store_keys: bool, _bits_for_hash: u8) -> Arc<RwLock<Graph>> {
         Arc::new(RwLock::new(Graph {
@@ -268,7 +273,6 @@ impl Graph {
             cur_to = VertexIndex::new(cur_to.to_u64() + 1);
             self.edge_index_by_to.push(pos);
         }
-        //let _ = self.dump_graph();
         println!(
             "Sealed graph with {} vertices and {} edges.",
             self.index_to_hash.len(),
@@ -282,7 +286,7 @@ impl Graph {
         match index {
             None => None,
             Some(index) => {
-                if index.0 & 0x8000000000000000 != 0 {
+                if index.0 & 0x80000000_00000000 != 0 {
                     // collision!
                     let except = self.exceptions.get(k);
                     match except {
@@ -306,6 +310,27 @@ impl Graph {
                     None => None,
                     Some(index) => Some(*index),
                 }
+            }
+        }
+    }
+
+    pub fn index_from_hash(&self, h: &VertexHash) -> Option<VertexIndex> {
+        let index = self.hash_to_index.get(h);
+        match index {
+            None => None,
+            Some(i) => Some(*i),
+        }
+    }
+
+    pub fn index_from_key_or_hash(&self, key_or_hash: &KeyOrHash) -> Option<VertexIndex> {
+        match key_or_hash {
+            KeyOrHash::Hash(h) => {
+                // Lookup if hash exists, if so, this is the index
+                self.index_from_hash(h)
+            }
+            KeyOrHash::Key(k) => {
+                // Hash key, look up hash, check for exception:
+                self.index_from_vertex_key(k)
             }
         }
     }
