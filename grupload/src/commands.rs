@@ -9,6 +9,7 @@ use std::fs::{metadata, File};
 use std::io::prelude::*;
 use std::io::{BufRead, BufReader, BufWriter, Cursor, Read, SeekFrom, Write};
 use std::str;
+use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 
@@ -179,6 +180,7 @@ fn vertices_one_thread(
                 "Key of exceptional hash: {}, index: {}, hash: {:x}",
                 kk, index, hash
             );
+            cursor.consume(l as usize);
         }
         Ok(())
     };
@@ -262,9 +264,7 @@ fn vertices_one_thread(
         match id {
             Value::String(i) => {
                 put_varlen(&mut buf, i.len() as u32);
-                for x in i.bytes() {
-                    buf.push(x);
-                }
+                buf.extend_from_slice(i.as_bytes());
                 buf.push(0); // no data for now
             }
             _ => {
@@ -429,6 +429,7 @@ pub fn edges_one_thread(
                 "Index of rejected vertex: {}, code: {}, data: {:?}",
                 index, code, kk
             );
+            cursor.consume(l as usize);
         }
         Ok(())
     };
@@ -507,13 +508,9 @@ pub fn edges_one_thread(
                 match to {
                     Value::String(t) => {
                         put_varlen(&mut buf, f.len() as u32);
-                        for x in f.bytes() {
-                            buf.push(x);
-                        }
+                        buf.extend_from_slice(f.as_bytes());
                         put_varlen(&mut buf, t.len() as u32);
-                        for x in t.bytes() {
-                            buf.push(x);
-                        }
+                        buf.extend_from_slice(t.as_bytes());
                         buf.push(0); // no data for now
                     }
                     _ => {
@@ -801,24 +798,23 @@ pub fn progress(args: &GruploadArgs) -> Result<(), String> {
 fn vertex_results_one_thread(
     file_name: &std::path::PathBuf,
     graph_number: u32,
+    comp_id: u64,
     endpoint: String,
     start: u64,
     finish: u64,
-    _output_file: &std::path::PathBuf,
+    output_file: &std::path::PathBuf,
+    out_mutex: &mut Arc<Mutex<Dummy>>,
 ) -> Result<(), String> {
     // Some preparations:
     let client = reqwest::blocking::Client::new();
-    let mut rng = rand::thread_rng();
     let mut buf: Vec<u8> = vec![];
     buf.reserve(1000000);
-    let mut client_id: u64 = 0;
 
     // Two closures to do some work:
 
-    let mut write_header = |buf: &mut Vec<u8>, client_id: &mut u64| {
+    let write_header = |buf: &mut Vec<u8>, comp_id: u64| {
         buf.clear();
-        *client_id = rng.gen::<u64>();
-        buf.write_u64::<BigEndian>(*client_id).unwrap();
+        buf.write_u64::<BigEndian>(comp_id).unwrap();
         buf.write_u32::<BigEndian>(graph_number).unwrap();
         buf.write_u32::<BigEndian>(0).unwrap();
     };
@@ -830,8 +826,8 @@ fn vertex_results_one_thread(
             tmp >>= 8;
         }
         let mut url = endpoint.clone();
-        url.push_str("/v1/vertices");
-        let mut resp = match client.post(url).body(buf.clone()).send() {
+        url.push_str("/v1/getResultsByVertices");
+        let mut resp = match client.put(url).body(buf.clone()).send() {
             Ok(resp) => resp,
             Err(err) => return Err(format!("Could not send off batch: {:?}", err)),
         };
@@ -841,18 +837,64 @@ fn vertex_results_one_thread(
         let _size = resp.read_to_end(&mut body).unwrap();
         let mut cursor = Cursor::new(body);
         // TODO: error handling if input is too short!
-        let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
-        let nr_exceptional = cursor.read_u32::<BigEndian>().unwrap();
-        for _i in 0..nr_exceptional {
-            let index = cursor.read_u32::<BigEndian>().unwrap();
-            let hash = cursor.read_u64::<BigEndian>().unwrap();
+        let _computation_id_back = cursor.read_u64::<BigEndian>().unwrap();
+        let _graph_number_back = cursor.read_u32::<BigEndian>().unwrap();
+        let nr_results = cursor.read_u32::<BigEndian>().unwrap();
+        let algorithm = cursor.read_u32::<BigEndian>().unwrap();
+        let mut v: Vec<u8> = vec![];
+        v.reserve(nr_results as usize);
+        for _i in 0..nr_results {
+            // First the key:
             let l = get_varlen(&mut cursor).unwrap();
             let k = read_bytes_or_fail(&mut cursor, l).unwrap();
-            let kk = str::from_utf8(k).unwrap();
-            println!(
-                "Key of exceptional hash: {}, index: {}, hash: {:x}",
-                kk, index, hash
-            );
+            v.extend_from_slice("{\"_id\":\"".as_bytes());
+            v.extend_from_slice(k);
+            v.extend_from_slice("\",".as_bytes());
+            cursor.consume(l as usize);
+
+            // And now the data:
+            let l2 = get_varlen(&mut cursor).unwrap();
+            match algorithm {
+                1 => {
+                    // weakly connected components
+                    assert_eq!(l2, 8);
+                    let comp = cursor.read_u64::<BigEndian>();
+                    match comp {
+                        Err(err) => {
+                            return Err(format!("Could not read component id: {:?}", err));
+                        }
+                        Ok(comp_id) => {
+                            let comp_id_str = comp_id.to_string();
+                            v.extend_from_slice("\"r\":".as_bytes());
+                            v.extend_from_slice(comp_id_str.as_bytes());
+                            v.extend_from_slice("\"}\n".as_bytes());
+                        }
+                    };
+                }
+                _ => { // not implemented
+                }
+            }
+        }
+        let _guard = out_mutex.lock().unwrap();
+        let out = File::options().append(true).open(output_file);
+        match out {
+            Ok(mut f) => {
+                let r = f.write_all(&v);
+                if let Err(err) = r {
+                    return Err(format!(
+                        "Could not write/append to file {}: {:?}!",
+                        output_file.display(),
+                        err
+                    ));
+                }
+            }
+            Err(err) => {
+                return Err(format!(
+                    "Could not append to file {}: {:?}!",
+                    output_file.display(),
+                    err
+                ));
+            }
         }
         Ok(())
     };
@@ -902,7 +944,20 @@ fn vertex_results_one_thread(
         }
     }
 
-    write_header(&mut buf, &mut client_id);
+    // Prepare output file:
+    {
+        let out = File::create(output_file);
+        if let Err(err) = out {
+            return Err(format!(
+                "Error creating output file {}: {:?}!",
+                output_file.display(),
+                err
+            ));
+        }
+        // File will exist with 0 length now.
+    }
+
+    write_header(&mut buf, comp_id);
     let mut count: u32 = 0;
     let mut overall: u64 = 0;
     while file_pos <= finish {
@@ -936,10 +991,7 @@ fn vertex_results_one_thread(
         match id {
             Value::String(i) => {
                 put_varlen(&mut buf, i.len() as u32);
-                for x in i.bytes() {
-                    buf.push(x);
-                }
-                buf.push(0); // no data for now
+                buf.extend_from_slice(i.as_bytes());
             }
             _ => {
                 return Err(format!(
@@ -952,7 +1004,7 @@ fn vertex_results_one_thread(
         count += 1;
         if count >= 65536 || buf.len() > 900000 {
             send_off(&mut buf, count)?;
-            write_header(&mut buf, &mut client_id);
+            write_header(&mut buf, comp_id);
             overall += count as u64;
             count = 0;
         }
@@ -969,6 +1021,8 @@ fn vertex_results_one_thread(
     Ok(())
 }
 
+struct Dummy {}
+
 pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
     println!("Querying results for vertices... {:?}", args);
 
@@ -980,17 +1034,22 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
     let chunk_size = total_size / (args.nr_threads as u64);
     if chunk_size < 4096 {
         // take care of very small files:
+        let mut output_mutex = Arc::new(Mutex::new(Dummy {}));
         return vertex_results_one_thread(
             &args.vertex_file,
             args.graph_number,
+            args.comp_id,
             args.endpoint.clone(),
             0,
             total_size,
             &args.output_file,
+            &mut output_mutex,
         );
     }
     let mut join: Vec<JoinHandle<Result<(), String>>> = vec![];
     let mut s: u64 = 0;
+    let output_mutex = Arc::new(Mutex::new(Dummy {}));
+
     for i in 0..(args.nr_threads) {
         let start: u64 = s;
         s += chunk_size;
@@ -1000,16 +1059,20 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
         }
         let file_name = args.vertex_file.clone();
         let graph_number = args.graph_number;
+        let comp_id = args.comp_id;
         let endpoint = args.endpoint.clone();
         let output_file = args.output_file.clone();
+        let mut mutex_copy = output_mutex.clone();
         join.push(spawn(move || -> Result<(), String> {
             vertex_results_one_thread(
                 &file_name,
                 graph_number,
+                comp_id,
                 endpoint,
                 start,
                 finish,
                 &output_file,
+                &mut mutex_copy,
             )
         }));
     }
