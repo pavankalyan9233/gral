@@ -1,4 +1,6 @@
  - go to SSL, in particular implement in grupload
+ - Progress report on upload of vertices and edges
+ - Progress report on download of results
  - Implement graph drop
  - Implement graph dump
  - Extend end to end test
@@ -9,3 +11,4 @@
  - Tune randomize (parallelization)
  - Tune receive in gral
  - error handling for server responses in client
+ - proper logging
