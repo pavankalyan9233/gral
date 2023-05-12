@@ -64,6 +64,11 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_results_by_vertices);
+    let drop_computation = warp::path!("v1" / "dropComputation")
+        .and(warp::put())
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_drop_computation);
 
     create
         .or(drop)
@@ -74,6 +79,7 @@ pub fn api_filter(
         .or(weakly_connected_components)
         .or(get_progress)
         .or(get_results_by_vertices)
+        .or(drop_computation)
 }
 
 /// An error object, which is used when the body size is unexpected.
@@ -854,7 +860,7 @@ async fn api_weakly_connected_components(
     Ok(v)
 }
 
-/// This function seals the edges of a graph.
+/// This function gets progress of a computation.
 async fn api_get_progress(
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
@@ -941,6 +947,50 @@ async fn api_get_results_by_vertices(
     v.write_u32::<BigEndian>(computation.algorithm_id())
         .unwrap();
     computation.dump_vertex_results(comp_id, &input, &mut v)?;
+    Ok(v)
+}
+
+/// This function drops a computation.
+async fn api_drop_computation(
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<Vec<u8>, Rejection> {
+    // Handle wrong length:
+    if bytes.len() != 16 {
+        return Err(warp::reject::custom(WrongBodyLength {
+            found: bytes.len(),
+            expected: 16,
+        }));
+    }
+
+    // Parse body and extract integers:
+    // (Note that we have checked the buffer length and so these cannot
+    // fail! Therefore unwrap() is OK here.)
+    let mut reader = Cursor::new(bytes.to_vec());
+    let client_id = reader.read_u64::<BigEndian>().unwrap();
+    let comp_id = reader.read_u64::<BigEndian>().unwrap();
+
+    let mut comps = computations.lock().unwrap();
+    let comp_arc = comps.list.get(&comp_id).clone();
+    match comp_arc {
+        None => {
+            return Err(warp::reject::custom(ComputationNotFound { comp_id }));
+        }
+        Some(comp_arc) => {
+            {
+                let mut comp = comp_arc.lock().unwrap();
+                comp.cancel();
+            }
+            comps.list.remove(&comp_id);
+        }
+    }
+
+    // Write response:
+    let mut v = Vec::new();
+    // TODO: handle errors!
+    v.reserve(256);
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u64::<BigEndian>(comp_id).unwrap();
     Ok(v)
 }
 

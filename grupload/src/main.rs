@@ -24,6 +24,7 @@ COMMANDS:
   compute                  trigger a computation
   progress                 get progress information
   vertexresults            dump results of a computation for all vertices
+  dropcomp                 drops a computation
                           
 OPTIONS:                  
   --max-vertices NR        Maximal number of vertices (only for create)
@@ -105,6 +106,7 @@ fn main() {
         "compute" => crate::commands::compute(&args),
         "progress" => crate::commands::progress(&args),
         "vertexresults" => crate::commands::vertex_results(&args),
+        "dropcomp" => crate::commands::drop_computation(&args),
         _ => Err(format!("Command {} not implemented.", args.command)),
     };
     if let Err(s) = r {

@@ -750,7 +750,7 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
     let comp_id = cursor.read_u64::<BigEndian>().unwrap();
 
     println!(
-        "{}: graph number: {}, computation number: {}.",
+        "{}: graph number: {}, computation number: {}",
         args.algorithm, graph_number, comp_id
     );
     Ok(())
@@ -784,7 +784,7 @@ pub fn progress(args: &GruploadArgs) -> Result<(), String> {
         w.push(cursor.read_u64::<BigEndian>().unwrap());
     }
     println!(
-        "Computation progress for {}: finished {} out of {}.",
+        "Computation progress for {}: finished {} out of {}",
         comp_id, progress, total_progress
     );
     if progress == total_progress {
@@ -1088,4 +1088,29 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
     } else {
         Ok(())
     }
+}
+
+pub fn drop_computation(args: &GruploadArgs) -> Result<(), String> {
+    println!("Dropping computation {}: {:?}", args.comp_id, args);
+    let client = reqwest::blocking::Client::new();
+    let mut v: Vec<u8> = vec![];
+    let mut rng = rand::thread_rng();
+    let client_id = rng.gen::<u64>();
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u64::<BigEndian>(args.comp_id).unwrap();
+
+    let mut url = args.endpoint.clone();
+    url.push_str("/v1/dropComputation");
+    let mut resp = match client.put(url).body(v).send() {
+        Ok(resp) => resp,
+        Err(err) => panic!("Error: {}", err),
+    };
+    handle_error(&mut resp, status(200))?;
+
+    let body = resp.bytes().unwrap();
+    let mut cursor = Cursor::new(&body);
+    let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
+    let comp_id = cursor.read_u64::<BigEndian>().unwrap();
+    println!("Computation {} dropped.", comp_id,);
+    Ok(())
 }
