@@ -1,12 +1,12 @@
- - Implement result output in client
- - Implement graph dump
- - drop graph removes results and cancels computations
- - drop computations
+ - drop computations (with cancellation)
  - go to SSL, in particular implement in grupload
  - End to end test
+ - Implement graph dump
+ - Extend end to end test
  - coverage?
  - strongly connected components
  - Add metrics (rust-prometheus crate)
+ - metric about memory usage
  - Tune randomize (parallelization)
  - Tune receive in gral
  - error handling for server responses in client

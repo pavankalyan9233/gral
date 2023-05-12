@@ -604,6 +604,8 @@ pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
     let client_id = rng.gen::<u64>();
     v.write_u64::<BigEndian>(client_id).unwrap();
     v.write_u32::<BigEndian>(args.graph_number).unwrap();
+    v.write_u32::<BigEndian>(if args.index_edges { 1 } else { 0 })
+        .unwrap();
 
     let mut url = args.endpoint.clone();
     url.push_str("/v1/sealEdges");
@@ -761,7 +763,6 @@ pub fn progress(args: &GruploadArgs) -> Result<(), String> {
     );
     let client = reqwest::blocking::Client::new();
     let mut v: Vec<u8> = vec![];
-    v.write_u32::<BigEndian>(args.graph_number).unwrap();
     v.write_u64::<BigEndian>(args.comp_id).unwrap();
 
     let mut url = args.endpoint.clone();
@@ -774,7 +775,6 @@ pub fn progress(args: &GruploadArgs) -> Result<(), String> {
 
     let body = resp.bytes().unwrap();
     let mut cursor = Cursor::new(&body);
-    let graph_number = cursor.read_u32::<BigEndian>().unwrap();
     let comp_id = cursor.read_u64::<BigEndian>().unwrap();
     let total_progress = cursor.read_u32::<BigEndian>().unwrap();
     let progress = cursor.read_u32::<BigEndian>().unwrap();
@@ -784,8 +784,8 @@ pub fn progress(args: &GruploadArgs) -> Result<(), String> {
         w.push(cursor.read_u64::<BigEndian>().unwrap());
     }
     println!(
-        "Computation progress for {}: graph number: {}, finished {} out of {}.",
-        comp_id, graph_number, progress, total_progress
+        "Computation progress for {}: finished {} out of {}.",
+        comp_id, progress, total_progress
     );
     if progress == total_progress {
         for x in w.iter() {
@@ -815,14 +815,13 @@ fn vertex_results_one_thread(
     let write_header = |buf: &mut Vec<u8>, comp_id: u64| {
         buf.clear();
         buf.write_u64::<BigEndian>(comp_id).unwrap();
-        buf.write_u32::<BigEndian>(graph_number).unwrap();
         buf.write_u32::<BigEndian>(0).unwrap();
     };
 
     let send_off = |buf: &mut Vec<u8>, count: u32| -> Result<(), String> {
         let mut tmp = count;
         for i in 1..=4 {
-            buf[16 - i] = (tmp & 0xff) as u8;
+            buf[12 - i] = (tmp & 0xff) as u8;
             tmp >>= 8;
         }
         let mut url = endpoint.clone();
@@ -838,7 +837,6 @@ fn vertex_results_one_thread(
         let mut cursor = Cursor::new(body);
         // TODO: error handling if input is too short!
         let _computation_id_back = cursor.read_u64::<BigEndian>().unwrap();
-        let _graph_number_back = cursor.read_u32::<BigEndian>().unwrap();
         let nr_results = cursor.read_u32::<BigEndian>().unwrap();
         let algorithm = cursor.read_u32::<BigEndian>().unwrap();
         let mut v: Vec<u8> = vec![];
@@ -1015,7 +1013,7 @@ fn vertex_results_one_thread(
     }
 
     println!(
-        "Vertices uploaded range from {} to {}, graph number: {}, number of vertices: {}",
+        "Vertex results downloaded range from {} to {}, graph number: {}, number of vertices: {}",
         start, finish, graph_number, overall
     );
     Ok(())

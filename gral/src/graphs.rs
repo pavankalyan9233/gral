@@ -34,7 +34,6 @@ impl VertexIndex {
 pub struct Edge {
     pub from: VertexIndex, // index of vertex
     pub to: VertexIndex,   // index of vertex
-    pub data_offset: u64,  // offset into edge_data
 }
 
 #[derive(Debug)]
@@ -52,15 +51,20 @@ pub struct Graph {
     // Maps indices of vertices to their names, not necessarily used:
     pub index_to_key: Vec<Vec<u8>>,
 
-    // Additional data for vertices:
+    // Additional data for vertices. If all data was empty, it is allowed
+    // that both of these are empty! After sealing, the offsets get one
+    // more entry to mark the end of the last one:
     pub vertex_data: Vec<u8>,
     pub vertex_data_offsets: Vec<u64>,
 
     // Edges as from/to tuples:
     pub edges: Vec<Edge>,
 
-    // Additional data for vertices:
+    // Additional data for edges. If all data was empty, it is allowed that
+    // both of these are empty! After sealing, the offsets get one more
+    // entry to mark the end of the last one:
     pub edge_data: Vec<u8>,
+    pub edge_data_offsets: Vec<u64>,
 
     // Maps indices of vertices to offsets in edges by from:
     pub edge_index_by_from: Vec<u64>,
@@ -83,6 +87,9 @@ pub struct Graph {
     // sealed?
     pub vertices_sealed: bool,
     pub edges_sealed: bool,
+
+    // Flag, if edges are already indexed:
+    pub edges_indexed: bool,
 }
 
 pub struct Graphs {
@@ -116,6 +123,7 @@ impl Graph {
             vertex_data_offsets: vec![],
             edges: vec![],
             edge_data: vec![],
+            edge_data_offsets: vec![],
             edges_by_from: vec![],
             edge_index_by_from: vec![],
             edges_by_to: vec![],
@@ -124,6 +132,7 @@ impl Graph {
             dropped: false,
             vertices_sealed: false,
             edges_sealed: false,
+            edges_indexed: false,
         }))
     }
 
@@ -135,6 +144,7 @@ impl Graph {
         self.vertex_data_offsets.clear();
         self.edges.clear();
         self.edge_data.clear();
+        self.edge_data_offsets.clear();
         self.edge_index_by_from.clear();
         self.edges_by_from.clear();
         self.edge_index_by_to.clear();
@@ -142,6 +152,7 @@ impl Graph {
         self.vertices_sealed = false;
         self.edges_sealed = false;
         self.dropped = true;
+        self.edges_indexed = false;
     }
 
     pub fn insert_vertex(
@@ -154,7 +165,7 @@ impl Graph {
         exceptional_keys: &mut Vec<Vec<u8>>,
     ) {
         // First detect a collision:
-        let index = VertexIndex(self.vertex_data_offsets.len() as u64);
+        let index = VertexIndex(self.index_to_hash.len() as u64);
         let mut actual = hash;
         if self.hash_to_index.contains_key(&hash) {
             // This is a collision, we create a random alternative
@@ -180,13 +191,23 @@ impl Graph {
         if self.store_keys {
             self.index_to_key.push(key.clone());
         }
-        if !data.is_empty() {
+        let pos = self.vertex_data.len() as u64;
+        if data.is_empty() {
+            // We only add things here lazily as soon as some non-empty
+            // data has been detected to save memory:
+            if !self.vertex_data_offsets.is_empty() {
+                self.vertex_data_offsets.push(pos);
+            }
+        } else {
+            // Now we have to pay for our laziness:
+            if self.vertex_data_offsets.is_empty() {
+                for _i in 0..index.to_u64() {
+                    self.vertex_data_offsets.push(0);
+                }
+            }
             // Insert data:
-            let pos = self.vertex_data.len() as u64;
             self.vertex_data_offsets.push(pos);
             self.vertex_data.extend_from_slice(&data);
-        } else {
-            self.vertex_data_offsets.push(0);
         }
     }
 
@@ -199,12 +220,13 @@ impl Graph {
     }
 
     pub fn seal_vertices(&mut self) {
-        self.vertex_data_offsets.push(self.vertex_data.len() as u64);
+        if !self.vertex_data_offsets.is_empty() {
+            self.vertex_data_offsets.push(self.vertex_data.len() as u64);
+        }
         self.vertices_sealed = true;
     }
 
-    pub fn seal_edges(&mut self) {
-        self.edges_sealed = true;
+    pub fn index_edges(&mut self) {
         let mut tmp: Vec<EdgeTemp> = vec![];
         let number_v = self.number_of_vertices() as usize;
         let number_e = self.number_of_edges() as usize;
@@ -273,6 +295,15 @@ impl Graph {
             cur_to = VertexIndex::new(cur_to.to_u64() + 1);
             self.edge_index_by_to.push(pos);
         }
+        self.edges_indexed = true;
+    }
+
+    pub fn seal_edges(&mut self) {
+        self.edges_sealed = true;
+        if !self.edge_data_offsets.is_empty() {
+            self.edge_data_offsets.push(self.edge_data.len() as u64);
+        }
+
         println!(
             "Sealed graph with {} vertices and {} edges.",
             self.index_to_hash.len(),
@@ -336,20 +367,23 @@ impl Graph {
     }
 
     pub fn insert_edge(&mut self, from: VertexIndex, to: VertexIndex, data: Vec<u8>) {
+        self.edges.push(Edge { from, to });
+        let offset = self.edge_data.len() as u64;
         if data.is_empty() {
-            self.edges.push(Edge {
-                from,
-                to,
-                data_offset: 0,
-            });
+            // We use edge_data_offsets lazily, only if there is some
+            // non-empty data!
+            if !self.edge_data_offsets.is_empty() {
+                self.edge_data_offsets.push(offset);
+            }
         } else {
-            let offset = self.edge_data.len();
+            if self.edge_data_offsets.is_empty() {
+                // We have to pay for our laziness now:
+                for _i in 0..(self.edges.len() - 1) {
+                    self.edge_data_offsets.push(0);
+                }
+            }
+            self.edge_data_offsets.push(offset);
             self.edge_data.extend_from_slice(&data);
-            self.edges.push(Edge {
-                from,
-                to,
-                data_offset: offset as u64,
-            });
         }
     }
 
@@ -374,7 +408,11 @@ impl Graph {
                 "{:32} {:016x} {}",
                 kkk,
                 self.index_to_hash[i as usize].to_u64(),
-                self.vertex_data_offsets[i as usize + 1] - self.vertex_data_offsets[i as usize]
+                if self.vertex_data_offsets.is_empty() {
+                    0
+                } else {
+                    self.vertex_data_offsets[i as usize + 1] - self.vertex_data_offsets[i as usize]
+                }
             );
         }
         println!("\nEdges:");
@@ -383,10 +421,10 @@ impl Graph {
             "from index", "from hash", "to index", "to hash", "data size"
         );
         for i in 0..(self.number_of_edges() as usize) {
-            let size = if i == (self.number_of_edges() as usize - 1) {
-                self.edge_data.len() as u64 - self.edges[i].data_offset
+            let size = if self.edge_data_offsets.is_empty() {
+                0
             } else {
-                self.edges[i + 1].data_offset - self.edges[i].data_offset
+                self.edge_data_offsets[i + 1] - self.edge_data_offsets[i]
             };
             println!(
                 "{:>15} {:016x} {:>15} {:016x} {}",

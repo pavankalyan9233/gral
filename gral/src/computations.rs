@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 
-use crate::graphs::KeyOrHash;
+use crate::graphs::{Graph, KeyOrHash};
 
 pub trait Computation {
     fn is_ready(&self) -> bool;
@@ -16,6 +16,7 @@ pub trait Computation {
         hashes: &Vec<KeyOrHash>,
         out: &mut Vec<u8>,
     ) -> Result<(), warp::Rejection>;
+    fn get_graph(&self) -> Arc<RwLock<Graph>>;
 }
 
 pub struct Computations {

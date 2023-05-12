@@ -265,6 +265,9 @@ Body:
 ```
 u64     client-id
 u32     number of graph
+u32     index edges, if non-zero, an edge index will be computed for the graph
+        Note that if this is not done, it will be done lazily, if a
+        computation needs the edge index later.
 ```
 
 Response is 200 with this body:
@@ -305,6 +308,11 @@ The computation-id identifies this particular computation.
 If the graph number is not found, we return 404 and an error body as
 described above.
 
+Note that computation IDs are not per graph but global!
+
+Note that a computation keeps the graph alive, even if it was dropped
+in the meantime!
+
 
 ### `POST /v1/stronglyConnectedComponents`
 
@@ -331,6 +339,11 @@ The computation-id identifies this particular computation.
 If the graph number is not found, we return 404 and an error body as
 described above.
 
+Note that computation IDs are not per graph but global!
+
+Note that a computation keeps the graph alive, even if it was dropped
+in the meantime!
+
 
 ### `PUT /v1/getProgress`
 
@@ -340,7 +353,6 @@ of the computation.
 Body:
 
 ```
-u32     number of graph [redundent, but we leave it in for now]
 u64     computation-id
 ```
 
@@ -348,7 +360,6 @@ If the computation is found (via its client-id), the response is 200
 with this body:
 
 ```
-u32     number of graph
 u64     computation-id
 u32     total progress (a number which indicates which progress number
         means completion, can be 1 for yes/no or 100 for percentages or
@@ -381,7 +392,6 @@ Body:
 
 ```
 u64     client-id
-u32     number of graph [redundent, but we leave it in for now]
 u64     computation-id
 ```
 
@@ -390,12 +400,14 @@ with this body:
 
 ```
 u64     client-id
-u32     number of graph
 u64     computation-id
 ```
 
 If the computation is not found (via its computation-id), the response is 404
 with an error body as described above.
+
+Note that this call also cancels a running computation (if supported by
+the particular computation).
 
 
 ### `PUT /v1/getResultsByVertices`
@@ -414,7 +426,6 @@ One sends a body like this:
 
 ```
 u64      computation-id
-u32      number of graph
 u32      number of vertices queried
 
 and then for each vertex queried its key or hash:
@@ -429,7 +440,6 @@ results, we get this body back:
 
 ```
 u64      computation-id
-u32      number of graph
 u32      number of results for vertices (including rejected)
 u32      id of type of computation:
          1: weakly connected components

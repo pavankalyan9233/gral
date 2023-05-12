@@ -44,6 +44,9 @@ OPTIONS:
   --algorithm NAME         Name of algorithm to trigger [default: 'wcc']
   --comp-id ID             Computation id [default: 0]
   --output FILENAME        Output file for data dump [default: 'output.jsonl']
+  --index-edges BOOL       Flag, if gral should index the edges when they
+                           are sealed. If not, this is done lazily later when
+                           a computation needs the edge index [default: false]
 ";
 
 #[derive(Debug)]
@@ -62,6 +65,7 @@ pub struct GruploadArgs {
     algorithm: String,
     comp_id: u64,
     output_file: std::path::PathBuf,
+    index_edges: bool,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -145,6 +149,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         output_file: pargs
             .opt_value_from_str("--output")?
             .unwrap_or("output_jsonl".into()),
+        index_edges: pargs.opt_value_from_str("--index-edges")?.unwrap_or(false),
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 

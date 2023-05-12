@@ -61,7 +61,6 @@ pub fn api_filter(
         .and_then(api_get_progress);
     let get_results_by_vertices = warp::path!("v1" / "getResultsByVertices")
         .and(warp::put())
-        .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_results_by_vertices);
@@ -691,10 +690,10 @@ async fn api_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, 
 /// This function seals the edges of a graph.
 async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
-    if bytes.len() != 12 {
+    if bytes.len() != 16 {
         return Err(warp::reject::custom(WrongBodyLength {
             found: bytes.len(),
-            expected: 12,
+            expected: 16,
         }));
     }
 
@@ -704,6 +703,7 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
     let mut reader = Cursor::new(bytes.to_vec());
     let client_id = reader.read_u64::<BigEndian>().unwrap();
     let graph_number = reader.read_u32::<BigEndian>().unwrap();
+    let index_edges = reader.read_u32::<BigEndian>().unwrap();
 
     let graph_arc = get_graph(&graphs, graph_number)?;
 
@@ -712,6 +712,9 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
     check_graph(graph.deref(), graph_number, false)?;
 
     graph.seal_edges();
+    if index_edges != 0 {
+        graph.index_edges();
+    }
 
     // Write response:
     let mut v = Vec::new();
@@ -741,6 +744,9 @@ impl Computation for WeaklyConnectedComponentsComputation {
     }
     fn algorithm_id(&self) -> u32 {
         return 1;
+    }
+    fn get_graph(&self) -> Arc<RwLock<Graph>> {
+        return self.graph.clone();
     }
     fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String> {
         out.write_u8(8).unwrap();
@@ -854,10 +860,10 @@ async fn api_get_progress(
     bytes: Bytes,
 ) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
-    if bytes.len() != 12 {
+    if bytes.len() != 8 {
         return Err(warp::reject::custom(WrongBodyLength {
             found: bytes.len(),
-            expected: 12,
+            expected: 8,
         }));
     }
 
@@ -865,7 +871,6 @@ async fn api_get_progress(
     // (Note that we have checked the buffer length and so these cannot
     // fail! Therefore unwrap() is OK here.)
     let mut reader = Cursor::new(bytes.to_vec());
-    let graph_number = reader.read_u32::<BigEndian>().unwrap();
     let comp_id = reader.read_u64::<BigEndian>().unwrap();
 
     let comps = computations.lock().unwrap();
@@ -881,7 +886,6 @@ async fn api_get_progress(
             let mut v = Vec::new();
             // TODO: handle errors!
             v.reserve(256);
-            v.write_u32::<BigEndian>(graph_number).unwrap();
             v.write_u64::<BigEndian>(comp_id).unwrap();
             v.write_u32::<BigEndian>(1).unwrap();
             if comp.is_ready() {
@@ -898,15 +902,14 @@ async fn api_get_progress(
 
 // The following function implements
 async fn api_get_results_by_vertices(
-    graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
-    if bytes.len() < 16 {
+    if bytes.len() < 12 {
         return Err(warp::reject::custom(TooShortBodyLength {
             found: bytes.len(),
-            expected_at_least: 16,
+            expected_at_least: 12,
         }));
     }
 
@@ -915,15 +918,9 @@ async fn api_get_results_by_vertices(
     // fail! Therefore unwrap() is OK here.)
     let mut reader = Cursor::new(bytes.to_vec());
     let comp_id = reader.read_u64::<BigEndian>().unwrap();
-    let graph_number = reader.read_u32::<BigEndian>().unwrap();
     let number = reader.read_u32::<BigEndian>().unwrap();
 
-    let graph_arc = get_graph(&graphs, graph_number)?;
     let computation_arc = get_computation(&computations, comp_id)?;
-
-    // Lock graph:
-    let graph = graph_arc.read().unwrap();
-    check_graph(graph.deref(), graph_number, true)?;
 
     let mut input: Vec<KeyOrHash> = vec![];
     input.reserve(number as usize);
@@ -937,7 +934,6 @@ async fn api_get_results_by_vertices(
     // TODO: handle errors!
     v.reserve(1024 * 1024);
     v.write_u64::<BigEndian>(comp_id).unwrap();
-    v.write_u32::<BigEndian>(graph_number).unwrap();
     v.write_u32::<BigEndian>(number).unwrap();
 
     // Now lock computation:
