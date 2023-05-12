@@ -1,6 +1,5 @@
- - drop computations (with cancellation)
  - go to SSL, in particular implement in grupload
- - End to end test
+ - Implement graph drop
  - Implement graph dump
  - Extend end to end test
  - coverage?

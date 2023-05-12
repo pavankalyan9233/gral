@@ -750,8 +750,8 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
     let comp_id = cursor.read_u64::<BigEndian>().unwrap();
 
     println!(
-        "{}: graph number: {}, computation number: {}",
-        args.algorithm, graph_number, comp_id
+        "{}: graph number: {}, computation id:\n{}",
+        args.algorithm, graph_number, comp_id,
     );
     Ok(())
 }
