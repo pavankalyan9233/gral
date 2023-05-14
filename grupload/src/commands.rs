@@ -1,7 +1,7 @@
 use crate::GruploadArgs;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand::Rng;
-use reqwest::{blocking::Response, StatusCode};
+use reqwest::{blocking::Response, Certificate, Identity, StatusCode};
 //use serde_json::Value::String;
 use serde_json::Value;
 use sha256::digest;
@@ -94,7 +94,20 @@ pub fn handle_error(resp: &mut Response, ok: StatusCode) -> Result<(), String> {
 
 pub fn create(args: &mut GruploadArgs) -> Result<(), String> {
     println!("Creating graph... {:?}", args);
-    let client = reqwest::blocking::Client::new();
+    let client: reqwest::blocking::Client;
+    let builder = reqwest::blocking::Client::builder();
+    if args.use_tls {
+        let certificate = Certificate::from_pem(&args.cacert).unwrap();
+        let identity = Identity::from_pem(&args.client_keyfile).unwrap();
+        client = builder
+            .min_tls_version(reqwest::tls::Version::TLS_1_2)
+            .add_root_certificate(certificate)
+            .identity(identity)
+            .build()
+            .unwrap(); // FIXME
+    } else {
+        client = builder.build().unwrap(); // FIXME
+    }
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();

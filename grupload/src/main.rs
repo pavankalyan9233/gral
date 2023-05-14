@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
+use reqwest::{Certificate, Identity};
 use std::cmp::min;
+use std::fs::File;
+use std::io::Read;
 
 mod commands;
 
@@ -46,6 +49,11 @@ OPTIONS:
   --index-edges BOOL       Flag, if gral should index the edges when they
                            are sealed. If not, this is done lazily later when
                            a computation needs the edge index [default: false]
+  --use-tls BOOL           Flag if TLS should be used [default: true]
+  --cacert PATH            Path to CA certificate for TLS
+                           [default: 'tls/ca.pem']
+  --client-keyfile PATH    Path to client certificate for authentication
+                           [default: 'tls/client-keyfile.pem']
 ";
 
 #[derive(Debug)]
@@ -65,6 +73,11 @@ pub struct GruploadArgs {
     comp_id: u64,
     output_file: std::path::PathBuf,
     index_edges: bool,
+    use_tls: bool,
+    cacert_filename: std::path::PathBuf,
+    cacert: Vec<u8>,
+    client_keyfile_filename: std::path::PathBuf,
+    client_keyfile: Vec<u8>,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -150,6 +163,15 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
             .opt_value_from_str("--output")?
             .unwrap_or("output_jsonl".into()),
         index_edges: pargs.opt_value_from_str("--index-edges")?.unwrap_or(false),
+        use_tls: pargs.opt_value_from_str("--use-tls")?.unwrap_or(true),
+        cacert_filename: pargs
+            .opt_value_from_str("--cacert")?
+            .unwrap_or("tls/ca.pem".into()),
+        cacert: vec![],
+        client_keyfile_filename: pargs
+            .opt_value_from_str("--client-keyfile")?
+            .unwrap_or("tls/client-keyfile.pem".into()),
+        client_keyfile: vec![],
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 
@@ -161,5 +183,73 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         eprintln!("Warning: unused arguments left: {:?}.", remaining);
     }
 
+    if args.use_tls {
+        let file = File::open(&args.cacert_filename);
+        match file {
+            Err(err) => {
+                eprintln!(
+                    "Cannot open cacert file {}: {:?}",
+                    args.cacert_filename.to_string_lossy(),
+                    err
+                );
+                std::process::exit(2);
+            }
+            Ok(mut f) => {
+                let r = f.read_to_end(&mut args.cacert);
+                if let Err(err) = r {
+                    eprintln!(
+                        "Cannot read cacert file {}: {:?}",
+                        args.cacert_filename.to_string_lossy(),
+                        err
+                    );
+                    std::process::exit(3);
+                }
+            }
+        }
+
+        let certificate = Certificate::from_pem(&args.cacert);
+        if let Err(err) = certificate {
+            eprintln!(
+                "Cannot parse cacert file {}: {:?}",
+                args.cacert_filename.to_string_lossy(),
+                err
+            );
+        }
+        // TLS clients will reparse the cacert file and thus rebuild the
+        // certificate object.
+
+        let file2 = File::open(&args.client_keyfile_filename);
+        match file2 {
+            Err(err) => {
+                eprintln!(
+                    "Cannot open client keyfile {}: {:?}",
+                    args.client_keyfile_filename.to_string_lossy(),
+                    err
+                );
+                std::process::exit(4);
+            }
+            Ok(mut f) => {
+                let r = f.read_to_end(&mut args.client_keyfile);
+                if let Err(err) = r {
+                    eprintln!(
+                        "Cannot read client keyfile {}: {:?}",
+                        args.client_keyfile_filename.to_string_lossy(),
+                        err
+                    );
+                    std::process::exit(3);
+                }
+            }
+        }
+
+        let id = Identity::from_pem(&args.client_keyfile);
+        if let Err(err) = id {
+            eprintln!(
+                "Cannot parse client keyfile {}: {:?}",
+                args.client_keyfile_filename.to_string_lossy(),
+                err
+            );
+        }
+        // TLS clients will reparse the keyfile and thus rebuild the identity
+    }
     Ok(args)
 }
