@@ -8,11 +8,8 @@ const HELP: &str = "\
 grupload
 
 USAGE:
-  grupload [OPTIONS] COMMAND
+  grupload COMMAND [OPTIONS]
 
-FLAGS:
-  -h, --help               Prints help information
-                          
 COMMANDS:                 
   create                   create a graph
   vertices                 upload vertices and seal them
@@ -27,6 +24,7 @@ COMMANDS:
   dropcomp                 drops a computation
                           
 OPTIONS:                  
+  -h, --help               Prints help information
   --max-vertices NR        Maximal number of vertices (only for create)
                            [default: 1000000]
   --max-edges NR           Maximal number of edges (only for create)

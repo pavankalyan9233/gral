@@ -27,6 +27,7 @@ async fn main() {
     };
 
     println!("{:#?}", args);
+
     // Setup version handler directly here:
     let version = warp::path!("v1" / "version").and(warp::get()).map(|| {
         let mut v = Vec::new();
@@ -48,12 +49,15 @@ async fn main() {
         .bind_addr
         .parse()
         .expect(format!("Could not parse bind address: {}", args.bind_addr).as_str());
-    warp::serve(apifilters)
-        //.tls()
-        //.cert_path("tls/cert.pem")
-        //.key_path("tls/key.pem")
-        //.client_auth_required_path("tls/authca.pem")
-        //.run(([0, 0, 0, 0], args.port))
-        .run((ip_addr, args.port))
-        .await;
+    if args.use_tls {
+        warp::serve(apifilters)
+            .tls()
+            .cert_path("tls/cert.pem")
+            .key_path("tls/key.pem")
+            .client_auth_required_path("tls/authca.pem")
+            .run((ip_addr, args.port))
+            .await;
+    } else {
+        warp::serve(apifilters).run((ip_addr, args.port)).await;
+    }
 }

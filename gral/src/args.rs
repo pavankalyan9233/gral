@@ -6,16 +6,23 @@ gral
 USAGE:
   gral [OPTIONS]
 
-FLAGS:
-  -h, --help            Prints help information
-
 OPTIONS:
+  -h, --help            Prints help information
+  --use-tls BOOL        Use TLS or not [default: true]
+  --cert PATH           Path to server certificate [default: 'tls/cert.pem']
+  --key PATH            Path to server secret key [default: 'tls/key.pem']
+  --authca PATH         Path to CA certificate for client authentication
+                        [default: 'tls/authca.pem']
   --bind-address ADDR   Network address for bind [default: '0.0.0.0']
-  --bind-port    PORT   Network port foro bind [default: 9999]
+  --bind-port PORT      Network port for bind [default: 9999]
 ";
 
 #[derive(Debug)]
 pub struct GralArgs {
+    pub use_tls: bool,
+    pub cert: std::path::PathBuf,
+    pub key: std::path::PathBuf,
+    pub authca: std::path::PathBuf,
     pub bind_addr: String,
     pub port: u16,
 }
@@ -30,6 +37,16 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
     }
 
     let args = GralArgs {
+        use_tls: pargs.opt_value_from_str("--use-tls")?.unwrap_or(true),
+        cert: pargs
+            .opt_value_from_str("--cert")?
+            .unwrap_or("tls/cert.pem".into()),
+        key: pargs
+            .opt_value_from_str("--key")?
+            .unwrap_or("tls/key.pem".into()),
+        authca: pargs
+            .opt_value_from_str("--authca")?
+            .unwrap_or("tls/authca.pem".into()),
         bind_addr: pargs
             .opt_value_from_str("--bind-address")?
             .unwrap_or("0.0.0.0".into()),
