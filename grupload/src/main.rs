@@ -52,8 +52,10 @@ OPTIONS:
   --use-tls BOOL           Flag if TLS should be used [default: true]
   --cacert PATH            Path to CA certificate for TLS
                            [default: 'tls/ca.pem']
-  --client-keyfile PATH    Path to client certificate for authentication
-                           [default: 'tls/client-keyfile.pem']
+  --client-cert PATH       Path to client certificate chain as PEM
+                           [default: 'tls/client-cert.pem']
+  --client-key PATH        Path to client private key for authentication
+                           [default: 'tls/client-key.pem']
 ";
 
 #[derive(Debug)]
@@ -76,8 +78,10 @@ pub struct GruploadArgs {
     use_tls: bool,
     cacert_filename: std::path::PathBuf,
     cacert: Vec<u8>,
-    client_keyfile_filename: std::path::PathBuf,
-    client_keyfile: Vec<u8>,
+    client_cert_filename: std::path::PathBuf,
+    client_cert: Vec<u8>,
+    client_key_filename: std::path::PathBuf,
+    client_key: Vec<u8>,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -168,10 +172,14 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
             .opt_value_from_str("--cacert")?
             .unwrap_or("tls/ca.pem".into()),
         cacert: vec![],
-        client_keyfile_filename: pargs
-            .opt_value_from_str("--client-keyfile")?
-            .unwrap_or("tls/client-keyfile.pem".into()),
-        client_keyfile: vec![],
+        client_cert_filename: pargs
+            .opt_value_from_str("--client-cert")?
+            .unwrap_or("tls/client-cert.pem".into()),
+        client_cert: vec![],
+        client_key_filename: pargs
+            .opt_value_from_str("--client-key")?
+            .unwrap_or("tls/client-key.pem".into()),
+        client_key: vec![],
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 
@@ -184,8 +192,8 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
     }
 
     if args.use_tls {
-        let file = File::open(&args.cacert_filename);
-        match file {
+        let cafile = File::open(&args.cacert_filename);
+        match cafile {
             Err(err) => {
                 eprintln!(
                     "Cannot open cacert file {}: {:?}",
@@ -218,22 +226,22 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         // TLS clients will reparse the cacert file and thus rebuild the
         // certificate object.
 
-        let file2 = File::open(&args.client_keyfile_filename);
-        match file2 {
+        let keyfile = File::open(&args.client_key_filename);
+        match keyfile {
             Err(err) => {
                 eprintln!(
-                    "Cannot open client keyfile {}: {:?}",
-                    args.client_keyfile_filename.to_string_lossy(),
+                    "Cannot open client key file {}: {:?}",
+                    args.client_key_filename.to_string_lossy(),
                     err
                 );
                 std::process::exit(4);
             }
             Ok(mut f) => {
-                let r = f.read_to_end(&mut args.client_keyfile);
+                let r = f.read_to_end(&mut args.client_key);
                 if let Err(err) = r {
                     eprintln!(
-                        "Cannot read client keyfile {}: {:?}",
-                        args.client_keyfile_filename.to_string_lossy(),
+                        "Cannot read client key file {}: {:?}",
+                        args.client_key_filename.to_string_lossy(),
                         err
                     );
                     std::process::exit(3);
@@ -241,13 +249,38 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
             }
         }
 
-        let id = Identity::from_pem(&args.client_keyfile);
+        let certfile = File::open(&args.client_cert_filename);
+        match certfile {
+            Err(err) => {
+                eprintln!(
+                    "Cannot open client certificate file {}: {:?}",
+                    args.client_cert_filename.to_string_lossy(),
+                    err
+                );
+                std::process::exit(5);
+            }
+            Ok(mut f) => {
+                let r = f.read_to_end(&mut args.client_cert);
+                if let Err(err) = r {
+                    eprintln!(
+                        "Cannot read client cert file {}: {:?}",
+                        args.client_cert_filename.to_string_lossy(),
+                        err
+                    );
+                    std::process::exit(6);
+                }
+            }
+        }
+
+        let id = Identity::from_pem(&args.client_cert);
         if let Err(err) = id {
             eprintln!(
-                "Cannot parse client keyfile {}: {:?}",
-                args.client_keyfile_filename.to_string_lossy(),
+                "Cannot parse client cert and key files {} {}: {:?}",
+                args.client_cert_filename.to_string_lossy(),
+                args.client_key_filename.to_string_lossy(),
                 err
             );
+            std::process::exit(7);
         }
         // TLS clients will reparse the keyfile and thus rebuild the identity
     }

@@ -61,8 +61,11 @@ EOF
 
 openssl x509 -req -passin pass:abcd1234 -in client-csr.pem -CA authca.pem -CAkey authca-key.pem -set_serial 101 -extensions client -days 365 -outform PEM -out client-cert.pem -extfile ssl.conf
 
-openssl pkcs12 -export -inkey client-key.pem -in client-cert.pem -out client.p12 -passout pass:abcd1234
+openssl pkcs12 -export -inkey client-key.pem -in client-cert.pem -out client.p12 -passin pass:abcd1234 -passout pass:abcd1234
 
 rm key-csr.pem client-csr.pem ssl.conf
 
+# Prepare concatenated files:
 cat cert.pem ca.pem > chain.pem
+#cat authca.pem client-cert.pem client-key.pem > client-keyfile.pem
+cat client-cert.pem client-key.pem > client-keyfile.pem

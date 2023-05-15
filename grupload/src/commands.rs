@@ -98,13 +98,19 @@ pub fn create(args: &mut GruploadArgs) -> Result<(), String> {
     let builder = reqwest::blocking::Client::builder();
     if args.use_tls {
         let certificate = Certificate::from_pem(&args.cacert).unwrap();
-        let identity = Identity::from_pem(&args.client_keyfile).unwrap();
-        client = builder
+        let identity = Identity::from_pem(&args.client_cert).unwrap();
+        let cl = builder
+            .use_rustls_tls()
             .min_tls_version(reqwest::tls::Version::TLS_1_2)
+            .tls_built_in_root_certs(false)
             .add_root_certificate(certificate)
             .identity(identity)
-            .build()
-            .unwrap(); // FIXME
+            .https_only(true)
+            .build();
+        if let Err(err) = cl {
+            return Err(format!("Error message from request builder: {:?}", err));
+        }
+        client = cl.unwrap();
     } else {
         client = builder.build().unwrap(); // FIXME
     }
