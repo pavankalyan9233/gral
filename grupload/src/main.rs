@@ -4,6 +4,7 @@ use reqwest::{Certificate, Identity};
 use std::cmp::min;
 use std::fs::File;
 use std::io::Read;
+use std::sync::Arc;
 
 mod commands;
 
@@ -38,7 +39,7 @@ OPTIONS:
                            [default: 'vertices.jsonl']
   --edges FILENAME         Edge input file (jsonl) [default: 'edges.jsonl']
   --endpoint ENDPOINT      gral endpoint to send data to
-                           [default: 'http://localhost:9999']
+                           [default: 'https://localhost:9999']
   --key-size NR            Size of keys in bytes in `randomize` [default: 32]
   --vertex-coll-name NAME  Name of the vertex collection (relevant for 
                            `randomize`) [default: 'V']
@@ -52,11 +53,15 @@ OPTIONS:
   --use-tls BOOL           Flag if TLS should be used [default: true]
   --cacert PATH            Path to CA certificate for TLS
                            [default: 'tls/ca.pem']
-  --client-cert PATH       Path to client certificate chain as PEM
-                           [default: 'tls/client-cert.pem']
-  --client-key PATH        Path to client private key for authentication
-                           [default: 'tls/client-key.pem']
+  --client-identity PATH   Path to client certificate and private key as PEM
+                           [default: 'tls/client-keyfile.pem']
 ";
+
+#[derive(Debug)]
+pub struct TLSClientInfo {
+    cacert: Vec<u8>,
+    client_identity: Vec<u8>,
+}
 
 #[derive(Debug)]
 pub struct GruploadArgs {
@@ -77,11 +82,8 @@ pub struct GruploadArgs {
     index_edges: bool,
     use_tls: bool,
     cacert_filename: std::path::PathBuf,
-    cacert: Vec<u8>,
-    client_cert_filename: std::path::PathBuf,
-    client_cert: Vec<u8>,
-    client_key_filename: std::path::PathBuf,
-    client_key: Vec<u8>,
+    client_identity_filename: std::path::PathBuf,
+    identity: Arc<TLSClientInfo>,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -101,8 +103,6 @@ fn main() {
             std::process::exit(1);
         }
     };
-
-    println!("{:#?}", args);
 
     if args.command == "empty" {
         eprintln!("Error: no command given, see --help for a list of commands!!");
@@ -153,7 +153,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
             .unwrap_or("edges.jsonl".into()),
         endpoint: pargs
             .opt_value_from_str("--endpoint")?
-            .unwrap_or("http://localhost:9999".into()),
+            .unwrap_or("https://localhost:9999".into()),
         key_size: pargs.opt_value_from_str("--key-size")?.unwrap_or(32),
         vertex_coll_name: pargs
             .opt_value_from_str("--vertex-coll-name")?
@@ -171,15 +171,13 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         cacert_filename: pargs
             .opt_value_from_str("--cacert")?
             .unwrap_or("tls/ca.pem".into()),
-        cacert: vec![],
-        client_cert_filename: pargs
-            .opt_value_from_str("--client-cert")?
-            .unwrap_or("tls/client-cert.pem".into()),
-        client_cert: vec![],
-        client_key_filename: pargs
-            .opt_value_from_str("--client-key")?
-            .unwrap_or("tls/client-key.pem".into()),
-        client_key: vec![],
+        client_identity_filename: pargs
+            .opt_value_from_str("--client-identity")?
+            .unwrap_or("tls/client-keyfile.pem".into()),
+        identity: Arc::new(TLSClientInfo {
+            cacert: vec![],
+            client_identity: vec![],
+        }),
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 
@@ -192,6 +190,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
     }
 
     if args.use_tls {
+        let mut certbuf: Vec<u8> = vec![];
         let cafile = File::open(&args.cacert_filename);
         match cafile {
             Err(err) => {
@@ -203,7 +202,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
                 std::process::exit(2);
             }
             Ok(mut f) => {
-                let r = f.read_to_end(&mut args.cacert);
+                let r = f.read_to_end(&mut certbuf);
                 if let Err(err) = r {
                     eprintln!(
                         "Cannot read cacert file {}: {:?}",
@@ -215,7 +214,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
             }
         }
 
-        let certificate = Certificate::from_pem(&args.cacert);
+        let certificate = Certificate::from_pem(&certbuf);
         if let Err(err) = certificate {
             eprintln!(
                 "Cannot parse cacert file {}: {:?}",
@@ -226,63 +225,44 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         // TLS clients will reparse the cacert file and thus rebuild the
         // certificate object.
 
-        let keyfile = File::open(&args.client_key_filename);
+        let mut identitybuf: Vec<u8> = vec![];
+        let keyfile = File::open(&args.client_identity_filename);
         match keyfile {
             Err(err) => {
                 eprintln!(
-                    "Cannot open client key file {}: {:?}",
-                    args.client_key_filename.to_string_lossy(),
+                    "Cannot open client identity file {}: {:?}",
+                    args.client_identity_filename.to_string_lossy(),
                     err
                 );
                 std::process::exit(4);
             }
             Ok(mut f) => {
-                let r = f.read_to_end(&mut args.client_key);
+                let r = f.read_to_end(&mut identitybuf);
                 if let Err(err) = r {
                     eprintln!(
-                        "Cannot read client key file {}: {:?}",
-                        args.client_key_filename.to_string_lossy(),
+                        "Cannot read client identity file {}: {:?}",
+                        args.client_identity_filename.to_string_lossy(),
                         err
                     );
-                    std::process::exit(3);
+                    std::process::exit(5);
                 }
             }
         }
 
-        let certfile = File::open(&args.client_cert_filename);
-        match certfile {
-            Err(err) => {
-                eprintln!(
-                    "Cannot open client certificate file {}: {:?}",
-                    args.client_cert_filename.to_string_lossy(),
-                    err
-                );
-                std::process::exit(5);
-            }
-            Ok(mut f) => {
-                let r = f.read_to_end(&mut args.client_cert);
-                if let Err(err) = r {
-                    eprintln!(
-                        "Cannot read client cert file {}: {:?}",
-                        args.client_cert_filename.to_string_lossy(),
-                        err
-                    );
-                    std::process::exit(6);
-                }
-            }
-        }
-
-        let id = Identity::from_pem(&args.client_cert);
+        let id = Identity::from_pem(&identitybuf);
         if let Err(err) = id {
             eprintln!(
-                "Cannot parse client cert and key files {} {}: {:?}",
-                args.client_cert_filename.to_string_lossy(),
-                args.client_key_filename.to_string_lossy(),
+                "Cannot parse client cert and key from file {}: {:?}",
+                args.client_identity_filename.to_string_lossy(),
                 err
             );
-            std::process::exit(7);
+            std::process::exit(6);
         }
-        // TLS clients will reparse the keyfile and thus rebuild the identity
+        // TLS clients will reparse the identity file and thus rebuild the identity
+        args.identity = Arc::new(TLSClientInfo {
+            cacert: certbuf,
+            client_identity: identitybuf,
+        });
     }
     Ok(args)
 }

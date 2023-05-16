@@ -1,4 +1,4 @@
-use crate::GruploadArgs;
+use crate::{GruploadArgs, TLSClientInfo};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand::Rng;
 use reqwest::{blocking::Response, Certificate, Identity, StatusCode};
@@ -92,14 +92,15 @@ pub fn handle_error(resp: &mut Response, ok: StatusCode) -> Result<(), String> {
     Err(format!("Error: code={}, {}", code, msg))
 }
 
-pub fn create(args: &mut GruploadArgs) -> Result<(), String> {
-    println!("Creating graph... {:?}", args);
-    let client: reqwest::blocking::Client;
+fn build_client(
+    use_tls: bool,
+    identity: Arc<TLSClientInfo>,
+) -> Result<reqwest::blocking::Client, String> {
     let builder = reqwest::blocking::Client::builder();
-    if args.use_tls {
-        let certificate = Certificate::from_pem(&args.cacert).unwrap();
-        let identity = Identity::from_pem(&args.client_cert).unwrap();
-        let cl = builder
+    if use_tls {
+        let certificate = Certificate::from_pem(&identity.cacert).unwrap();
+        let identity = Identity::from_pem(&identity.client_identity).unwrap();
+        let client = builder
             .use_rustls_tls()
             .min_tls_version(reqwest::tls::Version::TLS_1_2)
             .tls_built_in_root_certs(false)
@@ -107,13 +108,22 @@ pub fn create(args: &mut GruploadArgs) -> Result<(), String> {
             .identity(identity)
             .https_only(true)
             .build();
-        if let Err(err) = cl {
+        if let Err(err) = client {
             return Err(format!("Error message from request builder: {:?}", err));
         }
-        client = cl.unwrap();
+        Ok(client.unwrap())
     } else {
-        client = builder.build().unwrap(); // FIXME
+        let client = builder.build();
+        if let Err(err) = client {
+            return Err(format!("Error message from request builder: {:?}", err));
+        }
+        Ok(client.unwrap())
     }
+}
+
+pub fn create(args: &mut GruploadArgs) -> Result<(), String> {
+    println!("Creating graph...");
+    let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
@@ -146,6 +156,8 @@ pub fn create(args: &mut GruploadArgs) -> Result<(), String> {
 }
 
 fn vertices_one_thread(
+    use_tls: bool,
+    identity: Arc<TLSClientInfo>,
     file_name: &std::path::PathBuf,
     graph_number: u32,
     endpoint: String,
@@ -153,7 +165,7 @@ fn vertices_one_thread(
     finish: u64,
 ) -> Result<(), String> {
     // Some preparations:
-    let client = reqwest::blocking::Client::new();
+    let client = build_client(use_tls, identity.clone())?;
     let mut rng = rand::thread_rng();
     let mut buf: Vec<u8> = vec![];
     buf.reserve(1000000);
@@ -315,7 +327,7 @@ fn vertices_one_thread(
 }
 
 pub fn vertices(args: &GruploadArgs) -> Result<(), String> {
-    println!("Loading vertices... {:?}", args);
+    println!("Loading vertices...");
 
     let meta = metadata(&args.vertex_file);
     if let Err(err) = meta {
@@ -326,6 +338,8 @@ pub fn vertices(args: &GruploadArgs) -> Result<(), String> {
     if chunk_size < 4096 {
         // take care of very small files:
         return vertices_one_thread(
+            args.use_tls,
+            args.identity.clone(),
             &args.vertex_file,
             args.graph_number,
             args.endpoint.clone(),
@@ -342,11 +356,21 @@ pub fn vertices(args: &GruploadArgs) -> Result<(), String> {
         if i == args.nr_threads - 1 {
             finish = total_size;
         }
+        let use_tls = args.use_tls;
+        let identity = args.identity.clone();
         let file_name = args.vertex_file.clone();
         let graph_number = args.graph_number;
         let endpoint = args.endpoint.clone();
         join.push(spawn(move || -> Result<(), String> {
-            vertices_one_thread(&file_name, graph_number, endpoint, start, finish)
+            vertices_one_thread(
+                use_tls,
+                identity,
+                &file_name,
+                graph_number,
+                endpoint,
+                start,
+                finish,
+            )
         }));
     }
     let mut errors = String::new();
@@ -366,8 +390,8 @@ pub fn vertices(args: &GruploadArgs) -> Result<(), String> {
 }
 
 pub fn seal_vertices(args: &GruploadArgs) -> Result<(), String> {
-    println!("Sealing vertices... {:?}", args);
-    let client = reqwest::blocking::Client::new();
+    println!("Sealing vertices...");
+    let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
@@ -396,13 +420,15 @@ pub fn seal_vertices(args: &GruploadArgs) -> Result<(), String> {
 }
 
 pub fn edges_one_thread(
+    use_tls: bool,
+    identity: Arc<TLSClientInfo>,
     file_name: String,
     graph_number: u32,
     endpoint: String,
     start: u64,
     finish: u64,
 ) -> Result<(), String> {
-    let client = reqwest::blocking::Client::new();
+    let client = build_client(use_tls, identity)?;
     let mut rng = rand::thread_rng();
     let mut buf: Vec<u8> = vec![];
     buf.reserve(1000000);
@@ -566,7 +592,7 @@ pub fn edges_one_thread(
 }
 
 pub fn edges(args: &GruploadArgs) -> Result<(), String> {
-    println!("Loading edges... {:?}", args);
+    println!("Loading edges...");
 
     let meta = metadata(&args.edge_file);
     if let Err(err) = meta {
@@ -577,6 +603,8 @@ pub fn edges(args: &GruploadArgs) -> Result<(), String> {
     if chunk_size < 4096 {
         // take care of very small files:
         return edges_one_thread(
+            args.use_tls,
+            args.identity.clone(),
             args.edge_file.to_str().unwrap().to_owned(),
             args.graph_number,
             args.endpoint.clone(),
@@ -593,11 +621,21 @@ pub fn edges(args: &GruploadArgs) -> Result<(), String> {
         if i == args.nr_threads - 1 {
             finish = total_size;
         }
+        let use_tls = args.use_tls;
+        let identity = args.identity.clone();
         let file_name = args.edge_file.to_str().unwrap().to_owned();
         let graph_number = args.graph_number;
         let endpoint = args.endpoint.clone();
         join.push(spawn(move || -> Result<(), String> {
-            edges_one_thread(file_name, graph_number, endpoint, start, finish)
+            edges_one_thread(
+                use_tls,
+                identity,
+                file_name,
+                graph_number,
+                endpoint,
+                start,
+                finish,
+            )
         }));
     }
     let mut errors = String::new();
@@ -616,8 +654,8 @@ pub fn edges(args: &GruploadArgs) -> Result<(), String> {
 }
 
 pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
-    println!("Sealing edges... {:?}", args);
-    let client = reqwest::blocking::Client::new();
+    println!("Sealing edges...");
+    let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
@@ -654,8 +692,8 @@ pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
 }
 
 pub fn drop_graph(args: &GruploadArgs) -> Result<(), String> {
-    println!("Dropping graph {}... {:?}", args.graph_number, args);
-    let client = reqwest::blocking::Client::new();
+    println!("Dropping graph {}...", args.graph_number);
+    let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
@@ -680,8 +718,9 @@ pub fn drop_graph(args: &GruploadArgs) -> Result<(), String> {
 }
 
 pub fn randomize(args: &GruploadArgs) -> Result<(), String> {
+    println!("Creating new random graph on disk...");
+
     let mut rng = rand::thread_rng();
-    //let client_id = rng.gen::<u64>();
 
     let cap = args.vertex_coll_name.len() + 1 + args.key_size as usize;
 
@@ -737,10 +776,10 @@ pub fn randomize(args: &GruploadArgs) -> Result<(), String> {
 
 pub fn compute(args: &GruploadArgs) -> Result<(), String> {
     println!(
-        "Triggering computation {} for graph {}... {:?}",
-        args.algorithm, args.graph_number, args
+        "Triggering computation {} for graph {}...",
+        args.algorithm, args.graph_number,
     );
-    let client = reqwest::blocking::Client::new();
+    let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
@@ -777,10 +816,10 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
 
 pub fn progress(args: &GruploadArgs) -> Result<(), String> {
     println!(
-        "Getting progress of computation {} for graph {}... {:?}",
-        args.comp_id, args.graph_number, args
+        "Getting progress of computation {} for graph {}...",
+        args.comp_id, args.graph_number
     );
-    let client = reqwest::blocking::Client::new();
+    let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     v.write_u64::<BigEndian>(args.comp_id).unwrap();
 
@@ -815,6 +854,8 @@ pub fn progress(args: &GruploadArgs) -> Result<(), String> {
 }
 
 fn vertex_results_one_thread(
+    use_tls: bool,
+    identity: Arc<TLSClientInfo>,
     file_name: &std::path::PathBuf,
     graph_number: u32,
     comp_id: u64,
@@ -825,7 +866,7 @@ fn vertex_results_one_thread(
     out_mutex: &mut Arc<Mutex<Dummy>>,
 ) -> Result<(), String> {
     // Some preparations:
-    let client = reqwest::blocking::Client::new();
+    let client = build_client(use_tls, identity)?;
     let mut buf: Vec<u8> = vec![];
     buf.reserve(1000000);
 
@@ -1041,7 +1082,7 @@ fn vertex_results_one_thread(
 struct Dummy {}
 
 pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
-    println!("Querying results for vertices... {:?}", args);
+    println!("Querying results for vertices...");
 
     let meta = metadata(&args.vertex_file);
     if let Err(err) = meta {
@@ -1053,6 +1094,8 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
         // take care of very small files:
         let mut output_mutex = Arc::new(Mutex::new(Dummy {}));
         return vertex_results_one_thread(
+            args.use_tls,
+            args.identity.clone(),
             &args.vertex_file,
             args.graph_number,
             args.comp_id,
@@ -1074,6 +1117,8 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
         if i == args.nr_threads - 1 {
             finish = total_size;
         }
+        let use_tls = args.use_tls;
+        let identity = args.identity.clone();
         let file_name = args.vertex_file.clone();
         let graph_number = args.graph_number;
         let comp_id = args.comp_id;
@@ -1082,6 +1127,8 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
         let mut mutex_copy = output_mutex.clone();
         join.push(spawn(move || -> Result<(), String> {
             vertex_results_one_thread(
+                use_tls,
+                identity,
                 &file_name,
                 graph_number,
                 comp_id,
@@ -1110,8 +1157,8 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
 }
 
 pub fn drop_computation(args: &GruploadArgs) -> Result<(), String> {
-    println!("Dropping computation {}: {:?}", args.comp_id, args);
-    let client = reqwest::blocking::Client::new();
+    println!("Dropping computation {}:", args.comp_id);
+    let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
