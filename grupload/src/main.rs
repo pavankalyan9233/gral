@@ -18,7 +18,7 @@ COMMANDS:
   create                   create a graph
   vertices                 upload vertices and seal them
   edges                    upload edges and seal them
-  drop                     drop a graph
+  dropGraph                drop a graph
   upload                   create, upload and seal, return number
   randomize                create a random graph with max-vertices vertices
                            and max-edges edges

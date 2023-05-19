@@ -259,10 +259,10 @@ fn get_computation(
 /// This async function implements the "drop graph" API call.
 async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
-    if bytes.len() < 10 {
+    if bytes.len() < 12 {
         return Err(warp::reject::custom(TooShortBodyLength {
             found: bytes.len(),
-            expected_at_least: 10,
+            expected_at_least: 12,
         }));
     }
 
@@ -272,8 +272,6 @@ async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, R
     let mut reader = Cursor::new(bytes.to_vec());
     let client_id = reader.read_u64::<BigEndian>().unwrap();
     let graph_number = reader.read_u32::<BigEndian>().unwrap();
-
-    println!("Dropping graph with number {}!", graph_number);
 
     let graph_arc = get_graph(&graphs, graph_number)?;
 
@@ -287,9 +285,8 @@ async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, R
     }
 
     graph.clear();
-    graph.dropped = true;
 
-    println!("Have dropped graph with number {}!", graph_number);
+    println!("Have dropped graph {}!", graph_number);
 
     // Write response:
     let mut v = Vec::new();

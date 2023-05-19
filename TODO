@@ -1,10 +1,11 @@
+ - strongly connected components
  - Progress report on upload of vertices and edges
  - Progress report on download of results
- - Implement graph drop
+ - AQL query upload
+ - direct randomize/upload
  - Implement graph dump
  - Extend end to end test
  - coverage?
- - strongly connected components
  - Add metrics (rust-prometheus crate)
  - metric about memory usage
  - Tune randomize (parallelization)
