@@ -89,7 +89,8 @@ pub struct Graph {
     pub edges_sealed: bool,
 
     // Flag, if edges are already indexed:
-    pub edges_indexed: bool,
+    pub edges_indexed_from: bool,
+    pub edges_indexed_to: bool,
 }
 
 pub struct Graphs {
@@ -132,7 +133,8 @@ impl Graph {
             dropped: false,
             vertices_sealed: false,
             edges_sealed: false,
-            edges_indexed: false,
+            edges_indexed_from: false,
+            edges_indexed_to: false,
         }))
     }
 
@@ -152,7 +154,8 @@ impl Graph {
         self.vertices_sealed = false;
         self.edges_sealed = false;
         self.dropped = true;
-        self.edges_indexed = false;
+        self.edges_indexed_from = false;
+        self.edges_indexed_to = false;
     }
 
     pub fn insert_vertex(
@@ -226,7 +229,7 @@ impl Graph {
         self.vertices_sealed = true;
     }
 
-    pub fn index_edges(&mut self) {
+    pub fn index_edges(&mut self, by_from: bool, by_to: bool) {
         let mut tmp: Vec<EdgeTemp> = vec![];
         let number_v = self.number_of_vertices() as usize;
         let number_e = self.number_of_edges() as usize;
@@ -237,65 +240,73 @@ impl Graph {
                 to: e.to,
             });
         }
-        // Create lookup by from:
-        tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
-            a.from.to_u64().cmp(&b.from.to_u64())
-        });
-        self.edge_index_by_from.clear();
-        self.edge_index_by_from.reserve(number_v + 1);
-        self.edges_by_from.clear();
-        self.edges_by_from.reserve(number_e);
-        let mut cur_from = VertexIndex::new(0);
-        let mut pos: u64 = 0; // position in self.edges_by_from where
-                              // we currently write
-        self.edge_index_by_from.push(0);
-        // loop invariant: the start offset for cur_from has already been
-        // written into edge_index_by_from.
-        // loop invariant: pos == edges_by_from.len()
-        for e in self.edges.iter() {
-            if e.from != cur_from {
-                while cur_from < e.from {
+
+        if by_from {
+            // Create lookup by from:
+            tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
+                a.from.to_u64().cmp(&b.from.to_u64())
+            });
+            self.edge_index_by_from.clear();
+            self.edge_index_by_from.reserve(number_v + 1);
+            self.edges_by_from.clear();
+            self.edges_by_from.reserve(number_e);
+            let mut cur_from = VertexIndex::new(0);
+            let mut pos: u64 = 0; // position in self.edges_by_from where
+                                  // we currently write
+            self.edge_index_by_from.push(0);
+            // loop invariant: the start offset for cur_from has already been
+            // written into edge_index_by_from.
+            // loop invariant: pos == edges_by_from.len()
+            for e in self.edges.iter() {
+                if e.from != cur_from {
+                    while cur_from < e.from {
+                        self.edge_index_by_from.push(pos);
+                        cur_from = VertexIndex::new(cur_from.to_u64() + 1);
+                    }
                     self.edge_index_by_from.push(pos);
-                    cur_from = VertexIndex::new(cur_from.to_u64() + 1);
                 }
+                self.edges_by_from.push(e.to);
+                pos = pos + 1;
+            }
+            while cur_from.to_u64() < number_v as u64 {
+                cur_from = VertexIndex::new(cur_from.to_u64() + 1);
                 self.edge_index_by_from.push(pos);
             }
-            self.edges_by_from.push(e.to);
-            pos = pos + 1;
-        }
-        while cur_from.to_u64() < number_v as u64 {
-            cur_from = VertexIndex::new(cur_from.to_u64() + 1);
-            self.edge_index_by_from.push(pos);
+            self.edges_indexed_from = true;
         }
 
-        // Create lookup by to:
-        tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering { a.to.to_u64().cmp(&b.to.to_u64()) });
-        self.edge_index_by_to.clear();
-        self.edge_index_by_to.reserve(number_v + 1);
-        self.edges_by_to.clear();
-        self.edges_by_to.reserve(number_e);
-        let mut cur_to = VertexIndex::new(0);
-        pos = 0; // position in self.edges_by_to where we currently write
-        self.edge_index_by_to.push(0);
-        // loop invariant: the start offset for cur_to has already been
-        // written into edge_index_by_to.
-        // loop invariant: pos == edges_by_to.len()
-        for e in self.edges.iter() {
-            if e.to != cur_to {
-                while cur_to < e.to {
+        if by_to {
+            // Create lookup by to:
+            tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
+                a.to.to_u64().cmp(&b.to.to_u64())
+            });
+            self.edge_index_by_to.clear();
+            self.edge_index_by_to.reserve(number_v + 1);
+            self.edges_by_to.clear();
+            self.edges_by_to.reserve(number_e);
+            let mut cur_to = VertexIndex::new(0);
+            let mut pos = 0; // position in self.edges_by_to where we currently write
+            self.edge_index_by_to.push(0);
+            // loop invariant: the start offset for cur_to has already been
+            // written into edge_index_by_to.
+            // loop invariant: pos == edges_by_to.len()
+            for e in self.edges.iter() {
+                if e.to != cur_to {
+                    while cur_to < e.to {
+                        self.edge_index_by_to.push(pos);
+                        cur_to = VertexIndex::new(cur_to.to_u64() + 1);
+                    }
                     self.edge_index_by_to.push(pos);
-                    cur_to = VertexIndex::new(cur_to.to_u64() + 1);
                 }
+                self.edges_by_to.push(e.from);
+                pos = pos + 1;
+            }
+            while cur_to.to_u64() < number_v as u64 {
+                cur_to = VertexIndex::new(cur_to.to_u64() + 1);
                 self.edge_index_by_to.push(pos);
             }
-            self.edges_by_to.push(e.from);
-            pos = pos + 1;
+            self.edges_indexed_to = true;
         }
-        while cur_to.to_u64() < number_v as u64 {
-            cur_to = VertexIndex::new(cur_to.to_u64() + 1);
-            self.edge_index_by_to.push(pos);
-        }
-        self.edges_indexed = true;
     }
 
     pub fn seal_edges(&mut self) {

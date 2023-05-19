@@ -731,7 +731,7 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
 
     graph.seal_edges();
     if index_edges != 0 {
-        graph.index_edges();
+        graph.index_edges(index_edges & 1 != 0, index_edges & 2 != 0);
     }
 
     // Write response:

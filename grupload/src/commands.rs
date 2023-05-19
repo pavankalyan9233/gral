@@ -661,8 +661,7 @@ pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
     let client_id = rng.gen::<u64>();
     v.write_u64::<BigEndian>(client_id).unwrap();
     v.write_u32::<BigEndian>(args.graph_number).unwrap();
-    v.write_u32::<BigEndian>(if args.index_edges { 1 } else { 0 })
-        .unwrap();
+    v.write_u32::<BigEndian>(args.index_edges).unwrap();
 
     let mut url = args.endpoint.clone();
     url.push_str("/v1/sealEdges");

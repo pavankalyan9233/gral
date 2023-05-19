@@ -47,9 +47,10 @@ OPTIONS:
   --algorithm NAME         Name of algorithm to trigger [default: 'wcc']
   --comp-id ID             Computation id [default: 0]
   --output FILENAME        Output file for data dump [default: 'output.jsonl']
-  --index-edges BOOL       Flag, if gral should index the edges when they
-                           are sealed. If not, this is done lazily later when
-                           a computation needs the edge index [default: false]
+  --index-edges INTEGER    Flags, if gral should index the edges when they are
+                           sealed. 1-bit is indexing by from, 2-bit is indexing
+                           by to. If not, this is done lazily later when a
+                           computation needs the edge index [default: false]
   --use-tls BOOL           Flag if TLS should be used [default: true]
   --cacert PATH            Path to CA certificate for TLS
                            [default: 'tls/ca.pem']
@@ -79,7 +80,7 @@ pub struct GruploadArgs {
     algorithm: String,
     comp_id: u64,
     output_file: std::path::PathBuf,
-    index_edges: bool,
+    index_edges: u32,
     use_tls: bool,
     cacert_filename: std::path::PathBuf,
     client_identity_filename: std::path::PathBuf,
@@ -166,7 +167,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         output_file: pargs
             .opt_value_from_str("--output")?
             .unwrap_or("output_jsonl".into()),
-        index_edges: pargs.opt_value_from_str("--index-edges")?.unwrap_or(false),
+        index_edges: pargs.opt_value_from_str("--index-edges")?.unwrap_or(0),
         use_tls: pargs.opt_value_from_str("--use-tls")?.unwrap_or(true),
         cacert_filename: pargs
             .opt_value_from_str("--cacert")?

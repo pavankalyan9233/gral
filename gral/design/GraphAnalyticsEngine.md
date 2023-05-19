@@ -266,6 +266,8 @@ Body:
 u64     client-id
 u32     number of graph
 u32     index edges, if non-zero, an edge index will be computed for the graph
+        If bit 1 (least significant bit) is set, edges will be indexed by from
+        If bit 2 (second least sign. bit) is set, edges will be indexed by to
         Note that if this is not done, it will be done lazily, if a
         computation needs the edge index later.
 ```
