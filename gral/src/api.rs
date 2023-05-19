@@ -273,18 +273,33 @@ async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, R
     let client_id = reader.read_u64::<BigEndian>().unwrap();
     let graph_number = reader.read_u32::<BigEndian>().unwrap();
 
-    let graph_arc = get_graph(&graphs, graph_number)?;
-
-    // Lock graph:
-    let mut graph = graph_arc.write().unwrap();
-
-    if graph.dropped {
+    let mut graphs = graphs.lock().unwrap();
+    if graph_number as usize >= graphs.list.len() {
         return Err(warp::reject::custom(GraphNotFound {
-            number: graph_number as u32,
+            number: graph_number,
         }));
     }
 
-    graph.clear();
+    {
+        // Lock graph:
+        let graph = graphs.list[graph_number as usize].write().unwrap();
+
+        if graph.dropped {
+            return Err(warp::reject::custom(GraphNotFound {
+                number: graph_number as u32,
+            }));
+        }
+    }
+
+    // The following will automatically free graph if no longer used by
+    // a computation:
+    if graph_number as usize + 1 == graphs.list.len() {
+        graphs.list.pop();
+    } else {
+        graphs.list[graph_number as usize] = Graph::new(false, 64);
+        let mut graph = graphs.list[graph_number as usize].write().unwrap();
+        graph.dropped = true; // Mark unused
+    }
 
     println!("Have dropped graph {}!", graph_number);
 
