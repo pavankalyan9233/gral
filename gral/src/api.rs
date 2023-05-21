@@ -1,5 +1,5 @@
 use crate::computations::{with_computations, Computation, Computations};
-use crate::conncomp::weakly_connected_components;
+use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{with_graphs, Graph, Graphs, KeyOrHash, VertexHash, VertexIndex};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
@@ -69,6 +69,12 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_drop_computation);
+    let compute = warp::path!("v1" / "compute")
+        .and(warp::post())
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_compute);
 
     create
         .or(drop)
@@ -80,6 +86,7 @@ pub fn api_filter(
         .or(get_progress)
         .or(get_results_by_vertices)
         .or(drop_computation)
+        .or(compute)
 }
 
 /// An error object, which is used when the body size is unexpected.
@@ -163,6 +170,13 @@ struct InternalError {
     pub msg: String,
 }
 impl reject::Reject for InternalError {}
+
+/// An error object, which is used if an unknown algorithm is requested.
+#[derive(Debug)]
+struct UnknownAlgorithm {
+    pub algorithm: u32,
+}
+impl reject::Reject for UnknownAlgorithm {}
 
 /// This async function implements the "create graph" API call.
 async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
@@ -746,11 +760,71 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
     Ok(v)
 }
 
+pub struct ConcreteComputation {
+    pub algorithm: u32,
+    pub graph: Arc<RwLock<Graph>>,
+    pub components: Option<Vec<u64>>,
+    pub shall_stop: bool,
+    pub number: u64,
+}
+
 pub struct WeaklyConnectedComponentsComputation {
     pub graph: Arc<RwLock<Graph>>,
     pub components: Option<Vec<u64>>,
     pub shall_stop: bool,
     pub number: u64,
+}
+
+impl Computation for ConcreteComputation {
+    fn is_ready(&self) -> bool {
+        self.components.is_some()
+    }
+    fn cancel(&mut self) {
+        self.shall_stop = true;
+    }
+    fn algorithm_id(&self) -> u32 {
+        return self.algorithm;
+    }
+    fn get_graph(&self) -> Arc<RwLock<Graph>> {
+        return self.graph.clone();
+    }
+    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String> {
+        out.write_u8(8).unwrap();
+        out.write_u64::<BigEndian>(self.number).unwrap();
+        Ok(())
+    }
+    fn dump_vertex_results(
+        &self,
+        comp_id: u64,
+        kohs: &Vec<KeyOrHash>,
+        out: &mut Vec<u8>,
+    ) -> Result<(), Rejection> {
+        let comps = self.components.as_ref();
+        match comps {
+            None => {
+                return Err(warp::reject::custom(ComputationNotYetFinished { comp_id }));
+            }
+            Some(result) => {
+                let g = self.graph.read().unwrap();
+                for koh in kohs.iter() {
+                    let index = g.index_from_key_or_hash(koh);
+                    match index {
+                        None => {
+                            put_key_or_hash(out, koh);
+                            out.write_u8(0).unwrap();
+                        }
+                        Some(i) => {
+                            put_key_or_hash(out, koh);
+                            out.write_u8(8).unwrap();
+                            out.write_u64::<BigEndian>(result[i.to_u64() as usize])
+                                .unwrap();
+                        }
+                    }
+                }
+                return Ok(());
+            }
+        }
+    }
 }
 
 impl Computation for WeaklyConnectedComponentsComputation {
@@ -868,6 +942,97 @@ async fn api_weakly_connected_components(
     v.reserve(20);
     v.write_u64::<BigEndian>(client_id).unwrap();
     v.write_u32::<BigEndian>(graph_number).unwrap();
+    v.write_u64::<BigEndian>(comp_id).unwrap();
+    Ok(v)
+}
+
+/// This function triggers a computation:
+async fn api_compute(
+    graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<Vec<u8>, Rejection> {
+    // Handle wrong length:
+    if bytes.len() != 16 {
+        return Err(warp::reject::custom(WrongBodyLength {
+            found: bytes.len(),
+            expected: 16,
+        }));
+    }
+
+    // Parse body and extract integers:
+    // (Note that we have checked the buffer length and so these cannot
+    // fail! Therefore unwrap() is OK here.)
+    let mut reader = Cursor::new(bytes.to_vec());
+    let client_id = reader.read_u64::<BigEndian>().unwrap();
+    let graph_number = reader.read_u32::<BigEndian>().unwrap();
+    let algorithm = reader.read_u32::<BigEndian>().unwrap();
+
+    let graph_arc = get_graph(&graphs, graph_number)?;
+
+    {
+        // Check graph:
+        let graph = graph_arc.read().unwrap();
+        check_graph(graph.deref(), graph_number, true)?;
+    }
+
+    if algorithm < 1 || algorithm > 2 {
+        return Err(warp::reject::custom(UnknownAlgorithm { algorithm }));
+    }
+
+    let comp_arc = Arc::new(Mutex::new(ConcreteComputation {
+        algorithm,
+        graph: graph_arc.clone(),
+        components: None,
+        shall_stop: false,
+        number: 0,
+    }));
+
+    let mut rng = rand::thread_rng();
+    let mut comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        loop {
+            comp_id = rng.gen::<u64>();
+            if !comps.list.contains_key(&comp_id) {
+                break;
+            }
+        }
+        comps.list.insert(comp_id, comp_arc.clone());
+    }
+    let _join_handle = std::thread::spawn(move || {
+        let (nr, components) = match algorithm {
+            1 => {
+                let graph = graph_arc.read().unwrap();
+                weakly_connected_components(&graph)
+            }
+            2 => {
+                {
+                    // Make sure we have an edge index:
+                    let mut graph = graph_arc.write().unwrap();
+                    if !graph.edges_indexed_from {
+                        println!("Indexing edges by from...");
+                        graph.index_edges(true, false);
+                    }
+                }
+                let graph = graph_arc.read().unwrap();
+                strongly_connected_components(&graph)
+            }
+            _ => std::unreachable!(),
+        };
+        println!("Found {} connected components.", nr);
+        let mut comp = comp_arc.lock().unwrap();
+        comp.components = Some(components);
+        comp.number = nr;
+    });
+
+    // Write response:
+    let mut v = Vec::new();
+    // TODO: handle errors!
+    v.reserve(20);
+    v.write_u64::<BigEndian>(client_id).unwrap();
+    v.write_u32::<BigEndian>(graph_number).unwrap();
+    v.write_u32::<BigEndian>(algorithm).unwrap();
     v.write_u64::<BigEndian>(comp_id).unwrap();
     Ok(v)
 }
@@ -1074,6 +1239,9 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
     } else if let Some(wrong) = err.find::<InternalError>() {
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = wrong.msg.clone();
+    } else if let Some(wrong) = err.find::<UnknownAlgorithm>() {
+        code = StatusCode::BAD_REQUEST;
+        message = format!("Unknown algorithm with id {}", wrong.algorithm);
     } else {
         // We should have expected this... Just log and say its a 500
         eprintln!("unhandled rejection: {:?}", err);

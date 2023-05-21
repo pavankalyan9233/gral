@@ -257,13 +257,15 @@ impl Graph {
             // loop invariant: the start offset for cur_from has already been
             // written into edge_index_by_from.
             // loop invariant: pos == edges_by_from.len()
-            for e in self.edges.iter() {
+            for e in tmp.iter() {
                 if e.from != cur_from {
-                    while cur_from < e.from {
-                        self.edge_index_by_from.push(pos);
+                    loop {
                         cur_from = VertexIndex::new(cur_from.to_u64() + 1);
+                        self.edge_index_by_from.push(pos);
+                        if cur_from == e.from {
+                            break;
+                        }
                     }
-                    self.edge_index_by_from.push(pos);
                 }
                 self.edges_by_from.push(e.to);
                 pos = pos + 1;
@@ -290,13 +292,15 @@ impl Graph {
             // loop invariant: the start offset for cur_to has already been
             // written into edge_index_by_to.
             // loop invariant: pos == edges_by_to.len()
-            for e in self.edges.iter() {
+            for e in tmp.iter() {
                 if e.to != cur_to {
-                    while cur_to < e.to {
-                        self.edge_index_by_to.push(pos);
+                    loop {
                         cur_to = VertexIndex::new(cur_to.to_u64() + 1);
+                        self.edge_index_by_to.push(pos);
+                        if cur_to == e.to {
+                            break;
+                        }
                     }
-                    self.edge_index_by_to.push(pos);
                 }
                 self.edges_by_to.push(e.from);
                 pos = pos + 1;

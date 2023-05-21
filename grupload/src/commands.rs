@@ -785,15 +785,15 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
     v.write_u64::<BigEndian>(client_id).unwrap();
     v.write_u32::<BigEndian>(args.graph_number).unwrap();
 
-    let mut url = args.endpoint.clone();
     match args.algorithm.as_str() {
-        "wcc" => {
-            url.push_str("/v1/weaklyConnectedComponents");
-        }
+        "wcc" => v.write_u32::<BigEndian>(1).unwrap(),
+        "scc" => v.write_u32::<BigEndian>(2).unwrap(),
         _ => {
             return Err(format!("Unknown algorithm {} triggered.", args.algorithm));
         }
     }
+    let mut url = args.endpoint.clone();
+    url.push_str("/v1/compute");
     let mut resp = match client.post(url).body(v).send() {
         Ok(resp) => resp,
         Err(err) => panic!("Error: {}", err),
@@ -804,11 +804,12 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
     let mut cursor = Cursor::new(&body);
     let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
     let graph_number = cursor.read_u32::<BigEndian>().unwrap();
+    let algorithm = cursor.read_u32::<BigEndian>().unwrap();
     let comp_id = cursor.read_u64::<BigEndian>().unwrap();
 
     println!(
-        "{}: graph number: {}, computation id:\n{}",
-        args.algorithm, graph_number, comp_id,
+        "{}: graph number: {}, algorithm: {}, computation id:\n{}",
+        args.algorithm, algorithm, graph_number, comp_id,
     );
     Ok(())
 }
@@ -914,6 +915,22 @@ fn vertex_results_one_thread(
             match algorithm {
                 1 => {
                     // weakly connected components
+                    assert_eq!(l2, 8);
+                    let comp = cursor.read_u64::<BigEndian>();
+                    match comp {
+                        Err(err) => {
+                            return Err(format!("Could not read component id: {:?}", err));
+                        }
+                        Ok(comp_id) => {
+                            let comp_id_str = comp_id.to_string();
+                            v.extend_from_slice("\"r\":".as_bytes());
+                            v.extend_from_slice(comp_id_str.as_bytes());
+                            v.extend_from_slice("\"}\n".as_bytes());
+                        }
+                    };
+                }
+                2 => {
+                    // strongly connected components
                     assert_eq!(l2, 8);
                     let comp = cursor.read_u64::<BigEndian>();
                     match comp {

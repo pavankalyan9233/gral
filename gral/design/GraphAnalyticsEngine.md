@@ -285,6 +285,41 @@ If the graph number is not found (or its edges are already sealed), we
 return 404 and an error body as described above.
 
 
+### `POST /v1/compute`
+
+Triggers a computation for a graph. This call actually only triggers the
+computation and returns immediately.
+
+Body:
+
+```
+u64     client-id
+u32     number of graph
+u32     algorithm number:
+          1: weakly connected components
+          2: strongly connected components
+```
+
+Response is 200 with this body:
+
+```
+u64     client-id
+u32     number of graph
+u32     algorithm number
+u64     computation-id
+```
+
+The computation-id identifies this particular computation.
+
+If the graph number is not found, we return 404 and an error body as
+described above.
+
+Note that computation IDs are not per graph but global!
+
+Note that a computation keeps the graph alive, even if it was dropped
+in the meantime!
+
+
 ### `POST /v1/weaklyConnectedComponents`
 
 Computes the weakly connected components of a graph. This call actually
