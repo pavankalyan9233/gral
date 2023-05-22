@@ -1,0 +1,53 @@
+Time to write a graph with 100M vertices and edges:     281,90 (locally)
+Time to smartify vertices:                              168,06 (locally)
+Time to smartify edges:                                 247,95 (locally)
+Time to run connected components locally:               276,66 (locally)
+Time to import vertices into ArangoGraph:               46 min (DSL)
+Time to import edges into ArangoGraph:                  45 min (DSL)
+Time for Pregel wcc:                                    3735 seconds
+  Load: 7 min, 13 min, 16 min (on the three dbservers)
+  Startup time: 966 s (longest dbserver)
+  computation time: 2059 s
+  Parallelism: 4
+Upload to gral (single threaded on both sides):         401,20 (locally)
+   (RAM usage: 10.4 GB resident)
+Time for weakly connected components in RAM in gral:     49 seconds
+
+
+
+
+New, 10M example:
+
+Time to write a graph with 10M vertices and edges:    22.8 s
+
+Time to smartify vertices:                            12.9 s
+Time to smartify edges:                               18.8 s
+Time to import vertices:                              17.0 s
+Time to import edges:                                 75.0 s
+
+Pregel run in 3.10 (parallelism 4, incomp. result):  194.1 s
+  startupTime:                                        53.8 s
+  computationTime:                                    91.3 s
+  storageTime:                                        49.1 s
+
+Pregel run in 3.10 (parallelism 1):                  641.1 s
+  startupTime:                                       161.9 s
+  computationTime:                                   273.0 s
+  storageTime:                                       206.1 s
+Time to export result:                                38.9 s
+
+Pregel run in 3.11 (parallelism 4):                  309.2 s
+  startupTime:                                        52.0 s
+  computationTime:                                   188.0 s
+  storageTime:                                        69.1 s
+Time to export result in 3.11:                        33.6 s
+
+Pregel run in 3.11 (parallelism 1):                  765.9 s
+  startupTime:                                       166.4 s
+  computationTime:                                   415.9 s
+  storageTime:                                       183.6 s
+
+Time to import graph into gral (locally):             12.5 s
+Time to compute connected components in gral:          3.8 s
+Time to compute connected components in conncommp:    23.2 s
+

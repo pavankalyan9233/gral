@@ -1,0 +1,1130 @@
+{
+  "id": "1099526895541",
+  "database": "_system",
+  "algorithm": "WCC",
+  "created": "2023-05-10T08:53:54Z",
+  "expires": "2023-05-10T09:09:44Z",
+  "ttl": 600,
+  "state": "done",
+  "gss": 42,
+  "totalRuntime": 350.563224794,
+  "startupTime": 96.222072763,
+  "computationTime": 125.572344438,
+  "storageTime": 128.768805943,
+  "gssTimes": [
+    4.02753561,
+    6.243036891,
+    7.522916942,
+    6.166800896,
+    5.063649757,
+    5.391580184,
+    5.06076751,
+    5.144561711,
+    4.589059058,
+    4.633296889,
+    4.63594448,
+    4.690204707,
+    4.784177701,
+    4.824249239,
+    4.708349824,
+    4.751979468,
+    4.674221709,
+    4.575945671,
+    4.622541516,
+    4.50715182,
+    4.326073771,
+    3.948991353,
+    3.184958621,
+    2.377815778,
+    1.544920548,
+    0.966872907,
+    0.714102004,
+    0.587089957,
+    0.55765349,
+    0.524076432,
+    0.502186076,
+    0.505277369,
+    0.530709392,
+    0.543356402,
+    0.450268358,
+    0.481099946,
+    0.540554302,
+    0.552194224,
+    0.533320111,
+    0.539246161,
+    0.448186134,
+    0.571031978
+  ],
+  "aggregators": {},
+  "sendCount": 301938225,
+  "receivedCount": 301938225,
+  "reports": [],
+  "vertexCount": 10000000,
+  "edgeCount": 10000000,
+  "parallelism": 4,
+  "useMemoryMaps": true,
+  "detail": {
+    "aggregatedStatus": {
+      "timeStamp": "2023-05-10T08:59:44Z",
+      "graphStoreStatus": {
+        "verticesLoaded": 10000000,
+        "edgesLoaded": 10000000,
+        "memoryBytesUsed": 1580000000,
+        "verticesStored": 7501980
+      },
+      "allGssStatus": {
+        "items": [
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 10000000,
+            "messagesReceived": 0,
+            "memoryBytesUsedForMessages": 480000000
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 16321361,
+            "messagesReceived": 10000000,
+            "memoryBytesUsedForMessages": 1263425328
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 17366538,
+            "messagesReceived": 16321361,
+            "memoryBytesUsedForMessages": 1617019152
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 14849002,
+            "messagesReceived": 17366538,
+            "memoryBytesUsedForMessages": 1546345920
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 13535969,
+            "messagesReceived": 14849002,
+            "memoryBytesUsedForMessages": 1362478608
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12926769,
+            "messagesReceived": 13535969,
+            "memoryBytesUsedForMessages": 1270211424
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12712274,
+            "messagesReceived": 12926769,
+            "memoryBytesUsedForMessages": 1230674064
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12674124,
+            "messagesReceived": 12712274,
+            "memoryBytesUsedForMessages": 1218547104
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12709470,
+            "messagesReceived": 12674124,
+            "memoryBytesUsedForMessages": 1218412512
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12767917,
+            "messagesReceived": 12709470,
+            "memoryBytesUsedForMessages": 1222914576
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12816949,
+            "messagesReceived": 12767917,
+            "memoryBytesUsedForMessages": 1228073568
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12857801,
+            "messagesReceived": 12816949,
+            "memoryBytesUsedForMessages": 1232388000
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12885986,
+            "messagesReceived": 12857801,
+            "memoryBytesUsedForMessages": 1235701776
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12901368,
+            "messagesReceived": 12885986,
+            "memoryBytesUsedForMessages": 1237792992
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12903668,
+            "messagesReceived": 12901368,
+            "memoryBytesUsedForMessages": 1238641728
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12883632,
+            "messagesReceived": 12903668,
+            "memoryBytesUsedForMessages": 1237790400
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12850155,
+            "messagesReceived": 12883632,
+            "memoryBytesUsedForMessages": 1235221776
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12776234,
+            "messagesReceived": 12850155,
+            "memoryBytesUsedForMessages": 1230066672
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12633361,
+            "messagesReceived": 12776234,
+            "memoryBytesUsedForMessages": 1219660560
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 12343368,
+            "messagesReceived": 12633361,
+            "memoryBytesUsedForMessages": 1198882992
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 11694719,
+            "messagesReceived": 12343368,
+            "memoryBytesUsedForMessages": 1153828176
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 10289108,
+            "messagesReceived": 11694719,
+            "memoryBytesUsedForMessages": 1055223696
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 7765797,
+            "messagesReceived": 10289108,
+            "memoryBytesUsedForMessages": 866635440
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 4653403,
+            "messagesReceived": 7765797,
+            "memoryBytesUsedForMessages": 596121600
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 2233830,
+            "messagesReceived": 4653403,
+            "memoryBytesUsedForMessages": 330587184
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 943029,
+            "messagesReceived": 2233830,
+            "memoryBytesUsedForMessages": 152489232
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 383288,
+            "messagesReceived": 943029,
+            "memoryBytesUsedForMessages": 63663216
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 154466,
+            "messagesReceived": 383288,
+            "memoryBytesUsedForMessages": 25812192
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 62018,
+            "messagesReceived": 154466,
+            "memoryBytesUsedForMessages": 10391232
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 24875,
+            "messagesReceived": 62018,
+            "memoryBytesUsedForMessages": 4170864
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 10379,
+            "messagesReceived": 24875,
+            "memoryBytesUsedForMessages": 1692192
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 4336,
+            "messagesReceived": 10379,
+            "memoryBytesUsedForMessages": 706320
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 1766,
+            "messagesReceived": 4336,
+            "memoryBytesUsedForMessages": 292896
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 723,
+            "messagesReceived": 1766,
+            "memoryBytesUsedForMessages": 119472
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 297,
+            "messagesReceived": 723,
+            "memoryBytesUsedForMessages": 48960
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 130,
+            "messagesReceived": 297,
+            "memoryBytesUsedForMessages": 20496
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 53,
+            "messagesReceived": 130,
+            "memoryBytesUsedForMessages": 8784
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 26,
+            "messagesReceived": 53,
+            "memoryBytesUsedForMessages": 3792
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 17,
+            "messagesReceived": 26,
+            "memoryBytesUsedForMessages": 2064
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 11,
+            "messagesReceived": 17,
+            "memoryBytesUsedForMessages": 1344
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 8,
+            "messagesReceived": 11,
+            "memoryBytesUsedForMessages": 912
+          },
+          {
+            "verticesProcessed": 10000000,
+            "messagesSent": 0,
+            "messagesReceived": 8,
+            "memoryBytesUsedForMessages": 384
+          }
+        ]
+      }
+    },
+    "workerStatus": {
+      "PRMR-c9efa12d-8b61-44bf-9a2f-7d5fdcb93c8d": {
+        "timeStamp": "2023-05-10T08:59:44Z",
+        "graphStoreStatus": {
+          "verticesLoaded": 3792286,
+          "edgesLoaded": 3792685,
+          "memoryBytesUsed": 599199941,
+          "verticesStored": 2894369
+        },
+        "allGssStatus": {
+          "items": [
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 3792685,
+              "messagesReceived": 0,
+              "memoryBytesUsedForMessages": 182048880
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 6189940,
+              "messagesReceived": 3792749,
+              "memoryBytesUsedForMessages": 479169072
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 6757092,
+              "messagesReceived": 6189352,
+              "memoryBytesUsedForMessages": 621429312
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 5910673,
+              "messagesReceived": 6552359,
+              "memoryBytesUsedForMessages": 598225536
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 5313764,
+              "messagesReceived": 5775600,
+              "memoryBytesUsedForMessages": 532289472
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 5020555,
+              "messagesReceived": 5299243,
+              "memoryBytesUsedForMessages": 495350304
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4890564,
+              "messagesReceived": 5010089,
+              "memoryBytesUsedForMessages": 475231344
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4851232,
+              "messagesReceived": 4889977,
+              "memoryBytesUsedForMessages": 467578032
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4843900,
+              "messagesReceived": 4848060,
+              "memoryBytesUsedForMessages": 465214080
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4858877,
+              "messagesReceived": 4845575,
+              "memoryBytesUsedForMessages": 465813696
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4866756,
+              "messagesReceived": 4855817,
+              "memoryBytesUsedForMessages": 466683504
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4879117,
+              "messagesReceived": 4868605,
+              "memoryBytesUsedForMessages": 467890656
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4890722,
+              "messagesReceived": 4882055,
+              "memoryBytesUsedForMessages": 469093296
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4895591,
+              "messagesReceived": 4889644,
+              "memoryBytesUsedForMessages": 469691280
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4896574,
+              "messagesReceived": 4895993,
+              "memoryBytesUsedForMessages": 470043216
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4886796,
+              "messagesReceived": 4894688,
+              "memoryBytesUsedForMessages": 469511232
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4873838,
+              "messagesReceived": 4887536,
+              "memoryBytesUsedForMessages": 468545952
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4845678,
+              "messagesReceived": 4873509,
+              "memoryBytesUsedForMessages": 466520976
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4793912,
+              "messagesReceived": 4846448,
+              "memoryBytesUsedForMessages": 462737280
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4684453,
+              "messagesReceived": 4792113,
+              "memoryBytesUsedForMessages": 454875168
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4436614,
+              "messagesReceived": 4682546,
+              "memoryBytesUsedForMessages": 437719680
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 3901174,
+              "messagesReceived": 4437645,
+              "memoryBytesUsedForMessages": 400263312
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 2946365,
+              "messagesReceived": 3904031,
+              "memoryBytesUsedForMessages": 328819008
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 1764268,
+              "messagesReceived": 2945522,
+              "memoryBytesUsedForMessages": 226069920
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 845134,
+              "messagesReceived": 1763507,
+              "memoryBytesUsedForMessages": 125214768
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 357809,
+              "messagesReceived": 845958,
+              "memoryBytesUsedForMessages": 57780816
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 144607,
+              "messagesReceived": 356776,
+              "memoryBytesUsedForMessages": 24066384
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 58444,
+              "messagesReceived": 145273,
+              "memoryBytesUsedForMessages": 9778416
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 23514,
+              "messagesReceived": 58320,
+              "memoryBytesUsedForMessages": 3928032
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 9350,
+              "messagesReceived": 23490,
+              "memoryBytesUsedForMessages": 1576320
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 3944,
+              "messagesReceived": 9496,
+              "memoryBytesUsedForMessages": 645120
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 1597,
+              "messagesReceived": 3813,
+              "memoryBytesUsedForMessages": 259680
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 659,
+              "messagesReceived": 1630,
+              "memoryBytesUsedForMessages": 109872
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 291,
+              "messagesReceived": 670,
+              "memoryBytesUsedForMessages": 46128
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 115,
+              "messagesReceived": 276,
+              "memoryBytesUsedForMessages": 18768
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 51,
+              "messagesReceived": 126,
+              "memoryBytesUsedForMessages": 8496
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 16,
+              "messagesReceived": 51,
+              "memoryBytesUsedForMessages": 3216
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 4,
+              "messagesReceived": 17,
+              "memoryBytesUsedForMessages": 1008
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 3,
+              "messagesReceived": 5,
+              "memoryBytesUsedForMessages": 384
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 1,
+              "messagesReceived": 3,
+              "memoryBytesUsedForMessages": 192
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 1,
+              "messagesReceived": 1,
+              "memoryBytesUsedForMessages": 96
+            },
+            {
+              "verticesProcessed": 3792286,
+              "messagesSent": 0,
+              "messagesReceived": 1,
+              "memoryBytesUsedForMessages": 48
+            }
+          ]
+        }
+      },
+      "PRMR-c9e60faf-9452-4723-ac8f-a8735edb838f": {
+        "timeStamp": "2023-05-10T08:59:18Z",
+        "graphStoreStatus": {
+          "verticesLoaded": 2890011,
+          "edgesLoaded": 2889271,
+          "memoryBytesUsed": 456586958,
+          "verticesStored": 2030857
+        },
+        "allGssStatus": {
+          "items": [
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 2889271,
+              "messagesReceived": 0,
+              "memoryBytesUsedForMessages": 138685008
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 4720296,
+              "messagesReceived": 2892590,
+              "memoryBytesUsedForMessages": 365418528
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 4868700,
+              "messagesReceived": 4718198,
+              "memoryBytesUsedForMessages": 460171104
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 4181508,
+              "messagesReceived": 5052266,
+              "memoryBytesUsedForMessages": 443221152
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3888086,
+              "messagesReceived": 4219967,
+              "memoryBytesUsedForMessages": 389186544
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3753768,
+              "messagesReceived": 3906288,
+              "memoryBytesUsedForMessages": 367682688
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3699198,
+              "messagesReceived": 3753222,
+              "memoryBytesUsedForMessages": 357716160
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3683826,
+              "messagesReceived": 3700166,
+              "memoryBytesUsedForMessages": 354431616
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3688522,
+              "messagesReceived": 3683654,
+              "memoryBytesUsedForMessages": 353864448
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3699170,
+              "messagesReceived": 3687599,
+              "memoryBytesUsedForMessages": 354564912
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3712073,
+              "messagesReceived": 3699347,
+              "memoryBytesUsedForMessages": 355748160
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3720377,
+              "messagesReceived": 3710608,
+              "memoryBytesUsedForMessages": 356687280
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3725019,
+              "messagesReceived": 3720057,
+              "memoryBytesUsedForMessages": 357363648
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3731806,
+              "messagesReceived": 3726533,
+              "memoryBytesUsedForMessages": 358000272
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3731344,
+              "messagesReceived": 3730046,
+              "memoryBytesUsedForMessages": 358146720
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3724665,
+              "messagesReceived": 3731699,
+              "memoryBytesUsedForMessages": 357905472
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3714656,
+              "messagesReceived": 3724817,
+              "memoryBytesUsedForMessages": 357094704
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3694217,
+              "messagesReceived": 3714366,
+              "memoryBytesUsedForMessages": 355611984
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3651018,
+              "messagesReceived": 3692440,
+              "memoryBytesUsedForMessages": 352485984
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3567136,
+              "messagesReceived": 3652792,
+              "memoryBytesUsedForMessages": 346556544
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3380439,
+              "messagesReceived": 3567375,
+              "memoryBytesUsedForMessages": 333495072
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 2975472,
+              "messagesReceived": 3380773,
+              "memoryBytesUsedForMessages": 305099760
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 2245013,
+              "messagesReceived": 2974683,
+              "memoryBytesUsedForMessages": 250545408
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 1346139,
+              "messagesReceived": 2245651,
+              "memoryBytesUsedForMessages": 172405920
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 647477,
+              "messagesReceived": 1345652,
+              "memoryBytesUsedForMessages": 95670192
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 272878,
+              "messagesReceived": 646989,
+              "memoryBytesUsedForMessages": 44153616
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 111574,
+              "messagesReceived": 273382,
+              "memoryBytesUsedForMessages": 18477888
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 44591,
+              "messagesReceived": 111183,
+              "memoryBytesUsedForMessages": 7477152
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 17732,
+              "messagesReceived": 44719,
+              "memoryBytesUsedForMessages": 2997648
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 7089,
+              "messagesReceived": 17701,
+              "memoryBytesUsedForMessages": 1189920
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 2902,
+              "messagesReceived": 7084,
+              "memoryBytesUsedForMessages": 479328
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 1250,
+              "messagesReceived": 2988,
+              "memoryBytesUsedForMessages": 203424
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 469,
+              "messagesReceived": 1212,
+              "memoryBytesUsedForMessages": 80688
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 194,
+              "messagesReceived": 498,
+              "memoryBytesUsedForMessages": 33216
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 85,
+              "messagesReceived": 192,
+              "memoryBytesUsedForMessages": 13296
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 40,
+              "messagesReceived": 84,
+              "memoryBytesUsedForMessages": 5952
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 14,
+              "messagesReceived": 32,
+              "memoryBytesUsedForMessages": 2208
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 8,
+              "messagesReceived": 17,
+              "memoryBytesUsedForMessages": 1200
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 5,
+              "messagesReceived": 7,
+              "memoryBytesUsedForMessages": 576
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3,
+              "messagesReceived": 5,
+              "memoryBytesUsedForMessages": 384
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 3,
+              "messagesReceived": 3,
+              "memoryBytesUsedForMessages": 288
+            },
+            {
+              "verticesProcessed": 2890011,
+              "messagesSent": 0,
+              "messagesReceived": 2,
+              "memoryBytesUsedForMessages": 96
+            }
+          ]
+        }
+      },
+      "PRMR-8fc7a540-e49f-48b0-952d-502568f74d16": {
+        "timeStamp": "2023-05-10T08:59:29Z",
+        "graphStoreStatus": {
+          "verticesLoaded": 3317703,
+          "edgesLoaded": 3318044,
+          "memoryBytesUsed": 524213101,
+          "verticesStored": 2576754
+        },
+        "allGssStatus": {
+          "items": [
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 3318044,
+              "messagesReceived": 0,
+              "memoryBytesUsedForMessages": 159266112
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 5411125,
+              "messagesReceived": 3314661,
+              "memoryBytesUsedForMessages": 418837728
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 5740746,
+              "messagesReceived": 5413811,
+              "memoryBytesUsedForMessages": 535418736
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4756821,
+              "messagesReceived": 5761913,
+              "memoryBytesUsedForMessages": 504899232
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4334119,
+              "messagesReceived": 4853435,
+              "memoryBytesUsedForMessages": 441002592
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4152446,
+              "messagesReceived": 4330438,
+              "memoryBytesUsedForMessages": 407178432
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4122512,
+              "messagesReceived": 4163458,
+              "memoryBytesUsedForMessages": 397726560
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4139066,
+              "messagesReceived": 4122131,
+              "memoryBytesUsedForMessages": 396537456
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4177048,
+              "messagesReceived": 4142410,
+              "memoryBytesUsedForMessages": 399333984
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4209870,
+              "messagesReceived": 4176296,
+              "memoryBytesUsedForMessages": 402535968
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4238120,
+              "messagesReceived": 4212753,
+              "memoryBytesUsedForMessages": 405641904
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4258307,
+              "messagesReceived": 4237736,
+              "memoryBytesUsedForMessages": 407810064
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4270245,
+              "messagesReceived": 4255689,
+              "memoryBytesUsedForMessages": 409244832
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4273971,
+              "messagesReceived": 4269809,
+              "memoryBytesUsedForMessages": 410101440
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4275750,
+              "messagesReceived": 4275329,
+              "memoryBytesUsedForMessages": 410451792
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4272171,
+              "messagesReceived": 4277281,
+              "memoryBytesUsedForMessages": 410373696
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4261661,
+              "messagesReceived": 4271279,
+              "memoryBytesUsedForMessages": 409581120
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4236339,
+              "messagesReceived": 4262280,
+              "memoryBytesUsedForMessages": 407933712
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4188431,
+              "messagesReceived": 4237346,
+              "memoryBytesUsedForMessages": 404437296
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4091779,
+              "messagesReceived": 4188456,
+              "memoryBytesUsedForMessages": 397451280
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 3877666,
+              "messagesReceived": 4093447,
+              "memoryBytesUsedForMessages": 382613424
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 3412462,
+              "messagesReceived": 3876301,
+              "memoryBytesUsedForMessages": 349860624
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 2574419,
+              "messagesReceived": 3410394,
+              "memoryBytesUsedForMessages": 287271024
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 1542996,
+              "messagesReceived": 2574624,
+              "memoryBytesUsedForMessages": 197645760
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 741219,
+              "messagesReceived": 1544244,
+              "memoryBytesUsedForMessages": 109702224
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 312342,
+              "messagesReceived": 740883,
+              "memoryBytesUsedForMessages": 50554800
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 127107,
+              "messagesReceived": 312871,
+              "memoryBytesUsedForMessages": 21118944
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 51431,
+              "messagesReceived": 126832,
+              "memoryBytesUsedForMessages": 8556624
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 20772,
+              "messagesReceived": 51427,
+              "memoryBytesUsedForMessages": 3465552
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 8436,
+              "messagesReceived": 20827,
+              "memoryBytesUsedForMessages": 1404624
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 3533,
+              "messagesReceived": 8295,
+              "memoryBytesUsedForMessages": 567744
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 1489,
+              "messagesReceived": 3578,
+              "memoryBytesUsedForMessages": 243216
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 638,
+              "messagesReceived": 1494,
+              "memoryBytesUsedForMessages": 102336
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 238,
+              "messagesReceived": 598,
+              "memoryBytesUsedForMessages": 40128
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 97,
+              "messagesReceived": 255,
+              "memoryBytesUsedForMessages": 16896
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 39,
+              "messagesReceived": 87,
+              "memoryBytesUsedForMessages": 6048
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 23,
+              "messagesReceived": 47,
+              "memoryBytesUsedForMessages": 3360
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 14,
+              "messagesReceived": 19,
+              "memoryBytesUsedForMessages": 1584
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 9,
+              "messagesReceived": 14,
+              "memoryBytesUsedForMessages": 1104
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 7,
+              "messagesReceived": 9,
+              "memoryBytesUsedForMessages": 768
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 4,
+              "messagesReceived": 7,
+              "memoryBytesUsedForMessages": 528
+            },
+            {
+              "verticesProcessed": 3317703,
+              "messagesSent": 0,
+              "messagesReceived": 5,
+              "memoryBytesUsedForMessages": 240
+            }
+          ]
+        }
+      }
+    }
+  }
+}

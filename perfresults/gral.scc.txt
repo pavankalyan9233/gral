@@ -1,0 +1,34 @@
+Upload time: 21s with 16 threads
+Indexing edges by from...
+87ns Computing strongly connected components,
+number of vertices: 10000000, number of edges: 30000000
+22.129µs Allocating data...
+189.117068ms Starting depth first search...
+656.079917ms Have found 100000 connected components
+1.184533373s Have found 200000 connected components
+1.790042847s Have found 300000 connected components
+2.448546466s Have found 400000 connected components
+3.420567s Have found 500000 connected components
+5.740890091s Have found 600000 connected components
+5.774444549s Have found 700000 connected components
+5.80745002s Have found 800000 connected components
+5.840416073s Have found 900000 connected components
+5.872917111s Have found 1000000 connected components
+5.905281782s Have found 1100000 connected components
+5.923422753s Translating result...
+5.930669681s Finished. Found 1156300 strongly connected components.
+Found 1156300 connected components.
+
+5.93 seconds for computation.
+
+Download results 12.5 seconds with 1 thread.
+Download results 3.28 s with 16 threads.
+
+
+Factors:
+  load: 18.6
+  comp: 63.4
+  save: 81.0
+
+
+Total memory used in server: 2 GB resident

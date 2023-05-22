@@ -925,7 +925,7 @@ fn vertex_results_one_thread(
                             let comp_id_str = comp_id.to_string();
                             v.extend_from_slice("\"r\":".as_bytes());
                             v.extend_from_slice(comp_id_str.as_bytes());
-                            v.extend_from_slice("\"}\n".as_bytes());
+                            v.extend_from_slice("}\n".as_bytes());
                         }
                     };
                 }
