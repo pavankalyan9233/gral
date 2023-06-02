@@ -29,10 +29,6 @@ impl Computations {
             list: HashMap::new(),
         }
     }
-
-    pub fn clear(&mut self) {
-        self.list.clear();
-    }
 }
 
 pub fn with_computations(

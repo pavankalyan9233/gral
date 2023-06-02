@@ -29,6 +29,5 @@ grupload dropcomp --comp-id "$comp_id"
 
 grupload dropGraph --graph 0
 
-jobs
+grupload shutdown
 
-kill -INT %1

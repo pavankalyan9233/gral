@@ -3,7 +3,6 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Infallible;
 //use std::io::Write;
-use std::str;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
@@ -136,26 +135,6 @@ impl Graph {
             edges_indexed_from: false,
             edges_indexed_to: false,
         }))
-    }
-
-    pub fn clear(&mut self) {
-        self.hash_to_index.clear();
-        self.exceptions.clear();
-        self.index_to_key.clear();
-        self.vertex_data.clear();
-        self.vertex_data_offsets.clear();
-        self.edges.clear();
-        self.edge_data.clear();
-        self.edge_data_offsets.clear();
-        self.edge_index_by_from.clear();
-        self.edges_by_from.clear();
-        self.edge_index_by_to.clear();
-        self.edges_by_to.clear();
-        self.vertices_sealed = false;
-        self.edges_sealed = false;
-        self.dropped = true;
-        self.edges_indexed_from = false;
-        self.edges_indexed_to = false;
     }
 
     pub fn insert_vertex(
@@ -399,56 +378,6 @@ impl Graph {
             }
             self.edge_data_offsets.push(offset);
             self.edge_data.extend_from_slice(&data);
-        }
-    }
-
-    pub fn dump_graph(&self) {
-        println!("\nVertices:");
-        println!("{:<32} {:<16} {}", "key", "hash", "data size");
-        for i in 0..self.number_of_vertices() {
-            let k = if self.store_keys {
-                &self.index_to_key[i as usize]
-            } else {
-                "not stored".as_bytes()
-            };
-            let kkk: &str;
-            let kk = str::from_utf8(k);
-            if kk.is_err() {
-                kkk = "non-UTF8-bytes";
-            } else {
-                kkk = kk.unwrap();
-            }
-
-            println!(
-                "{:32} {:016x} {}",
-                kkk,
-                self.index_to_hash[i as usize].to_u64(),
-                if self.vertex_data_offsets.is_empty() {
-                    0
-                } else {
-                    self.vertex_data_offsets[i as usize + 1] - self.vertex_data_offsets[i as usize]
-                }
-            );
-        }
-        println!("\nEdges:");
-        println!(
-            "{:<15} {:<16} {:<15} {:16} {}",
-            "from index", "from hash", "to index", "to hash", "data size"
-        );
-        for i in 0..(self.number_of_edges() as usize) {
-            let size = if self.edge_data_offsets.is_empty() {
-                0
-            } else {
-                self.edge_data_offsets[i + 1] - self.edge_data_offsets[i]
-            };
-            println!(
-                "{:>15} {:016x} {:>15} {:016x} {}",
-                self.edges[i].from.to_u64(),
-                self.index_to_hash[self.edges[i].from.to_u64() as usize].to_u64(),
-                self.edges[i].to.to_u64(),
-                self.index_to_hash[self.edges[i].to.to_u64() as usize].to_u64(),
-                size
-            );
         }
     }
 }
