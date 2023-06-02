@@ -1196,3 +1196,48 @@ pub fn drop_computation(args: &GruploadArgs) -> Result<(), String> {
     println!("Computation {} dropped.", comp_id,);
     Ok(())
 }
+
+pub fn version(args: &GruploadArgs) -> Result<(), String> {
+    println!("Fetching version from server...");
+    let client = build_client(args.use_tls, args.identity.clone())?;
+
+    let mut url = args.endpoint.clone();
+    url.push_str("/v1/version");
+    let mut resp = match client.get(url).send() {
+        Ok(resp) => resp,
+        Err(err) => panic!("Error: {}", err),
+    };
+    handle_error(&mut resp, status(200))?;
+
+    let body = resp.bytes().unwrap();
+    let mut cursor = Cursor::new(&body);
+    let version = cursor.read_u32::<BigEndian>().unwrap();
+    let low_api = cursor.read_u32::<BigEndian>().unwrap();
+    let high_api = cursor.read_u32::<BigEndian>().unwrap();
+
+    println!(
+        "Server version {:x} minimal API version {} maximal API version {}.",
+        version, low_api, high_api
+    );
+    Ok(())
+}
+
+pub fn shutdown(args: &GruploadArgs) -> Result<(), String> {
+    println!("Shutting down server...");
+    let client = build_client(args.use_tls, args.identity.clone())?;
+
+    let mut url = args.endpoint.clone();
+    url.push_str("/v1/shutdown");
+    let mut resp = match client.delete(url).send() {
+        Ok(resp) => resp,
+        Err(err) => panic!("Error: {}", err),
+    };
+    handle_error(&mut resp, status(200))?;
+
+    let body = resp.bytes().unwrap();
+    let mut cursor = Cursor::new(&body);
+    let version = cursor.read_u32::<BigEndian>().unwrap();
+
+    println!("Server version {:x} shutting down.", version);
+    Ok(())
+}

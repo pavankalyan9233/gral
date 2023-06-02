@@ -26,6 +26,8 @@ COMMANDS:
   progress                 get progress information
   vertexresults            dump results of a computation for all vertices
   dropcomp                 drops a computation
+  shutdown                 shut down server
+  version                  ask for server version
                           
 OPTIONS:                  
   -h, --help               Prints help information
@@ -123,6 +125,8 @@ fn main() {
         "progress" => crate::commands::progress(&args),
         "vertexresults" => crate::commands::vertex_results(&args),
         "dropcomp" => crate::commands::drop_computation(&args),
+        "shutdown" => crate::commands::shutdown(&args),
+        "version" => crate::commands::version(&args),
         _ => Err(format!("Command {} not implemented.", args.command)),
     };
     if let Err(s) = r {

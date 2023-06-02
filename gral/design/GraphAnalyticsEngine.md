@@ -84,6 +84,20 @@ u32        lowest version of API which is supported, currently always 1
 u32        highest version of API which is supported, currently always 1
 ```
 
+### `DELETE /v1/shutdown`
+
+This asks the server to shut down gracefully.
+
+Response code: 
+  - 200 for OK
+
+Response body:
+
+```
+u32        version of the server, where 0x10203 means version 1.2.3
+```
+
+
 ### `POST /v1/create`
 
 This will create a graph. The server can allocate memory since it has
