@@ -185,3 +185,11 @@ async fn api_weakly_connected_components(
     Ok(v)
 }
 
+    let version = warp::path!("v1" / "version")
+        .and(warp::body::bytes())
+        .map(|body: Bytes| {
+            let s: String = format!("Input length: {}, version: {}", body.len(), VERSION);
+            Response::builder()
+                .header("X-Max-Header", "Hugo Honk")
+                .body(s)
+        });
