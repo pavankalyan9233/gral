@@ -632,6 +632,56 @@ varlen  length of additional data (0 allowed for no additional data)
 ```
 
 
+### `POST /v1/getArangoDBGraph`
+
+Reads a complete graph from ArangoDB.
+
+Body is JSON:
+
+```
+{
+  "clientId": "1231313123",    # decimal u64 number as string
+  "endpoints": [ "http://localhost:8529" ],
+  "database": "_system",
+  "vertexCollections": [
+    {"name":"V", "fields":[]}      # will only fetch _id
+  ],
+  "edgeCollections": [
+    {"name": "E", "fields":[]}     # will only fetch _from and _to
+  ],
+  "username": "root",    # need either username/password or jwt
+  "password": "abc",
+  "jwt": "asdqweuwqehuwqeqe",
+  "threads": 10,
+  "indexEdges": 3,
+  "bitsForHash": 64,   (or 128)
+  "storeKeys": true
+}
+```
+
+This API will call ArangoDB and fetch graph data via the dump API
+from all given vertex collections and edge collections. For vertex
+collections, only the `_id` field will be fetched plus all additional
+fields listed (they end up as JSON in the additional data). For edge
+collections, only the `_from` and `_to` fields will be fetched plus all
+additional fields listed (they end up as JSON in the additional data).
+
+The result is 200 if all went well and an error code if things go wrong
+(no connection, database or collections not found, or other probelems).
+In case of a good result, the returned body is:
+
+```
+{
+  "clientId": "12321312312",
+  "graphNumber": 0,
+  "numberOfVertices": 10,
+  "numberOfEdges": 10,
+  "bitsForHash": 64,
+  "storeKeys": true,
+}
+```
+
+
 ## Sharding
 
 Should we ever want to put a distributed system behind this API, we
