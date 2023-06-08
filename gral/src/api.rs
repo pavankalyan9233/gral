@@ -4,6 +4,7 @@ use crate::graphs::{with_graphs, Graph, Graphs, KeyOrHash, VertexHash, VertexInd
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::io::{BufRead, Cursor};
 use std::ops::Deref;
@@ -69,6 +70,11 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_compute);
+    let get_arangodb_graph = warp::path!("v1" / "getArangoDBGraph")
+        .and(warp::post())
+        .and(with_graphs(graphs.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_get_arangodb_graph);
 
     create
         .or(drop)
@@ -80,7 +86,23 @@ pub fn api_filter(
         .or(get_results_by_vertices)
         .or(drop_computation)
         .or(compute)
+        .or(get_arangodb_graph)
 }
+
+/// An error object, which is used when the body cannot be parsed as JSON.
+#[derive(Debug)]
+struct CannotParseJSON {
+    pub msg: String,
+}
+impl reject::Reject for CannotParseJSON {}
+
+/// An error object, which is used when the fetching of a graph from
+/// ArangoDB did not work
+#[derive(Debug)]
+struct GetFromArangoDBFailed {
+    pub msg: String,
+}
+impl reject::Reject for GetFromArangoDBFailed {}
 
 /// An error object, which is used when the body size is unexpected.
 #[derive(Debug)]
@@ -1038,11 +1060,58 @@ async fn api_drop_computation(
     Ok(v)
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct CollectionInfo {
+    name: String,
+    fields: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GetArangoDBGraphRequest {
+    client_id: String,
+    endpoints: Vec<String>,
+    database: String,
+    vertex_collections: Vec<CollectionInfo>,
+    edge_collections: Vec<CollectionInfo>,
+    username: String,
+    password: String,
+    jwt: String,
+    threads: u32,
+    index_edges: u32,
+    bits_for_hash: u32,
+    store_keys: bool,
+}
+
+async fn api_get_arangodb_graph(
+    _graphs: Arc<Mutex<Graphs>>,
+    bytes: Bytes,
+) -> Result<Vec<u8>, Rejection> {
+    let parsed: serde_json::Result<GetArangoDBGraphRequest> = serde_json::from_slice(&bytes[..]);
+    if let Err(e) = parsed {
+        return Err(warp::reject::custom(CannotParseJSON { msg: e.to_string() }));
+    }
+    let body = parsed.unwrap();
+
+    // Fetch from ArangoDB:
+    let graph = fetch_graph_from_arangodb(&body).await;
+    match graph {
+        Err(e) => Err(warp::reject::custom(GetFromArangoDBFailed {
+            msg: e.to_string(),
+        })),
+        Ok(_graph) => {
+            let v: Vec<u8> = vec![];
+            Ok(v)
+        }
+    }
+}
+
 // This function receives a `Rejection` and is responsible to convert
 // this into a proper HTTP error with a body as designed.
 pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallible> {
     let code;
     let message: String;
+    let mut output_json = false;
 
     if err.is_not_found() {
         code = StatusCode::NOT_FOUND;
@@ -1058,6 +1127,14 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
             "Expected body size {} but found {}",
             wrong.expected, wrong.found
         );
+    } else if let Some(wrong) = err.find::<CannotParseJSON>() {
+        code = StatusCode::BAD_REQUEST;
+        message = format!("Cannot parse JSON body of request: {}", wrong.msg);
+        output_json = true;
+    } else if let Some(wrong) = err.find::<GetFromArangoDBFailed>() {
+        code = StatusCode::BAD_REQUEST;
+        message = format!("Could not fetch graph from ArangoDB: {}", wrong.msg);
+        output_json = true;
     } else if let Some(wrong) = err.find::<TooShortBodyLength>() {
         code = StatusCode::BAD_REQUEST;
         message = format!(
@@ -1116,11 +1193,21 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
         message = "UNHANDLED_REJECTION".to_string();
     }
 
-    let mut v = Vec::new();
-    v.write_u32::<BigEndian>(code.as_u16() as u32).unwrap();
-    put_varlen(&mut v, message.len() as u32);
-    v.extend_from_slice(message.as_bytes());
-    Ok(warp::reply::with_status(v, code))
+    if !output_json {
+        let mut v = Vec::new();
+        v.write_u32::<BigEndian>(code.as_u16() as u32).unwrap();
+        put_varlen(&mut v, message.len() as u32);
+        v.extend_from_slice(message.as_bytes());
+        Ok(warp::reply::with_status(v, code))
+    } else {
+        let body = serde_json::json!({
+            "error": true,
+            "errorCode": code.as_u16(),
+            "errorMessage": message
+        });
+        let v = serde_json::to_vec(&body).expect("Should be serializable");
+        Ok(warp::reply::with_status(v, code))
+    }
 }
 
 fn check_graph(
@@ -1152,4 +1239,8 @@ fn check_graph(
         }
     }
     Ok(())
+}
+
+async fn fetch_graph_from_arangodb(_req: &GetArangoDBGraphRequest) -> Result<Graph, String> {
+    Err("Hello".to_string())
 }
