@@ -206,6 +206,10 @@ impl Graph {
             self.vertex_data_offsets.push(self.vertex_data.len() as u64);
         }
         self.vertices_sealed = true;
+        println!(
+            "Vertices sealed in graph, number of vertices: {}",
+            self.index_to_hash.len()
+        );
     }
 
     pub fn index_edges(&mut self, by_from: bool, by_to: bool) {

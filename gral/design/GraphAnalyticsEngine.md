@@ -642,6 +642,7 @@ Body is JSON:
 {
   "clientId": "1231313123",    # decimal u64 number as string
   "endpoints": [ "http://localhost:8529" ],
+  "useTls": false,
   "database": "_system",
   "vertexCollections": [
     {"name":"V", "fields":[]}      # will only fetch _id

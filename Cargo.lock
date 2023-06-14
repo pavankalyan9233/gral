@@ -258,6 +258,7 @@ dependencies = [
  "bytes",
  "pico-args",
  "rand",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",
