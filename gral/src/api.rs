@@ -1428,7 +1428,7 @@ struct DBServerInfo {
 async fn get_all_shard_data(
     req: &GetArangoDBGraphRequest,
     shard_map: &ShardMap,
-    result_channel: async_channel::Sender<reqwest::Response>,
+    result_channel: std::sync::mpsc::Sender<Bytes>,
 ) -> Result<(), String> {
     let begin = SystemTime::now();
 
@@ -1581,9 +1581,12 @@ async fn get_all_shard_data(
                     task_info.last_batch_id = Some(task_info.current_batch_id);
                     task_info.current_batch_id += par_per_dbserver as u64;
                     println!("Before sending... {:?}", task_info);
-                    result_channel_clone
-                        .send(resp)
+                    let body = resp
+                        .bytes()
                         .await
+                        .map_err(|e| format!("Error in body: {:?}", e))?;
+                    result_channel_clone
+                        .send(body)
                         .expect("Could not send to channel!");
                     println!("After sending... {:?}", task_info);
                 }
@@ -1602,9 +1605,9 @@ async fn get_all_shard_data(
         }
     }
     cleanup(dbservers).await;
-    result_channel.close();
     println!("Done cleanup and channel is closed!");
     Ok(())
+    // We drop the result_channel when we leave the function.
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -1652,40 +1655,32 @@ async fn fetch_graph_from_arangodb(
 
     // Let's first get the vertices:
     {
-        let (sender, receiver) = async_channel::bounded(100);
-        let consumer = tokio::task::spawn_blocking(|| async move {
+        let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
+        let consumer = std::thread::spawn(move || {
             println!("Started blocking task...");
-            loop {
-                let r = receiver.recv().await;
-                if r.is_err() {
-                    println!("Terminating background thread");
-                    break;
-                }
-                println!("Processing batch...");
+            while let Ok(body) = receiver.recv() {
+                println!("Processing batch, response size {}...", body.len());
             }
+            println!("Terminating background thread");
         });
-        let _guck = consumer.await;
         get_all_shard_data(req, &vertex_map, sender).await?;
+        let _guck = consumer.join();
         let mut graph = graph_arc.write().unwrap();
         graph.seal_vertices();
     }
 
     // And now the edges:
     {
-        let (sender, receiver) = async_channel::bounded(100);
-        let consumer = tokio::task::spawn_blocking(|| async move {
+        let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
+        let consumer = std::thread::spawn(move || {
             println!("Started blocking task 2 ...");
-            loop {
-                let r = receiver.recv().await;
-                if r.is_err() {
-                    println!("Terminating background thread");
-                    break;
-                }
-                println!("Processing batch...");
+            while let Ok(body) = receiver.recv() {
+                println!("Processing batch, response size {}...", body.len());
             }
+            println!("Terminating background thread");
         });
-        let _guck = consumer.await;
         get_all_shard_data(req, &edge_map, sender).await?;
+        let _guck = consumer.join();
 
         let mut graph = graph_arc.write().unwrap();
         graph.seal_edges();
