@@ -6,14 +6,14 @@ use bytes::Bytes;
 use log::info;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+//use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::io::{BufRead, Cursor};
 use std::ops::Deref;
 use std::str;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::{SystemTime, Duration};
+use std::time::SystemTime;
 use tokio::task::JoinSet;
 use warp::{http::StatusCode, reject, Filter, Rejection};
 use xxhash_rust::xxh3::xxh3_64_with_seed;
@@ -1425,12 +1425,17 @@ struct DBServerInfo {
     dump_id: String,
 }
 
-async fn get_all_shard_data(use_tls: bool, 
-                            shard_map: &ShardMap, coll_list: Vec<String>,
-                            channel: async_channel::bounded::Sender::<reqwest::Response>,
-                            make_url: &fn (path: &str) -> String)
-    -> Result<(), String> {
-    let client = build_client(use_tls)?;
+async fn get_all_shard_data(
+    req: &GetArangoDBGraphRequest,
+    shard_map: &ShardMap,
+    result_channel: async_channel::Sender<reqwest::Response>,
+) -> Result<(), String> {
+    let begin = SystemTime::now();
+
+    let client = build_client(req.use_tls)?;
+
+    let make_url =
+        |path: &str| -> String { req.endpoints[0].clone() + "/_db/" + &req.database + path };
 
     // Start a single dump context on all involved dbservers, we can do
     // this sequentially, since it is not performance critical, we can
@@ -1438,7 +1443,7 @@ async fn get_all_shard_data(use_tls: bool,
     let mut dbservers: Vec<DBServerInfo> = vec![];
     let mut error_happened = false;
     let mut error: String = "".into();
-    for (server, shard_list) in vertex_map.iter() {
+    for (server, shard_list) in shard_map.iter() {
         let url = make_url(&format!("/_api/dump/start?dbserver={}", server));
         let body = DumpStartBody {
             batch_size: req.batch_size,
@@ -1506,8 +1511,6 @@ async fn get_all_shard_data(use_tls: bool,
     let par_per_dbserver = (req.parallelism as usize + dbservers.len() - 1) / dbservers.len();
     let mut task_set = JoinSet::new();
     let mut endpoints_round_robin: usize = 0;
-    let graph_arc = Graph::new(true, 64);
-    let result_chan = 
     for i in 0..par_per_dbserver {
         for dbserver in &dbservers {
             let mut task_info = TaskInfo {
@@ -1519,13 +1522,13 @@ async fn get_all_shard_data(use_tls: bool,
             //let client_clone = client.clone(); // the clones will share
             //                                   // the connection pool
             let client_clone = build_client(req.use_tls)?;
-            let graph_clone = graph_arc.clone(); // Our own copy of the Arc
             let endpoint_clone = req.endpoints[endpoints_round_robin].clone();
             endpoints_round_robin += 1;
             if endpoints_round_robin >= req.endpoints.len() {
                 endpoints_round_robin = 0;
             }
             let database_clone = req.database.clone();
+            let result_channel_clone = result_channel.clone();
             task_set.spawn(async move {
                 loop {
                     let mut url = format!(
@@ -1540,9 +1543,13 @@ async fn get_all_shard_data(use_tls: bool,
                         url.push_str(&format!("&lastBatch={}", last));
                     }
                     let start = SystemTime::now();
-                    info!("{:?} Sending post request... {} {} {}", 
-                          start.duration_since(begin), task_info.id,
-                          task_info.dbserver.dbserver, task_info.current_batch_id);
+                    info!(
+                        "{:?} Sending post request... {} {} {}",
+                        start.duration_since(begin),
+                        task_info.id,
+                        task_info.dbserver.dbserver,
+                        task_info.current_batch_id
+                    );
                     let resp = client_clone.post(url).send().await;
                     let resp = handle_arangodb_response(resp, |c| {
                         c == StatusCode::OK || c == StatusCode::NO_CONTENT
@@ -1550,72 +1557,29 @@ async fn get_all_shard_data(use_tls: bool,
                     .await?;
                     let end = SystemTime::now();
                     let dur = end.duration_since(start).unwrap();
+                    let h = resp.headers().get("X-Arango-Dump_Block_Counts");
+                    if let Some(hh) = h {
+                        println!("Dump_block_counts: {:?}", hh);
+                    }
                     if resp.status() == StatusCode::NO_CONTENT {
                         // Done, cleanup will be done later
-                        info!("{:?} Received final post response... {} {} {} {:?}",
-                              end.duration_since(begin), task_info.id,
-                              task_info.dbserver.dbserver, task_info.current_batch_id,
-                              dur);
+                        info!(
+                            "{:?} Received final post response... {} {} {} {:?}",
+                            end.duration_since(begin),
+                            task_info.id,
+                            task_info.dbserver.dbserver,
+                            task_info.current_batch_id,
+                            dur
+                        );
                         return Ok::<(), String>(());
                     }
                     // Now the result was OK and the body is JSONL
                     task_info.last_batch_id = Some(task_info.current_batch_id);
                     task_info.current_batch_id += par_per_dbserver as u64;
-                    let body_slice = resp
-                        .bytes()
+                    result_channel_clone
+                        .send(resp)
                         .await
-                        .map_err(|e| format!("Error when reading body: {:?}", e))?;
-                    let body = std::str::from_utf8(body_slice.as_ref())
-                        .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
-                    info!("{:?} Received post response... {} {} {} {:?} body size: {}", 
-                          end.duration_since(begin), task_info.id,
-                          task_info.dbserver.dbserver, task_info.current_batch_id,
-                          dur, body.len());
-                    let mut vertex_keys: Vec<Vec<u8>> = vec![];
-                    vertex_keys.reserve(2000000);
-                    for line in body.lines() {
-                        let v: Value = match serde_json::from_str(line) {
-                            Err(err) => {
-                                return Err(format!(
-                                    "Error parsing document for line:\n{}\n{:?}",
-                                    line, err
-                                ));
-                            }
-                            Ok(val) => val,
-                        };
-                        let id = &v["_id"];
-                        match id {
-                            Value::String(i) => {
-                                let mut buf = vec![];
-                                buf.extend_from_slice((&i[..]).as_bytes());
-                                vertex_keys.push(buf);
-                            }
-                            _ => {
-                                return Err(format!(
-                                    "JSON is no object with a string _id attribute:\n{}",
-                                    line
-                                ));
-                            }
-                        }
-                    }
-                    let mut graph = graph_clone.write().unwrap();
-                    let mut i: u32 = 0;
-                    let mut exceptional: Vec<(u32, VertexHash)> = vec![];
-                    let mut exceptional_keys: Vec<Vec<u8>> = vec![];
-                    /*
-                    for k in &vertex_keys {
-                        let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
-                        graph.insert_vertex(
-                            i,
-                            hash,
-                            k.clone(),
-                            vec![],
-                            &mut exceptional,
-                            &mut exceptional_keys,
-                        );
-                        i += 1;
-                    }
-                    */
+                        .expect("Could not send to channel!");
                 }
             });
         }
@@ -1632,10 +1596,7 @@ async fn get_all_shard_data(use_tls: bool,
         }
     }
     cleanup(dbservers).await;
-    {
-        let mut graph = graph_arc.write().unwrap();
-        graph.seal_vertices();
-    }
+    result_channel.close();
     Ok(())
 }
 
@@ -1652,8 +1613,6 @@ async fn fetch_graph_from_arangodb(
     req: &GetArangoDBGraphRequest,
 ) -> Result<Arc<RwLock<Graph>>, String> {
     let client = build_client(req.use_tls)?;
-
-    let begin = SystemTime::now();
 
     let make_url =
         |path: &str| -> String { req.endpoints[0].clone() + "/_db/" + &req.database + path };
@@ -1673,438 +1632,56 @@ async fn fetch_graph_from_arangodb(
         .iter()
         .map(|ci| -> String { ci.name.clone() })
         .collect();
+    let vertex_map = compute_shard_map(&shard_dist, &vertex_coll_list)?;
     let edge_coll_list = req
         .edge_collections
         .iter()
         .map(|ci| -> String { ci.name.clone() })
         .collect();
-    let vertex_map = compute_shard_map(&shard_dist, &vertex_coll_list)?;
     let edge_map = compute_shard_map(&shard_dist, &edge_coll_list)?;
 
-    // Let's first get the vertices:
-    let (sender, receiver) = async_channel::bounded(20);
-    let consumer = tokio::spawn_blocking(move || {
-        loop {
-            let r = receiver.recv().await;
-            if r.is_err() {
-                break;
-            }
-            println!("Processing batch...");
-        }
-    });
-    get_all_shard_data(req.use_tls, &vertex_map, &vertex_coll_list, sender, 
-                                 &make_url).await?;
-    consumer.join();
-
-    #[derive(Debug, Clone)]
-    struct DBServerInfo {
-        dbserver: String,
-        dump_id: String,
-    }
-
-    // Start a single dump context on all involved dbservers, we can do
-    // this sequentially, since it is not performance critical, we can
-    // also use the same HTTP client and the same first endpoint:
-    let mut dbservers: Vec<DBServerInfo> = vec![];
-    let mut error_happened = false;
-    let mut error: String = "".into();
-    for (server, shard_list) in vertex_map.iter() {
-        let url = make_url(&format!("/_api/dump/start?dbserver={}", server));
-        let body = DumpStartBody {
-            batch_size: req.batch_size,
-            prefetch_count: req.prefetch_count,
-            parallelism: req.dbserver_parallelism,
-            shards: shard_list.clone(),
-        };
-        let body_v =
-            serde_json::to_vec::<DumpStartBody>(&body).expect("could not serialize DumpStartBody");
-        let resp = client.post(url).body(body_v).send().await;
-        let r = handle_arangodb_response(resp, |c| c == StatusCode::NO_CONTENT).await;
-        if let Err(rr) = r {
-            error = rr;
-            error_happened = true;
-            break;
-        }
-        let r = r.unwrap();
-        let headers = r.headers();
-        if let Some(id) = headers.get("X-Arango-Dump-Id") {
-            if let Ok(id) = id.to_str() {
-                dbservers.push(DBServerInfo {
-                    dbserver: server.clone(),
-                    dump_id: id.to_owned(),
-                });
-            }
-        }
-    }
-
-    let client_clone_for_cleanup = client.clone();
-    let cleanup = |dbservers: Vec<DBServerInfo>| async move {
-        for dbserver in dbservers.iter() {
-            let url = make_url(&format!(
-                "/_api/dump/{}?dbserver={}",
-                dbserver.dump_id, dbserver.dbserver
-            ));
-            let resp = client_clone_for_cleanup.delete(url).send().await;
-            let r = handle_arangodb_response(resp, |c| c == StatusCode::OK).await;
-            if let Err(rr) = r {
-                println!(
-                    "An error in cancelling a dump context occurred, dbserver: {}, error: {}",
-                    dbserver.dbserver, rr
-                );
-                // Otherwise ignore the error, this is just a cleanup!
-            }
-        }
-    };
-
-    if error_happened {
-        // We need to cancel all dump contexts which we did get successfully:
-        cleanup(dbservers).await;
-        return Err(error);
-    }
-
-    // We want to start the same number of tasks for each dbserver, each of
-    // them will send next requests until no more data arrives
-
-    #[derive(Debug)]
-    struct TaskInfo {
-        dbserver: DBServerInfo,
-        current_batch_id: u64,
-        last_batch_id: Option<u64>,
-        id: u64,
-    }
-
-    let par_per_dbserver = (req.parallelism as usize + dbservers.len() - 1) / dbservers.len();
-    let mut task_set = JoinSet::new();
-    let mut endpoints_round_robin: usize = 0;
+    // Generate a graph object:
     let graph_arc = Graph::new(true, 64);
-    let result_chan = 
-    for i in 0..par_per_dbserver {
-        for dbserver in &dbservers {
-            let mut task_info = TaskInfo {
-                dbserver: dbserver.clone(),
-                current_batch_id: i as u64,
-                last_batch_id: None,
-                id: i as u64,
-            };
-            //let client_clone = client.clone(); // the clones will share
-            //                                   // the connection pool
-            let client_clone = build_client(req.use_tls)?;
-            let graph_clone = graph_arc.clone(); // Our own copy of the Arc
-            let endpoint_clone = req.endpoints[endpoints_round_robin].clone();
-            endpoints_round_robin += 1;
-            if endpoints_round_robin >= req.endpoints.len() {
-                endpoints_round_robin = 0;
-            }
-            let database_clone = req.database.clone();
-            task_set.spawn(async move {
-                loop {
-                    let mut url = format!(
-                        "{}/_db/{}/_api/dump/next/{}?dbserver={}&batchId={}",
-                        endpoint_clone,
-                        database_clone,
-                        task_info.dbserver.dump_id,
-                        task_info.dbserver.dbserver,
-                        task_info.current_batch_id
-                    );
-                    if let Some(last) = task_info.last_batch_id {
-                        url.push_str(&format!("&lastBatch={}", last));
-                    }
-                    let start = SystemTime::now();
-                    info!("{:?} Sending post request... {} {} {}", 
-                          start.duration_since(begin), task_info.id,
-                          task_info.dbserver.dbserver, task_info.current_batch_id);
-                    let resp = client_clone.post(url).send().await;
-                    let resp = handle_arangodb_response(resp, |c| {
-                        c == StatusCode::OK || c == StatusCode::NO_CONTENT
-                    })
-                    .await?;
-                    let end = SystemTime::now();
-                    let dur = end.duration_since(start).unwrap();
-                    if resp.status() == StatusCode::NO_CONTENT {
-                        // Done, cleanup will be done later
-                        info!("{:?} Received final post response... {} {} {} {:?}",
-                              end.duration_since(begin), task_info.id,
-                              task_info.dbserver.dbserver, task_info.current_batch_id,
-                              dur);
-                        return Ok::<(), String>(());
-                    }
-                    // Now the result was OK and the body is JSONL
-                    task_info.last_batch_id = Some(task_info.current_batch_id);
-                    task_info.current_batch_id += par_per_dbserver as u64;
-                    let body_slice = resp
-                        .bytes()
-                        .await
-                        .map_err(|e| format!("Error when reading body: {:?}", e))?;
-                    let body = std::str::from_utf8(body_slice.as_ref())
-                        .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
-                    info!("{:?} Received post response... {} {} {} {:?} body size: {}", 
-                          end.duration_since(begin), task_info.id,
-                          task_info.dbserver.dbserver, task_info.current_batch_id,
-                          dur, body.len());
-                    let mut vertex_keys: Vec<Vec<u8>> = vec![];
-                    vertex_keys.reserve(2000000);
-                    for line in body.lines() {
-                        let v: Value = match serde_json::from_str(line) {
-                            Err(err) => {
-                                return Err(format!(
-                                    "Error parsing document for line:\n{}\n{:?}",
-                                    line, err
-                                ));
-                            }
-                            Ok(val) => val,
-                        };
-                        let id = &v["_id"];
-                        match id {
-                            Value::String(i) => {
-                                let mut buf = vec![];
-                                buf.extend_from_slice((&i[..]).as_bytes());
-                                vertex_keys.push(buf);
-                            }
-                            _ => {
-                                return Err(format!(
-                                    "JSON is no object with a string _id attribute:\n{}",
-                                    line
-                                ));
-                            }
-                        }
-                    }
-                    let mut graph = graph_clone.write().unwrap();
-                    let mut i: u32 = 0;
-                    let mut exceptional: Vec<(u32, VertexHash)> = vec![];
-                    let mut exceptional_keys: Vec<Vec<u8>> = vec![];
-                    /*
-                    for k in &vertex_keys {
-                        let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
-                        graph.insert_vertex(
-                            i,
-                            hash,
-                            k.clone(),
-                            vec![],
-                            &mut exceptional,
-                            &mut exceptional_keys,
-                        );
-                        i += 1;
-                    }
-                    */
-                }
-            });
-        }
-    }
-    while let Some(res) = task_set.join_next().await {
-        let r = res.unwrap();
-        match r {
-            Ok(_x) => {
-                println!("Got OK Result");
-            }
-            Err(msg) => {
-                println!("Got error result: {}", msg);
-            }
-        }
-    }
-    cleanup(dbservers).await;
+
+    // Let's first get the vertices:
     {
+        let (sender, receiver) = async_channel::bounded(100);
+        let consumer = tokio::task::spawn_blocking(|| async move {
+            loop {
+                let r = receiver.recv().await;
+                if r.is_err() {
+                    println!("Terminating background thread");
+                    break;
+                }
+                println!("Processing batch...");
+            }
+        });
+        get_all_shard_data(req, &vertex_map, sender).await?;
+        let _guck = consumer.await;
         let mut graph = graph_arc.write().unwrap();
         graph.seal_vertices();
     }
 
-    // Now let's get edges:
-
-    // Start a single dump context on all involved dbservers, we can do
-    // this sequentially, since it is not performance critical, we can
-    // also use the same HTTP client and the same first endpoint:
-    dbservers = vec![];
-    error_happened = false;
-    error = "".into();
-    for (server, shard_list) in edge_map.iter() {
-        let url = make_url(&format!("/_api/dump/start?dbserver={}", server));
-        let body = DumpStartBody {
-            batch_size: req.batch_size,
-            prefetch_count: req.prefetch_count,
-            parallelism: req.dbserver_parallelism,
-            shards: shard_list.clone(),
-        };
-        let body_v =
-            serde_json::to_vec::<DumpStartBody>(&body).expect("could not serialize DumpStartBody");
-        let resp = client.post(url).body(body_v).send().await;
-        let r = handle_arangodb_response(resp, |c| c == StatusCode::NO_CONTENT).await;
-        if let Err(rr) = r {
-            error = rr;
-            error_happened = true;
-            break;
-        }
-        let r = r.unwrap();
-        let headers = r.headers();
-        if let Some(id) = headers.get("X-Arango-Dump-Id") {
-            if let Ok(id) = id.to_str() {
-                dbservers.push(DBServerInfo {
-                    dbserver: server.clone(),
-                    dump_id: id.to_owned(),
-                });
-            }
-        }
-    }
-
-    let client_clone_for_cleanup = client.clone();
-    let cleanup = |dbservers: Vec<DBServerInfo>| async move {
-        for dbserver in dbservers.iter() {
-            let url = make_url(&format!(
-                "/_api/dump/{}?dbserver={}",
-                dbserver.dump_id, dbserver.dbserver
-            ));
-            let resp = client_clone_for_cleanup.delete(url).send().await;
-            let r = handle_arangodb_response(resp, |c| c == StatusCode::OK).await;
-            if let Err(rr) = r {
-                println!(
-                    "An error in cancelling a dump context occurred, dbserver: {}, error: {}",
-                    dbserver.dbserver, rr
-                );
-                // Otherwise ignore the error, this is just a cleanup!
-            }
-        }
-    };
-
-    if error_happened {
-        // We need to cancel all dump contexts which we did get successfully:
-        cleanup(dbservers).await;
-        return Err(error);
-    }
-
-    // We want to start the same number of tasks for each dbserver, each of
-    // them will send next requests until no more data arrives
-
-    task_set = JoinSet::new();
-    endpoints_round_robin = 0;
-    for dbserver in &dbservers {
-        for i in 0..par_per_dbserver {
-            let mut task_info = TaskInfo {
-                dbserver: dbserver.clone(),
-                current_batch_id: i as u64,
-                last_batch_id: None,
-                id: i as u64,
-            };
-            //let client_clone = client.clone(); // the clones will share
-            //                                   // the connection pool
-            let client_clone = build_client(req.use_tls)?;
-            let graph_clone = graph_arc.clone(); // Our own copy of the Arc
-            let endpoint_clone = req.endpoints[endpoints_round_robin].clone();
-            endpoints_round_robin += 1;
-            if endpoints_round_robin >= req.endpoints.len() {
-                endpoints_round_robin = 0;
-            }
-            let database_clone = req.database.clone();
-            task_set.spawn(async move {
-                loop {
-                    let mut url = format!(
-                        "{}/_db/{}/_api/dump/next/{}?dbserver={}&batchId={}",
-                        endpoint_clone,
-                        database_clone,
-                        task_info.dbserver.dump_id,
-                        task_info.dbserver.dbserver,
-                        task_info.current_batch_id
-                    );
-                    if let Some(last) = task_info.last_batch_id {
-                        url.push_str(&format!("&lastBatch={}", last));
-                    }
-                    let resp = client_clone.post(url).send().await;
-                    let resp = handle_arangodb_response(resp, |c| {
-                        c == StatusCode::OK || c == StatusCode::NO_CONTENT
-                    })
-                    .await?;
-                    if resp.status() == StatusCode::NO_CONTENT {
-                        // Done, cleanup will be done later
-                        return Ok::<(), String>(());
-                    }
-                    let h = resp.headers().get("X-Arango-Dump_Block_Counts");
-                    if let Some(hh) = h {
-                        println!("Dump_block_counts: {:?}", hh);
-                    }
-                    // Now the result was OK and the body is JSONL
-                    task_info.last_batch_id = Some(task_info.current_batch_id);
-                    task_info.current_batch_id += par_per_dbserver as u64;
-                    let body_slice = resp
-                        .bytes()
-                        .await
-                        .map_err(|e| format!("Error when reading body: {:?}", e))?;
-                    let body = std::str::from_utf8(body_slice.as_ref())
-                        .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
-                    let mut froms: Vec<Vec<u8>> = vec![];
-                    froms.reserve(1000000);
-                    let mut tos: Vec<Vec<u8>> = vec![];
-                    tos.reserve(1000000);
-                    /*
-                    for line in body.lines() {
-                        let v: Value = match serde_json::from_str(line) {
-                            Err(err) => {
-                                return Err(format!(
-                                    "Error parsing document for line:\n{}\n{:?}",
-                                    line, err
-                                ));
-                            }
-                            Ok(val) => val,
-                        };
-                        let from = &v["_from"];
-                        match from {
-                            Value::String(i) => {
-                                let mut buf = vec![];
-                                buf.extend_from_slice((&i[..]).as_bytes());
-                                froms.push(buf);
-                            }
-                            _ => {
-                                return Err(format!(
-                                    "JSON is no object with a string _from attribute:\n{}",
-                                    line
-                                ));
-                            }
-                        }
-                        let to = &v["_to"];
-                        match to {
-                            Value::String(i) => {
-                                let mut buf = vec![];
-                                buf.extend_from_slice((&i[..]).as_bytes());
-                                tos.push(buf);
-                            }
-                            _ => {
-                                return Err(format!(
-                                    "JSON is no object with a string _from attribute:\n{}",
-                                    line
-                                ));
-                            }
-                        }
-                    }
-                    */
-                    let mut graph = graph_clone.write().unwrap();
-                    assert!(froms.len() == tos.len());
-                    for i in 0..froms.len() {
-                        let from_key = &froms[i];
-                        let from_opt = graph.index_from_vertex_key(from_key);
-                        let to_key = &tos[i];
-                        let to_opt = graph.index_from_vertex_key(to_key);
-                        if from_opt.is_some() && to_opt.is_some() {
-                            graph.insert_edge(from_opt.unwrap(), to_opt.unwrap(), vec![]);
-                        } else {
-                            println!("Did not find _from or _to key in vertices!");
-                        }
-                    }
-                }
-            });
-        }
-    }
-    while let Some(res) = task_set.join_next().await {
-        let r = res.unwrap();
-        match r {
-            Ok(_x) => {
-                println!("Got OK Result");
-            }
-            Err(msg) => {
-                println!("Got error result: {}", msg);
-            }
-        }
-    }
-    cleanup(dbservers).await;
+    // And now the edges:
     {
+        let (sender, receiver) = async_channel::bounded(100);
+        let consumer = tokio::task::spawn_blocking(|| async move {
+            loop {
+                let r = receiver.recv().await;
+                if r.is_err() {
+                    println!("Terminating background thread");
+                    break;
+                }
+                println!("Processing batch...");
+            }
+        });
+        get_all_shard_data(req, &edge_map, sender).await?;
+        let _guck = consumer.await;
+
         let mut graph = graph_arc.write().unwrap();
         graph.seal_edges();
     }
+
     println!("All successfully transferred...");
     Ok(graph_arc)
 }
