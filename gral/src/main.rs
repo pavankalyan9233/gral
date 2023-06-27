@@ -3,6 +3,7 @@ use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use warp::{http::Response, Filter};
+use log::info;
 
 mod api;
 mod args;
@@ -19,6 +20,9 @@ const VERSION: u32 = 0x00100;
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+    info!("Hello, this is gral!");
+
     let args = match parse_args() {
         Ok(v) => v,
         Err(e) => {
