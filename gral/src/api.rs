@@ -1664,8 +1664,8 @@ async fn fetch_graph_from_arangodb(
                 println!("Processing batch...");
             }
         });
-        get_all_shard_data(req, &vertex_map, sender).await?;
         let _guck = consumer.await;
+        get_all_shard_data(req, &vertex_map, sender).await?;
         let mut graph = graph_arc.write().unwrap();
         graph.seal_vertices();
     }
@@ -1684,8 +1684,8 @@ async fn fetch_graph_from_arangodb(
                 println!("Processing batch...");
             }
         });
-        get_all_shard_data(req, &edge_map, sender).await?;
         let _guck = consumer.await;
+        get_all_shard_data(req, &edge_map, sender).await?;
 
         let mut graph = graph_arc.write().unwrap();
         graph.seal_edges();
