@@ -1657,7 +1657,7 @@ async fn fetch_graph_from_arangodb(
         let consumer = std::thread::spawn(move || {
             println!("Started vertex creation thread...");
             while let Ok(body) = receiver.recv() {
-                println!("Processing batch, response size {}...", body.len());
+                //println!("Processing batch, response size {}...", body.len());
             }
             println!("Terminating background thread");
         });
@@ -1673,7 +1673,7 @@ async fn fetch_graph_from_arangodb(
         let consumer = std::thread::spawn(move || {
             println!("Started edge creation thread...");
             while let Ok(body) = receiver.recv() {
-                println!("Processing batch, response size {}...", body.len());
+                //println!("Processing batch, response size {}...", body.len());
             }
             println!("Terminating background thread");
         });
