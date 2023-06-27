@@ -1470,10 +1470,12 @@ async fn get_all_shard_data(
                 });
             }
         }
+        println!("Started dbserver {}", server);
     }
 
     let client_clone_for_cleanup = client.clone();
     let cleanup = |dbservers: Vec<DBServerInfo>| async move {
+        println!("Doing cleanup...");
         for dbserver in dbservers.iter() {
             let url = make_url(&format!(
                 "/_api/dump/{}?dbserver={}",
@@ -1529,7 +1531,9 @@ async fn get_all_shard_data(
             }
             let database_clone = req.database.clone();
             let result_channel_clone = result_channel.clone();
+            println!("Spawning task for dbserver {:?} id {}", dbserver, i);
             task_set.spawn(async move {
+                println!("This is task {:?}", task_info);
                 loop {
                     let mut url = format!(
                         "{}/_db/{}/_api/dump/next/{}?dbserver={}&batchId={}",
@@ -1576,10 +1580,12 @@ async fn get_all_shard_data(
                     // Now the result was OK and the body is JSONL
                     task_info.last_batch_id = Some(task_info.current_batch_id);
                     task_info.current_batch_id += par_per_dbserver as u64;
+                    println!("Before sending... {:?}", task_info);
                     result_channel_clone
                         .send(resp)
                         .await
                         .expect("Could not send to channel!");
+                    println!("After sending... {:?}", task_info);
                 }
             });
         }
@@ -1597,6 +1603,7 @@ async fn get_all_shard_data(
     }
     cleanup(dbservers).await;
     result_channel.close();
+    println!("Done cleanup and channel is closed!");
     Ok(())
 }
 
@@ -1647,6 +1654,7 @@ async fn fetch_graph_from_arangodb(
     {
         let (sender, receiver) = async_channel::bounded(100);
         let consumer = tokio::task::spawn_blocking(|| async move {
+            println!("Started blocking task...");
             loop {
                 let r = receiver.recv().await;
                 if r.is_err() {
@@ -1666,6 +1674,7 @@ async fn fetch_graph_from_arangodb(
     {
         let (sender, receiver) = async_channel::bounded(100);
         let consumer = tokio::task::spawn_blocking(|| async move {
+            println!("Started blocking task 2 ...");
             loop {
                 let r = receiver.recv().await;
                 if r.is_err() {
