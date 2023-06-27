@@ -1580,7 +1580,6 @@ async fn get_all_shard_data(
                     // Now the result was OK and the body is JSONL
                     task_info.last_batch_id = Some(task_info.current_batch_id);
                     task_info.current_batch_id += par_per_dbserver as u64;
-                    println!("Before sending... {:?}", task_info);
                     let body = resp
                         .bytes()
                         .await
@@ -1588,7 +1587,6 @@ async fn get_all_shard_data(
                     result_channel_clone
                         .send(body)
                         .expect("Could not send to channel!");
-                    println!("After sending... {:?}", task_info);
                 }
             });
         }
@@ -1657,7 +1655,7 @@ async fn fetch_graph_from_arangodb(
     {
         let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
         let consumer = std::thread::spawn(move || {
-            println!("Started blocking task...");
+            println!("Started vertex creation thread...");
             while let Ok(body) = receiver.recv() {
                 println!("Processing batch, response size {}...", body.len());
             }
@@ -1673,7 +1671,7 @@ async fn fetch_graph_from_arangodb(
     {
         let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
         let consumer = std::thread::spawn(move || {
-            println!("Started blocking task 2 ...");
+            println!("Started edge creation thread...");
             while let Ok(body) = receiver.recv() {
                 println!("Processing batch, response size {}...", body.len());
             }
