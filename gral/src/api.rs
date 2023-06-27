@@ -1531,9 +1531,7 @@ async fn get_all_shard_data(
             }
             let database_clone = req.database.clone();
             let result_channel_clone = result_channel.clone();
-            println!("Spawning task for dbserver {:?} id {}", dbserver, i);
             task_set.spawn(async move {
-                println!("This is task {:?}", task_info);
                 loop {
                     let mut url = format!(
                         "{}/_db/{}/_api/dump/next/{}?dbserver={}&batchId={}",
@@ -1655,11 +1653,9 @@ async fn fetch_graph_from_arangodb(
     {
         let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
         let consumer = std::thread::spawn(move || {
-            println!("Started vertex creation thread...");
             while let Ok(body) = receiver.recv() {
                 //println!("Processing batch, response size {}...", body.len());
             }
-            println!("Terminating background thread");
         });
         get_all_shard_data(req, &vertex_map, sender).await?;
         let _guck = consumer.join();
@@ -1671,11 +1667,9 @@ async fn fetch_graph_from_arangodb(
     {
         let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
         let consumer = std::thread::spawn(move || {
-            println!("Started edge creation thread...");
             while let Ok(body) = receiver.recv() {
                 //println!("Processing batch, response size {}...", body.len());
             }
-            println!("Terminating background thread");
         });
         get_all_shard_data(req, &edge_map, sender).await?;
         let _guck = consumer.join();
