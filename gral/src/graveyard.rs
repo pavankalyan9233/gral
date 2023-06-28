@@ -193,3 +193,60 @@ async fn api_weakly_connected_components(
                 .header("X-Max-Header", "Hugo Honk")
                 .body(s)
         });
+
+
+    #[cfg(dump_graph)]
+    pub fn dump_graph(&self) {
+        let file = File::create("/tmp/V").expect("Could not create /tmp/V");
+        let mut out = BufWriter::new(file);
+        for i in 0..self.number_of_vertices() {
+            let k = if self.store_keys {
+                &self.index_to_key[i as usize]
+            } else {
+                "not stored".as_bytes()
+            };
+            let kkk: &str;
+            let kk = str::from_utf8(k);
+            if kk.is_err() {
+                kkk = "non-UTF8-bytes";
+            } else {
+                kkk = kk.unwrap();
+            }
+
+            out.write(format!(
+                "{:32} {:016x} {}\n",
+                kkk,
+                self.index_to_hash[i as usize].to_u64(),
+                if self.vertex_data_offsets.is_empty() {
+                    0
+                } else {
+                    self.vertex_data_offsets[i as usize + 1] - self.vertex_data_offsets[i as usize]
+                }
+            ).as_bytes()).expect("Could not write 3");
+        }
+        drop(out);
+        let file = File::create("/tmp/E").expect("Could not create /tmp/E");
+        let mut out = BufWriter::new(file);
+        out.write("\nEdges:\n".as_ref()).expect("Could not write 4");
+        out.write(format!(
+            "{:<15} {:<16} {:<15} {:16} {}\n",
+            "from index", "from hash", "to index", "to hash", "data size"
+        ).as_bytes()).expect("Could not write 5");
+        for i in 0..(self.number_of_edges() as usize) {
+            let size = if self.edge_data_offsets.is_empty() {
+                0
+            } else {
+                self.edge_data_offsets[i + 1] - self.edge_data_offsets[i]
+            };
+            out.write(format!(
+                "{:>15} {:016x} {:>15} {:016x} {}\n",
+                self.edges[i].from.to_u64(),
+                self.index_to_hash[self.edges[i].from.to_u64() as usize].to_u64(),
+                self.edges[i].to.to_u64(),
+                self.index_to_hash[self.edges[i].to.to_u64() as usize].to_u64(),
+                size
+            ).as_bytes()).expect("Could not write 6");
+        }
+        drop(out);
+    }
+

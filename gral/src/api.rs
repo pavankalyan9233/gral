@@ -7,7 +7,7 @@ use log::info;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::io::{BufRead, Cursor};
 use std::ops::Deref;
@@ -1396,6 +1396,22 @@ type ShardMap = HashMap<String, Vec<String>>;
 fn compute_shard_map(sd: &ShardDistribution, coll_list: &Vec<String>) -> Result<ShardMap, String> {
     let mut result: ShardMap = HashMap::new();
     for c in coll_list.into_iter() {
+        // Handle the case of a smart edge collection. If c is
+        // one, then we also find a collection called `_to_`+c.
+        // In this case, we must not get those shards, because their
+        // data is already contained in `_from_`+c, just sharded
+        // differently.
+        let mut ignore : HashSet<String> = HashSet::new();
+        let smart_name = "_to_".to_owned() + c;
+        match sd.results.get(&smart_name) {
+            None => (),
+            Some(coll_dist) => {
+                // Keys of coll_dist are the shards, value has leader:
+                for (shard, _) in &(coll_dist.plan) {
+                    ignore.insert(shard.clone());
+                }
+            }
+        }
         match sd.results.get(c) {
             None => {
                 return Err(format!("collection {} not found in shard distribution", c));
@@ -1403,13 +1419,15 @@ fn compute_shard_map(sd: &ShardDistribution, coll_list: &Vec<String>) -> Result<
             Some(coll_dist) => {
                 // Keys of coll_dist are the shards, value has leader:
                 for (shard, location) in &(coll_dist.plan) {
-                    let leader = &(location.leader);
-                    match result.get_mut(leader) {
-                        None => {
-                            result.insert(leader.clone(), vec![shard.clone()]);
-                        }
-                        Some(list) => {
-                            list.push(shard.clone());
+                    if ignore.get(shard).is_none() {
+                        let leader = &(location.leader);
+                        match result.get_mut(leader) {
+                            None => {
+                                result.insert(leader.clone(), vec![shard.clone()]);
+                            }
+                            Some(list) => {
+                                list.push(shard.clone());
+                            }
                         }
                     }
                 }
