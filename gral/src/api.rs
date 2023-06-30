@@ -3,7 +3,7 @@ use crate::conncomp::{strongly_connected_components, weakly_connected_components
 use crate::graphs::{with_graphs, Graph, Graphs, KeyOrHash, VertexHash, VertexIndex};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
-use log::info;
+use log::{debug, info};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -250,7 +250,7 @@ async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>,
     }
     // By now, index is always set to some sensible value!
 
-    println!("Have created graph with number {}!", index);
+    info!("Have created graph with number {}!", index);
 
     // Write response:
     let mut v = Vec::new();
@@ -335,7 +335,7 @@ async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, R
         graph.dropped = true; // Mark unused
     }
 
-    println!("Have dropped graph {}!", graph_number);
+    info!("Have dropped graph {}!", graph_number);
 
     // Write response:
     let mut v = Vec::new();
@@ -905,7 +905,7 @@ async fn api_compute(
                     // Make sure we have an edge index:
                     let mut graph = graph_arc.write().unwrap();
                     if !graph.edges_indexed_from {
-                        println!("Indexing edges by from...");
+                        info!("Indexing edges by from...");
                         graph.index_edges(true, false);
                     }
                 }
@@ -914,7 +914,7 @@ async fn api_compute(
             }
             _ => std::unreachable!(),
         };
-        println!("Found {} connected components.", nr);
+        info!("Found {} connected components.", nr);
         let mut comp = comp_arc.lock().unwrap();
         comp.components = Some(components);
         comp.number = nr;
@@ -1164,10 +1164,10 @@ async fn api_get_arangodb_graph(
     }
     // By now, index is always set to some sensible value!
 
-    println!("Have created graph with number {}!", index);
+    info!("Have created graph with number {}!", index);
 
     // Write response:
-    let response = GetFromArangoDBResponse{
+    let response = GetFromArangoDBResponse {
         client_id: body.client_id,
         graph_number: index,
         number_of_vertices: 1,
@@ -1449,7 +1449,7 @@ fn compute_shard_map(sd: &ShardDistribution, coll_list: &Vec<String>) -> Result<
         // In this case, we must not get those shards, because their
         // data is already contained in `_from_`+c, just sharded
         // differently.
-        let mut ignore : HashSet<String> = HashSet::new();
+        let mut ignore: HashSet<String> = HashSet::new();
         let smart_name = "_to_".to_owned() + c;
         match sd.results.get(&smart_name) {
             None => (),
@@ -1536,12 +1536,12 @@ async fn get_all_shard_data(
                 });
             }
         }
-        println!("Started dbserver {}", server);
+        debug!("Started dbserver {}", server);
     }
 
     let client_clone_for_cleanup = client.clone();
     let cleanup = |dbservers: Vec<DBServerInfo>| async move {
-        println!("Doing cleanup...");
+        debug!("Doing cleanup...");
         for dbserver in dbservers.iter() {
             let url = make_url(&format!(
                 "/_api/dump/{}?dbserver={}",
@@ -1550,7 +1550,7 @@ async fn get_all_shard_data(
             let resp = client_clone_for_cleanup.delete(url).send().await;
             let r = handle_arangodb_response(resp, |c| c == StatusCode::OK).await;
             if let Err(rr) = r {
-                println!(
+                eprintln!(
                     "An error in cancelling a dump context occurred, dbserver: {}, error: {}",
                     dbserver.dbserver, rr
                 );
@@ -1625,10 +1625,6 @@ async fn get_all_shard_data(
                     .await?;
                     let end = SystemTime::now();
                     let dur = end.duration_since(start).unwrap();
-                    let h = resp.headers().get("X-Arango-Dump_Block_Counts");
-                    if let Some(hh) = h {
-                        println!("Dump_block_counts: {:?}", hh);
-                    }
                     if resp.status() == StatusCode::NO_CONTENT {
                         // Done, cleanup will be done later
                         info!(
@@ -1659,15 +1655,15 @@ async fn get_all_shard_data(
         let r = res.unwrap();
         match r {
             Ok(_x) => {
-                println!("Got OK Result");
+                debug!("Got OK result!");
             }
             Err(msg) => {
-                println!("Got error result: {}", msg);
+                debug!("Got error result: {}", msg);
             }
         }
     }
     cleanup(dbservers).await;
-    println!("Done cleanup and channel is closed!");
+    debug!("Done cleanup and channel is closed!");
     Ok(())
     // We drop the result_channel when we leave the function.
 }
@@ -1842,7 +1838,7 @@ async fn fetch_graph_from_arangodb(
                     if from_opt.is_some() && to_opt.is_some() {
                         graph.insert_edge(from_opt.unwrap(), to_opt.unwrap(), vec![]);
                     } else {
-                        println!("Did not find _from or _to key in vertices!");
+                        eprintln!("Did not find _from or _to key in vertices!");
                     }
                 }
             }
@@ -1855,6 +1851,6 @@ async fn fetch_graph_from_arangodb(
         graph.seal_edges();
     }
 
-    println!("All successfully transferred...");
+    debug!("All successfully transferred...");
     Ok(graph_arc)
 }

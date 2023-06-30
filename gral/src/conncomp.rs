@@ -1,4 +1,5 @@
 use crate::graphs::Graph;
+use log::info;
 use std::time::Instant;
 
 pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
@@ -10,19 +11,19 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
     let start = Instant::now();
     let nr_v = g.number_of_vertices();
     let nr_e = g.number_of_edges();
-    println!(
+    info!(
         "{:?} Weakly connected components: Have graph with {} vertices and {} edges.",
         start.elapsed(),
         nr_v,
         nr_e
     );
-    println!("{:?} Creating mini...", start.elapsed());
+    info!("{:?} Creating mini...", start.elapsed());
     let mut mini: Vec<u64> = vec![];
     mini.reserve(nr_v as usize);
     for i in 0..nr_v {
         mini.push(i);
     }
-    println!("{:?} Creating next...", start.elapsed());
+    info!("{:?} Creating next...", start.elapsed());
     let mut next: Vec<i64> = vec![];
     next.reserve(nr_v as usize);
     for _ in 0..nr_v {
@@ -31,14 +32,14 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
 
     let mut nr_components = nr_v;
 
-    println!(
+    info!(
         "{:?} Computing weakly connected components...",
         start.elapsed()
     );
     let mut counter: u64 = 0;
     for e in g.edges.iter() {
         if counter % 1000000 == 0 {
-            println!(
+            info!(
                 "{:?} Have currently {} connected components with {} of {} edges processed.",
                 start.elapsed(),
                 nr_components,
@@ -75,8 +76,8 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
             break;
         }
     }
-    println!(
-        "{:?} Finished, found {} weakly connected components.",
+    info!(
+        "{:?} Finished, found {} weakly connected component(s).",
         start.elapsed(),
         nr_components
     );
@@ -100,9 +101,9 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
     let sent = nr_v; // SENT in Knuth
 
     // Working data, all number of vertices sized:
-    println!("{:?} Computing strongly connected components,\nnumber of vertices: {}, number of edges: {}",
+    info!("{:?} Computing strongly connected components,\nnumber of vertices: {}, number of edges: {}",
              start.elapsed(), nr_v, g.number_of_edges());
-    println!("{:?} Allocating data...", start.elapsed());
+    info!("{:?} Allocating data...", start.elapsed());
     let mut parent: Vec<u64> = vec![];
     let mut arc: Vec<u64> = vec![];
     let mut link: Vec<u64> = vec![];
@@ -121,7 +122,7 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
     let mut sink: u64 = sent;
     let mut root: u64;
     let mut count: u64 = 0; // number of connected components
-    println!("{:?} Starting depth first search...", start.elapsed());
+    info!("{:?} Starting depth first search...", start.elapsed());
     while w > 0 {
         w -= 1;
         if parent[w as usize] != lambda {
@@ -197,8 +198,8 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
                     rep[v as usize] = sent + v;
                     count += 1;
                     if count % 100000 == 0 {
-                        println!(
-                            "{:?} Have found {} connected components",
+                        info!(
+                            "{:?} Have found {} connected component(s)",
                             start.elapsed(),
                             count
                         );
@@ -224,14 +225,14 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
         }
     }
     rep.pop(); // remove unneeded 0
-    println!("{:?} Translating result...", start.elapsed());
+    info!("{:?} Translating result...", start.elapsed());
     // Translate rep array:
 
     for i in 0..nr_v {
         rep[i as usize] -= sent;
     }
-    println!(
-        "{:?} Finished. Found {} strongly connected components.",
+    info!(
+        "{:?} Finished. Found {} strongly connected component(s).",
         start.elapsed(),
         count
     );

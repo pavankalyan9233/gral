@@ -1,9 +1,10 @@
 use byteorder::{BigEndian, WriteBytesExt};
+use log::info;
+use log::info;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use warp::{http::Response, Filter};
-use log::info;
 
 mod api;
 mod args;
@@ -31,7 +32,7 @@ async fn main() {
         }
     };
 
-    println!("{:#?}", args);
+    info!("{:#?}", args);
 
     // Setup version handler directly here:
     let version = warp::path!("v1" / "version").and(warp::get()).map(|| {
@@ -89,7 +90,7 @@ async fn main() {
                     .expect("failed to listen to shutdown signal");
                     */
                 rx_shutdown.await.unwrap();
-                println!("Received shutdown...");
+                info!("Received shutdown...");
             });
         let j = tokio::task::spawn(server);
         j.await.expect("Join did not work!");
@@ -100,7 +101,7 @@ async fn main() {
                 .await
                 .expect("failed to listen to shutdown signal"); */
                 rx_shutdown.await.unwrap();
-                println!("Received shutdown...");
+                info!("Received shutdown...");
             });
         let j = tokio::task::spawn(server);
         j.await.expect("Join did not work!");

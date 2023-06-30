@@ -1,3 +1,4 @@
+use log::info;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -205,7 +206,7 @@ impl Graph {
             self.vertex_data_offsets.push(self.vertex_data.len() as u64);
         }
         self.vertices_sealed = true;
-        println!(
+        info!(
             "Vertices sealed in graph, number of vertices: {}",
             self.index_to_hash.len()
         );
@@ -301,7 +302,7 @@ impl Graph {
             self.edge_data_offsets.push(self.edge_data.len() as u64);
         }
 
-        println!(
+        info!(
             "Sealed graph with {} vertices and {} edges.",
             self.index_to_hash.len(),
             self.edges.len()
