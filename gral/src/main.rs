@@ -6,6 +6,7 @@ use tokio::sync::oneshot;
 use warp::{http::Response, Filter};
 
 mod api;
+mod arangodb;
 mod args;
 mod computations;
 mod conncomp;
