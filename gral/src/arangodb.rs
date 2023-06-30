@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use crate::api::GetArangoDBGraphRequest;
 use crate::graphs::{Graph, VertexHash};
-use log::debug;
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -378,6 +378,11 @@ struct DumpStartBody {
 pub async fn fetch_graph_from_arangodb(
     req: &GetArangoDBGraphRequest,
 ) -> Result<Arc<RwLock<Graph>>, String> {
+    let begin = std::time::SystemTime::now();
+
+    info!("{:?} Fetching graph from ArangoDB...",
+          std::time::SystemTime::now().duration_since(begin).unwrap());
+
     let client = build_client(req.use_tls)?;
 
     let make_url =
@@ -405,6 +410,11 @@ pub async fn fetch_graph_from_arangodb(
         .map(|ci| -> String { ci.name.clone() })
         .collect();
     let edge_map = compute_shard_map(&shard_dist, &edge_coll_list)?;
+
+    info!("{:?} Need to fetch data from {} vertex shards and {} edge shards...",
+          std::time::SystemTime::now().duration_since(begin).unwrap(),
+          vertex_map.values().map(|v| v.len()).sum::<usize>(),
+          edge_map.values().map(|v| v.len()).sum::<usize>());
 
     // Generate a graph object:
     let graph_arc = Graph::new(true, 64);
@@ -470,6 +480,8 @@ pub async fn fetch_graph_from_arangodb(
             Ok(())
         });
         get_all_shard_data(req, &vertex_map, sender).await?;
+        info!("{:?} Got all data, processing...",
+              std::time::SystemTime::now().duration_since(begin).unwrap());
         let _guck = consumer.join();
         let mut graph = graph_arc.write().unwrap();
         graph.seal_vertices();
@@ -543,13 +555,15 @@ pub async fn fetch_graph_from_arangodb(
             Ok(())
         });
         get_all_shard_data(req, &edge_map, sender).await?;
+        info!("{:?} Got all data, processing...",
+              std::time::SystemTime::now().duration_since(begin).unwrap());
         let _guck = consumer.join();
 
         let mut graph = graph_arc.write().unwrap();
         graph.seal_edges();
+        info!("{:?} Graph loaded.",
+              std::time::SystemTime::now().duration_since(begin).unwrap());
     }
-
-    debug!("All successfully transferred...");
     Ok(graph_arc)
 }
 
