@@ -732,6 +732,8 @@ async fn api_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, 
     v.write_u32::<BigEndian>(rejected.len() as u32).unwrap();
     for r in rejected.iter() {
         v.write_u32::<BigEndian>(*r).unwrap();
+        v.write_u32::<BigEndian>(3).unwrap();
+        v.write_u8(0).unwrap();
     }
     Ok(v)
 }

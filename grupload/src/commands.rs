@@ -471,7 +471,7 @@ pub fn edges_one_thread(
             let k = read_bytes_or_fail(&mut cursor, l).unwrap();
             let kk = str::from_utf8(k).unwrap();
             println!(
-                "Index of rejected vertex: {}, code: {}, data: {:?}",
+                "Index of rejected edge: {}, code: {}, data: {:?}",
                 index, code, kk
             );
             cursor.consume(l as usize);
