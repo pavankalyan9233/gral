@@ -1092,10 +1092,21 @@ struct GetArangoDBGraphRequest {
     dbserver_parallelism: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GetFromArangoDBResponse {
+    client_id: String,
+    graph_number: u32,
+    number_of_vertices: u64,
+    number_of_edges: u64,
+    bits_for_hash: u32,
+    store_keys: bool,
+}
+
 async fn api_get_arangodb_graph(
-    _graphs: Arc<Mutex<Graphs>>,
+    graphs: Arc<Mutex<Graphs>>,
     bytes: Bytes,
-) -> Result<Vec<u8>, Rejection> {
+) -> Result<warp::reply::Json, Rejection> {
     let parsed: serde_json::Result<GetArangoDBGraphRequest> = serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Err(warp::reject::custom(CannotParseJSON { msg: e.to_string() }));
@@ -1119,15 +1130,52 @@ async fn api_get_arangodb_graph(
 
     // Fetch from ArangoDB:
     let graph = fetch_graph_from_arangodb(&body).await;
-    match graph {
-        Err(e) => Err(warp::reject::custom(GetFromArangoDBFailed {
+    if let Err(e) = graph {
+        return Err(warp::reject::custom(GetFromArangoDBFailed {
             msg: e.to_string(),
-        })),
-        Ok(_graph) => {
-            let v: Vec<u8> = vec![];
-            Ok(v)
-        }
+        }));
     }
+    let graph = graph.unwrap();
+
+    // And store it amongst the graphs:
+    let mut graphs = graphs.lock().unwrap();
+    // First try to find an empty spot:
+    let mut index: u32 = 0;
+    let mut found: bool = false;
+    for g in graphs.list.iter_mut() {
+        // Lock graph mutex:
+        let dropped: bool;
+        {
+            let gg = g.read().unwrap();
+            dropped = gg.dropped;
+        }
+        if dropped {
+            found = true;
+            break;
+        }
+        index += 1;
+    }
+    // or else append to the end:
+    if !found {
+        index = graphs.list.len() as u32;
+        graphs.list.push(graph);
+    } else {
+        graphs.list[index as usize] = graph;
+    }
+    // By now, index is always set to some sensible value!
+
+    println!("Have created graph with number {}!", index);
+
+    // Write response:
+    let response = GetFromArangoDBResponse{
+        client_id: body.client_id,
+        graph_number: index,
+        number_of_vertices: 1,
+        number_of_edges: 1,
+        bits_for_hash: 64,
+        store_keys: true,
+    };
+    Ok(warp::reply::json(&response))
 }
 
 // This function receives a `Rejection` and is responsible to convert
