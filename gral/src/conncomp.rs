@@ -71,6 +71,9 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
         next[rep as usize] = first as i64;
         next[c as usize] = second;
         nr_components -= 1;
+        if nr_components == 1 {
+            break;
+        }
     }
     println!(
         "{:?} Finished, found {} weakly connected components.",
