@@ -1,6 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use log::info;
-use log::info;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
@@ -21,7 +20,9 @@ const VERSION: u32 = 0x00100;
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    env_logger::builder()
+        .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Micros))
+        .init();
     info!("Hello, this is gral!");
 
     let args = match parse_args() {

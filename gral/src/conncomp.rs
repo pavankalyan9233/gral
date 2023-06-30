@@ -38,7 +38,7 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
     );
     let mut counter: u64 = 0;
     for e in g.edges.iter() {
-        if counter % 1000000 == 0 {
+        if counter % 10000000 == 0 {
             info!(
                 "{:?} Have currently {} connected components with {} of {} edges processed.",
                 start.elapsed(),
@@ -101,7 +101,7 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
     let sent = nr_v; // SENT in Knuth
 
     // Working data, all number of vertices sized:
-    info!("{:?} Computing strongly connected components,\nnumber of vertices: {}, number of edges: {}",
+    info!("{:?} Computing strongly connected components, number of vertices: {}, number of edges: {}",
              start.elapsed(), nr_v, g.number_of_edges());
     info!("{:?} Allocating data...", start.elapsed());
     let mut parent: Vec<u64> = vec![];
@@ -197,7 +197,7 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
                     }
                     rep[v as usize] = sent + v;
                     count += 1;
-                    if count % 100000 == 0 {
+                    if count % 1000000 == 0 {
                         info!(
                             "{:?} Have found {} connected component(s)",
                             start.elapsed(),

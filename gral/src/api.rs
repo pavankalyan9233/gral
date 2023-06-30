@@ -1611,7 +1611,7 @@ async fn get_all_shard_data(
                         url.push_str(&format!("&lastBatch={}", last));
                     }
                     let start = SystemTime::now();
-                    info!(
+                    debug!(
                         "{:?} Sending post request... {} {} {}",
                         start.duration_since(begin),
                         task_info.id,
@@ -1627,7 +1627,7 @@ async fn get_all_shard_data(
                     let dur = end.duration_since(start).unwrap();
                     if resp.status() == StatusCode::NO_CONTENT {
                         // Done, cleanup will be done later
-                        info!(
+                        debug!(
                             "{:?} Received final post response... {} {} {} {:?}",
                             end.duration_since(begin),
                             task_info.id,
@@ -1720,7 +1720,7 @@ async fn fetch_graph_from_arangodb(
             while let Ok(resp) = receiver.recv() {
                 let body = std::str::from_utf8(resp.as_ref())
                     .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
-                info!(
+                debug!(
                     "{:?} Received post response, body size: {}",
                     std::time::SystemTime::now().duration_since(begin),
                     body.len()
