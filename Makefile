@@ -12,3 +12,6 @@ docker: Makefile Dockerfile
 
 clean:
 	rm -rf target
+
+keys: Makefile makekeys.sh
+	./makekeys.sh
