@@ -1,5 +1,5 @@
 use crate::api::GetArangoDBGraphRequest;
-use crate::graphs::{Graph, VertexHash};
+use crate::graphs::{Graph, VertexHash, VertexIndex};
 use bytes::Bytes;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -563,17 +563,31 @@ pub async fn fetch_graph_from_arangodb(
                             }
                         }
                     }
-                    let mut graph = graph_clone.write().unwrap();
-                    assert!(froms.len() == tos.len());
-                    for i in 0..froms.len() {
-                        let from_key = &froms[i];
-                        let from_opt = graph.index_from_vertex_key(from_key);
-                        let to_key = &tos[i];
-                        let to_opt = graph.index_from_vertex_key(to_key);
-                        if from_opt.is_some() && to_opt.is_some() {
-                            graph.insert_edge(from_opt.unwrap(), to_opt.unwrap(), vec![]);
-                        } else {
-                            eprintln!("Did not find _from or _to key in vertices!");
+                    let mut edges : Vec<(VertexIndex, VertexIndex)> = vec![];
+                    edges.reserve(froms.len());
+                    {
+                        // First translate keys to indexes by reading
+                        // the graph object:
+                        let graph = graph_clone.read().unwrap();
+                        assert!(froms.len() == tos.len());
+                        for i in 0..froms.len() {
+                            let from_key = &froms[i];
+                            let from_opt = graph.index_from_vertex_key(from_key);
+                            let to_key = &tos[i];
+                            let to_opt = graph.index_from_vertex_key(to_key);
+                            if from_opt.is_some() && to_opt.is_some() {
+                                edges.push( (from_opt.unwrap(), to_opt.unwrap()) );
+                            } else {
+                                eprintln!("Did not find _from or _to key in vertices!");
+                            }
+                        }
+                    }
+                    {
+                        // Now actually insert edges by writing the graph
+                        // object:
+                        let mut graph = graph_clone.write().unwrap();
+                        for e in edges {
+                            graph.insert_edge(e.0, e.1, vec![]);
                         }
                     }
                 }

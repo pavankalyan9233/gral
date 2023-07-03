@@ -1,4 +1,3 @@
- - Tune fetch from ArangoDB w.r.t. multithreaded data structure building
  - Progress report on number of vertices/edges imported
  - Write result back into collection in ArangoDB
  - JSON API to trigger computations
