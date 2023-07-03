@@ -1,12 +1,13 @@
-use bytes::Bytes;
 use crate::api::GetArangoDBGraphRequest;
 use crate::graphs::{Graph, VertexHash};
+use bytes::Bytes;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::time::SystemTime;
 use std::sync::{Arc, RwLock};
+use std::thread::JoinHandle;
+use std::time::SystemTime;
 use tokio::task::JoinSet;
 use warp::http::StatusCode;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
@@ -192,7 +193,7 @@ struct DBServerInfo {
 async fn get_all_shard_data(
     req: &GetArangoDBGraphRequest,
     shard_map: &ShardMap,
-    result_channel: std::sync::mpsc::Sender<Bytes>,
+    result_channels: Vec<std::sync::mpsc::Sender<Bytes>>,
 ) -> Result<(), String> {
     let begin = SystemTime::now();
 
@@ -277,6 +278,7 @@ async fn get_all_shard_data(
     let par_per_dbserver = (req.parallelism as usize + dbservers.len() - 1) / dbservers.len();
     let mut task_set = JoinSet::new();
     let mut endpoints_round_robin: usize = 0;
+    let mut consumers_round_robin: usize = 0;
     for i in 0..par_per_dbserver {
         for dbserver in &dbservers {
             let mut task_info = TaskInfo {
@@ -294,7 +296,11 @@ async fn get_all_shard_data(
                 endpoints_round_robin = 0;
             }
             let database_clone = req.database.clone();
-            let result_channel_clone = result_channel.clone();
+            let result_channel_clone = result_channels[consumers_round_robin].clone();
+            consumers_round_robin += 1;
+            if consumers_round_robin >= result_channels.len() {
+                consumers_round_robin = 0;
+            }
             task_set.spawn(async move {
                 loop {
                     let mut url = format!(
@@ -380,8 +386,10 @@ pub async fn fetch_graph_from_arangodb(
 ) -> Result<Arc<RwLock<Graph>>, String> {
     let begin = std::time::SystemTime::now();
 
-    info!("{:?} Fetching graph from ArangoDB...",
-          std::time::SystemTime::now().duration_since(begin).unwrap());
+    info!(
+        "{:?} Fetching graph from ArangoDB...",
+        std::time::SystemTime::now().duration_since(begin).unwrap()
+    );
 
     let client = build_client(req.use_tls)?;
 
@@ -411,159 +419,183 @@ pub async fn fetch_graph_from_arangodb(
         .collect();
     let edge_map = compute_shard_map(&shard_dist, &edge_coll_list)?;
 
-    info!("{:?} Need to fetch data from {} vertex shards and {} edge shards...",
-          std::time::SystemTime::now().duration_since(begin).unwrap(),
-          vertex_map.values().map(|v| v.len()).sum::<usize>(),
-          edge_map.values().map(|v| v.len()).sum::<usize>());
+    info!(
+        "{:?} Need to fetch data from {} vertex shards and {} edge shards...",
+        std::time::SystemTime::now().duration_since(begin).unwrap(),
+        vertex_map.values().map(|v| v.len()).sum::<usize>(),
+        edge_map.values().map(|v| v.len()).sum::<usize>()
+    );
 
     // Generate a graph object:
     let graph_arc = Graph::new(true, 64);
 
     // Let's first get the vertices:
     {
-        let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
-        let graph_clone = graph_arc.clone();
-        let consumer = std::thread::spawn(move || -> Result<(), String> {
-            let begin = std::time::SystemTime::now();
-            while let Ok(resp) = receiver.recv() {
-                let body = std::str::from_utf8(resp.as_ref())
-                    .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
-                debug!(
-                    "{:?} Received post response, body size: {}",
-                    std::time::SystemTime::now().duration_since(begin),
-                    body.len()
-                );
-                let mut vertex_keys: Vec<Vec<u8>> = vec![];
-                vertex_keys.reserve(400000);
-                for line in body.lines() {
-                    let v: Value = match serde_json::from_str(line) {
-                        Err(err) => {
-                            return Err(format!(
-                                "Error parsing document for line:\n{}\n{:?}",
-                                line, err
-                            ));
-                        }
-                        Ok(val) => val,
-                    };
-                    let id = &v["_id"];
-                    match id {
-                        Value::String(i) => {
-                            let mut buf = vec![];
-                            buf.extend_from_slice((&i[..]).as_bytes());
-                            vertex_keys.push(buf);
-                        }
-                        _ => {
-                            return Err(format!(
-                                "JSON is no object with a string _id attribute:\n{}",
-                                line
-                            ));
+        // We use multiple threads to receive the data in batches:
+        let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
+        let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
+        for _i in 0..req.nr_threads {
+            let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
+            senders.push(sender);
+            let graph_clone = graph_arc.clone();
+            let consumer = std::thread::spawn(move || -> Result<(), String> {
+                let begin = std::time::SystemTime::now();
+                while let Ok(resp) = receiver.recv() {
+                    let body = std::str::from_utf8(resp.as_ref())
+                        .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
+                    debug!(
+                        "{:?} Received post response, body size: {}",
+                        std::time::SystemTime::now().duration_since(begin),
+                        body.len()
+                    );
+                    let mut vertex_keys: Vec<Vec<u8>> = vec![];
+                    vertex_keys.reserve(400000);
+                    for line in body.lines() {
+                        let v: Value = match serde_json::from_str(line) {
+                            Err(err) => {
+                                return Err(format!(
+                                    "Error parsing document for line:\n{}\n{:?}",
+                                    line, err
+                                ));
+                            }
+                            Ok(val) => val,
+                        };
+                        let id = &v["_id"];
+                        match id {
+                            Value::String(i) => {
+                                let mut buf = vec![];
+                                buf.extend_from_slice((&i[..]).as_bytes());
+                                vertex_keys.push(buf);
+                            }
+                            _ => {
+                                return Err(format!(
+                                    "JSON is no object with a string _id attribute:\n{}",
+                                    line
+                                ));
+                            }
                         }
                     }
+                    let mut graph = graph_clone.write().unwrap();
+                    let mut i: u32 = 0;
+                    let mut exceptional: Vec<(u32, VertexHash)> = vec![];
+                    let mut exceptional_keys: Vec<Vec<u8>> = vec![];
+                    for k in &vertex_keys {
+                        let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
+                        graph.insert_vertex(
+                            i,
+                            hash,
+                            k.clone(),
+                            vec![],
+                            &mut exceptional,
+                            &mut exceptional_keys,
+                        );
+                        i += 1;
+                    }
                 }
-                let mut graph = graph_clone.write().unwrap();
-                let mut i: u32 = 0;
-                let mut exceptional: Vec<(u32, VertexHash)> = vec![];
-                let mut exceptional_keys: Vec<Vec<u8>> = vec![];
-                for k in &vertex_keys {
-                    let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
-                    graph.insert_vertex(
-                        i,
-                        hash,
-                        k.clone(),
-                        vec![],
-                        &mut exceptional,
-                        &mut exceptional_keys,
-                    );
-                    i += 1;
-                }
-            }
-            Ok(())
-        });
-        get_all_shard_data(req, &vertex_map, sender).await?;
-        info!("{:?} Got all data, processing...",
-              std::time::SystemTime::now().duration_since(begin).unwrap());
-        let _guck = consumer.join();
+                Ok(())
+            });
+            consumers.push(consumer);
+        }
+        get_all_shard_data(req, &vertex_map, senders).await?;
+        info!(
+            "{:?} Got all data, processing...",
+            std::time::SystemTime::now().duration_since(begin).unwrap()
+        );
+        for c in consumers {
+            let _guck = c.join();
+        }
         let mut graph = graph_arc.write().unwrap();
         graph.seal_vertices();
     }
 
     // And now the edges:
     {
-        let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
-        let graph_clone = graph_arc.clone();
-        let consumer = std::thread::spawn(move || -> Result<(), String> {
-            while let Ok(resp) = receiver.recv() {
-                let body = std::str::from_utf8(resp.as_ref())
-                    .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
-                let mut froms: Vec<Vec<u8>> = vec![];
-                froms.reserve(1000000);
-                let mut tos: Vec<Vec<u8>> = vec![];
-                tos.reserve(1000000);
-                for line in body.lines() {
-                    let v: Value = match serde_json::from_str(line) {
-                        Err(err) => {
-                            return Err(format!(
-                                "Error parsing document for line:\n{}\n{:?}",
-                                line, err
-                            ));
+        let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
+        let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
+        for _i in 0..req.nr_threads {
+            let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
+            senders.push(sender);
+            let graph_clone = graph_arc.clone();
+            let consumer = std::thread::spawn(move || -> Result<(), String> {
+                while let Ok(resp) = receiver.recv() {
+                    let body = std::str::from_utf8(resp.as_ref())
+                        .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
+                    let mut froms: Vec<Vec<u8>> = vec![];
+                    froms.reserve(1000000);
+                    let mut tos: Vec<Vec<u8>> = vec![];
+                    tos.reserve(1000000);
+                    for line in body.lines() {
+                        let v: Value = match serde_json::from_str(line) {
+                            Err(err) => {
+                                return Err(format!(
+                                    "Error parsing document for line:\n{}\n{:?}",
+                                    line, err
+                                ));
+                            }
+                            Ok(val) => val,
+                        };
+                        let from = &v["_from"];
+                        match from {
+                            Value::String(i) => {
+                                let mut buf = vec![];
+                                buf.extend_from_slice((&i[..]).as_bytes());
+                                froms.push(buf);
+                            }
+                            _ => {
+                                return Err(format!(
+                                    "JSON is no object with a string _from attribute:\n{}",
+                                    line
+                                ));
+                            }
                         }
-                        Ok(val) => val,
-                    };
-                    let from = &v["_from"];
-                    match from {
-                        Value::String(i) => {
-                            let mut buf = vec![];
-                            buf.extend_from_slice((&i[..]).as_bytes());
-                            froms.push(buf);
-                        }
-                        _ => {
-                            return Err(format!(
-                                "JSON is no object with a string _from attribute:\n{}",
-                                line
-                            ));
+                        let to = &v["_to"];
+                        match to {
+                            Value::String(i) => {
+                                let mut buf = vec![];
+                                buf.extend_from_slice((&i[..]).as_bytes());
+                                tos.push(buf);
+                            }
+                            _ => {
+                                return Err(format!(
+                                    "JSON is no object with a string _from attribute:\n{}",
+                                    line
+                                ));
+                            }
                         }
                     }
-                    let to = &v["_to"];
-                    match to {
-                        Value::String(i) => {
-                            let mut buf = vec![];
-                            buf.extend_from_slice((&i[..]).as_bytes());
-                            tos.push(buf);
-                        }
-                        _ => {
-                            return Err(format!(
-                                "JSON is no object with a string _from attribute:\n{}",
-                                line
-                            ));
+                    let mut graph = graph_clone.write().unwrap();
+                    assert!(froms.len() == tos.len());
+                    for i in 0..froms.len() {
+                        let from_key = &froms[i];
+                        let from_opt = graph.index_from_vertex_key(from_key);
+                        let to_key = &tos[i];
+                        let to_opt = graph.index_from_vertex_key(to_key);
+                        if from_opt.is_some() && to_opt.is_some() {
+                            graph.insert_edge(from_opt.unwrap(), to_opt.unwrap(), vec![]);
+                        } else {
+                            eprintln!("Did not find _from or _to key in vertices!");
                         }
                     }
                 }
-                let mut graph = graph_clone.write().unwrap();
-                assert!(froms.len() == tos.len());
-                for i in 0..froms.len() {
-                    let from_key = &froms[i];
-                    let from_opt = graph.index_from_vertex_key(from_key);
-                    let to_key = &tos[i];
-                    let to_opt = graph.index_from_vertex_key(to_key);
-                    if from_opt.is_some() && to_opt.is_some() {
-                        graph.insert_edge(from_opt.unwrap(), to_opt.unwrap(), vec![]);
-                    } else {
-                        eprintln!("Did not find _from or _to key in vertices!");
-                    }
-                }
-            }
-            Ok(())
-        });
-        get_all_shard_data(req, &edge_map, sender).await?;
-        info!("{:?} Got all data, processing...",
-              std::time::SystemTime::now().duration_since(begin).unwrap());
-        let _guck = consumer.join();
+                Ok(())
+            });
+            consumers.push(consumer);
+        }
+        get_all_shard_data(req, &edge_map, senders).await?;
+        info!(
+            "{:?} Got all data, processing...",
+            std::time::SystemTime::now().duration_since(begin).unwrap()
+        );
+        for c in consumers {
+            let _guck = c.join();
+        }
 
         let mut graph = graph_arc.write().unwrap();
         graph.seal_edges();
-        info!("{:?} Graph loaded.",
-              std::time::SystemTime::now().duration_since(begin).unwrap());
+        info!(
+            "{:?} Graph loaded.",
+            std::time::SystemTime::now().duration_since(begin).unwrap()
+        );
     }
     Ok(graph_arc)
 }
-

@@ -1089,6 +1089,7 @@ pub struct GetArangoDBGraphRequest {
     pub batch_size: u32,
     pub prefetch_count: u32,
     pub dbserver_parallelism: u32,
+    pub nr_threads: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1311,4 +1312,3 @@ fn check_graph(
     }
     Ok(())
 }
-
