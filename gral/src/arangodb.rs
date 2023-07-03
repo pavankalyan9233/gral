@@ -5,7 +5,7 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
 use std::time::SystemTime;
 use tokio::task::JoinSet;
@@ -317,7 +317,7 @@ async fn get_all_shard_data(
                     let start = SystemTime::now();
                     debug!(
                         "{:?} Sending post request... {} {} {}",
-                        start.duration_since(begin),
+                        start.duration_since(begin).unwrap(),
                         task_info.id,
                         task_info.dbserver.dbserver,
                         task_info.current_batch_id
@@ -333,7 +333,7 @@ async fn get_all_shard_data(
                         // Done, cleanup will be done later
                         debug!(
                             "{:?} Received final post response... {} {} {} {:?}",
-                            end.duration_since(begin),
+                            end.duration_since(begin).unwrap(),
                             task_info.id,
                             task_info.dbserver.dbserver,
                             task_info.current_batch_id,
@@ -434,10 +434,12 @@ pub async fn fetch_graph_from_arangodb(
         // We use multiple threads to receive the data in batches:
         let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
+        let prog_reported = Arc::new(Mutex::new(0 as u64));
         for _i in 0..req.nr_threads {
             let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
             senders.push(sender);
             let graph_clone = graph_arc.clone();
+            let prog_reported_clone = prog_reported.clone();
             let consumer = std::thread::spawn(move || -> Result<(), String> {
                 let begin = std::time::SystemTime::now();
                 while let Ok(resp) = receiver.recv() {
@@ -475,21 +477,32 @@ pub async fn fetch_graph_from_arangodb(
                             }
                         }
                     }
-                    let mut graph = graph_clone.write().unwrap();
-                    let mut i: u32 = 0;
-                    let mut exceptional: Vec<(u32, VertexHash)> = vec![];
-                    let mut exceptional_keys: Vec<Vec<u8>> = vec![];
-                    for k in &vertex_keys {
-                        let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
-                        graph.insert_vertex(
-                            i,
-                            hash,
-                            k.clone(),
-                            vec![],
-                            &mut exceptional,
-                            &mut exceptional_keys,
-                        );
-                        i += 1;
+                    let nr_vertices: u64;
+                    {
+                        let mut graph = graph_clone.write().unwrap();
+                        let mut i: u32 = 0;
+                        let mut exceptional: Vec<(u32, VertexHash)> = vec![];
+                        let mut exceptional_keys: Vec<Vec<u8>> = vec![];
+                        for k in &vertex_keys {
+                            let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
+                            graph.insert_vertex(
+                                i,
+                                hash,
+                                k.clone(),
+                                vec![],
+                                &mut exceptional,
+                                &mut exceptional_keys,
+                            );
+                            i += 1;
+                        }
+                        nr_vertices = graph.number_of_vertices();
+                    }
+                    let mut prog = prog_reported_clone.lock().unwrap();
+                    if nr_vertices > *prog + 1000000 as u64 {
+                        *prog = nr_vertices;
+                        info!("{:?} Have imported {} vertices.",
+                              std::time::SystemTime::now().duration_since(begin).unwrap(),
+                              *prog);
                     }
                 }
                 Ok(())
@@ -512,10 +525,12 @@ pub async fn fetch_graph_from_arangodb(
     {
         let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
+        let prog_reported = Arc::new(Mutex::new(0 as u64));
         for _i in 0..req.nr_threads {
             let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
             senders.push(sender);
             let graph_clone = graph_arc.clone();
+            let prog_reported_clone = prog_reported.clone();
             let consumer = std::thread::spawn(move || -> Result<(), String> {
                 while let Ok(resp) = receiver.recv() {
                     let body = std::str::from_utf8(resp.as_ref())
@@ -582,6 +597,7 @@ pub async fn fetch_graph_from_arangodb(
                             }
                         }
                     }
+                    let nr_edges: u64;
                     {
                         // Now actually insert edges by writing the graph
                         // object:
@@ -589,6 +605,14 @@ pub async fn fetch_graph_from_arangodb(
                         for e in edges {
                             graph.insert_edge(e.0, e.1, vec![]);
                         }
+                        nr_edges = graph.number_of_edges();
+                    }
+                    let mut prog = prog_reported_clone.lock().unwrap();
+                    if nr_edges > *prog + 1000000 as u64 {
+                        *prog = nr_edges;
+                        info!("{:?} Have imported {} edges.",
+                              std::time::SystemTime::now().duration_since(begin).unwrap(),
+                              *prog);
                     }
                 }
                 Ok(())

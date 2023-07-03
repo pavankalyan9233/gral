@@ -1,4 +1,3 @@
- - Progress report on number of vertices/edges imported
  - Write result back into collection in ArangoDB
  - JSON API to trigger computations
  - Refactor (error handling in module, etc.)
