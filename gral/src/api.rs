@@ -23,12 +23,12 @@ pub fn api_filter(
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    let version_bin = warp::path!("v1" / "version-binary")
+        .and(warp::get())
+        .map(version_bin);
     let version = warp::path!("v1" / "version")
         .and(warp::get())
-        .map(version_v1);
-    let version2 = warp::path!("v2" / "version")
-        .and(warp::get())
-        .map(version_v2);
+        .map(version_json);
     let create = warp::path!("v1" / "create")
         .and(warp::post())
         .and(with_graphs(graphs.clone()))
@@ -86,8 +86,8 @@ pub fn api_filter(
         .and(warp::body::bytes())
         .and_then(api_get_arangodb_graph);
 
-    version
-        .or(version2)
+    version_bin
+        .or(version)
         .or(create)
         .or(drop)
         .or(vertices)
@@ -101,7 +101,7 @@ pub fn api_filter(
         .or(get_arangodb_graph)
 }
 
-fn version_v1() -> Result<Response<Vec<u8>>, Error> {
+fn version_bin() -> Result<Response<Vec<u8>>, Error> {
     let mut v = Vec::new();
     v.write_u32::<BigEndian>(VERSION as u32).unwrap();
     v.write_u32::<BigEndian>(1 as u32).unwrap();
@@ -112,7 +112,7 @@ fn version_v1() -> Result<Response<Vec<u8>>, Error> {
         .body(v)
 }
 
-fn version_v2() -> Result<Response<Vec<u8>>, Error> {
+fn version_json() -> Result<Response<Vec<u8>>, Error> {
     let version_str = format!(
         "{}.{}.{}",
         VERSION >> 16,

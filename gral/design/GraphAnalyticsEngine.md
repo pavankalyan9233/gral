@@ -69,7 +69,7 @@ varlen  length of error message (can be 0 for empty)
 ```
 
 
-### `GET /v1/version`
+### `GET /v1/version-binary`
 
 This returns the version of the server and the protocol version.
 
@@ -84,7 +84,7 @@ u32        lowest version of API which is supported, currently always 1
 u32        highest version of API which is supported, currently always 1
 ```
 
-### `GET /v2/version`
+### `GET /v1/version`
 
 This returns the version of the server and the protocol version.
 
