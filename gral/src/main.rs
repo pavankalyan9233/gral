@@ -17,7 +17,7 @@ use crate::args::parse_args;
 use crate::computations::Computations;
 use crate::graphs::Graphs;
 
-const VERSION: u32 = 0x00100;
+pub const VERSION: u32 = 0x00100;
 
 #[tokio::main]
 async fn main() {
@@ -36,17 +36,6 @@ async fn main() {
 
     info!("{:#?}", args);
 
-    // Setup version handler directly here:
-    let version = warp::path!("v1" / "version").and(warp::get()).map(|| {
-        let mut v = Vec::new();
-        v.write_u32::<BigEndian>(VERSION as u32).unwrap();
-        v.write_u32::<BigEndian>(1 as u32).unwrap();
-        v.write_u32::<BigEndian>(1 as u32).unwrap();
-
-        Response::builder()
-            .header("Content-Type", "x-application-gral")
-            .body(v)
-    });
     let (tx_shutdown, rx_shutdown) = oneshot::channel::<()>();
     let tx_arc = Arc::new(Mutex::new(Some(tx_shutdown)));
     let tx_clone = tx_arc.clone();
@@ -70,8 +59,7 @@ async fn main() {
     let the_graphs = Arc::new(Mutex::new(Graphs { list: vec![] }));
     let the_computations = Arc::new(Mutex::new(Computations::new()));
 
-    let apifilters = version
-        .or(shutdown)
+    let apifilters = shutdown
         .or(api_filter(the_graphs.clone(), the_computations.clone()))
         .recover(handle_errors);
     let ip_addr: IpAddr = args
@@ -80,22 +68,30 @@ async fn main() {
         .expect(format!("Could not parse bind address: {}", args.bind_addr).as_str());
 
     if args.use_tls {
-        let (_addr, server) = warp::serve(apifilters)
-            .tls()
-            .cert_path("tls/cert.pem")
-            .key_path("tls/key.pem")
-            .client_auth_required_path("tls/authca.pem")
-            .bind_with_graceful_shutdown((ip_addr, args.port), async move {
-                /*
-                tokio::signal::ctrl_c()
-                    .await
-                    .expect("failed to listen to shutdown signal");
-                    */
-                rx_shutdown.await.unwrap();
-                info!("Received shutdown...");
-            });
-        let j = tokio::task::spawn(server);
-        j.await.expect("Join did not work!");
+        if args.use_auth {
+            let (_addr, server) = warp::serve(apifilters)
+                .tls()
+                .cert_path(args.cert)
+                .key_path(args.key)
+                .client_auth_required_path("tls/authca.pem")
+                .bind_with_graceful_shutdown((ip_addr, args.port), async move {
+                    rx_shutdown.await.unwrap();
+                    info!("Received shutdown...");
+                });
+            let j = tokio::task::spawn(server);
+            j.await.expect("Join did not work!");
+        } else {
+            let (_addr, server) = warp::serve(apifilters)
+                .tls()
+                .cert_path(args.cert)
+                .key_path(args.key)
+                .bind_with_graceful_shutdown((ip_addr, args.port), async move {
+                    rx_shutdown.await.unwrap();
+                    info!("Received shutdown...");
+                });
+            let j = tokio::task::spawn(server);
+            j.await.expect("Join did not work!");
+        }
     } else {
         let (_addr, server) =
             warp::serve(apifilters).bind_with_graceful_shutdown((ip_addr, args.port), async move {

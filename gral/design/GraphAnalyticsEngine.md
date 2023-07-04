@@ -84,6 +84,23 @@ u32        lowest version of API which is supported, currently always 1
 u32        highest version of API which is supported, currently always 1
 ```
 
+### `GET /v2/version`
+
+This returns the version of the server and the protocol version.
+
+Response code:
+  - 200 for OK
+
+Response body:
+
+```
+{
+  "version": "1.2.3",
+  "apiMinVersion": 1,
+  "apiMaxVersion": 2
+}
+```
+
 ### `DELETE /v1/shutdown`
 
 This asks the server to shut down gracefully.

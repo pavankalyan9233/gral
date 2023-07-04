@@ -9,6 +9,7 @@ USAGE:
 OPTIONS:
   -h, --help            Prints help information
   --use-tls BOOL        Use TLS or not [default: true]
+  --use-auth BOOL       Use TLS client cert authentification [default: false]
   --cert PATH           Path to server certificate [default: 'tls/cert.pem']
   --key PATH            Path to server secret key [default: 'tls/key.pem']
   --authca PATH         Path to CA certificate for client authentication
@@ -20,6 +21,7 @@ OPTIONS:
 #[derive(Debug)]
 pub struct GralArgs {
     pub use_tls: bool,
+    pub use_auth: bool,
     pub cert: std::path::PathBuf,
     pub key: std::path::PathBuf,
     pub authca: std::path::PathBuf,
@@ -38,6 +40,7 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
 
     let args = GralArgs {
         use_tls: pargs.opt_value_from_str("--use-tls")?.unwrap_or(true),
+        use_auth: pargs.opt_value_from_str("--use-auth")?.unwrap_or(false),
         cert: pargs
             .opt_value_from_str("--cert")?
             .unwrap_or("tls/cert.pem".into()),

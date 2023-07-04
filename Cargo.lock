@@ -315,6 +315,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "env_logger",
+ "http",
  "log",
  "pico-args",
  "rand",

@@ -2,8 +2,10 @@ use crate::arangodb::fetch_graph_from_arangodb;
 use crate::computations::{with_computations, Computation, Computations};
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{with_graphs, Graph, Graphs, KeyOrHash, VertexHash, VertexIndex};
+use crate::VERSION;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
+use http::Error;
 use log::info;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -12,7 +14,7 @@ use std::io::{BufRead, Cursor};
 use std::ops::Deref;
 use std::str;
 use std::sync::{Arc, Mutex, RwLock};
-use warp::{http::StatusCode, reject, Filter, Rejection};
+use warp::{http::Response, http::StatusCode, reject, Filter, Rejection};
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 /// The following function puts together the filters for the API.
@@ -21,6 +23,12 @@ pub fn api_filter(
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    let version = warp::path!("v1" / "version")
+        .and(warp::get())
+        .map(version_v1);
+    let version2 = warp::path!("v2" / "version")
+        .and(warp::get())
+        .map(version_v2);
     let create = warp::path!("v1" / "create")
         .and(warp::post())
         .and(with_graphs(graphs.clone()))
@@ -78,7 +86,9 @@ pub fn api_filter(
         .and(warp::body::bytes())
         .and_then(api_get_arangodb_graph);
 
-    create
+    version
+        .or(version2)
+        .or(create)
         .or(drop)
         .or(vertices)
         .or(seal_vertices)
@@ -89,6 +99,35 @@ pub fn api_filter(
         .or(drop_computation)
         .or(compute)
         .or(get_arangodb_graph)
+}
+
+fn version_v1() -> Result<Response<Vec<u8>>, Error> {
+    let mut v = Vec::new();
+    v.write_u32::<BigEndian>(VERSION as u32).unwrap();
+    v.write_u32::<BigEndian>(1 as u32).unwrap();
+    v.write_u32::<BigEndian>(2 as u32).unwrap();
+
+    Response::builder()
+        .header("Content-Type", "x-application-gral")
+        .body(v)
+}
+
+fn version_v2() -> Result<Response<Vec<u8>>, Error> {
+    let version_str = format!(
+        "{}.{}.{}",
+        VERSION >> 16,
+        (VERSION >> 8) & 0xff,
+        VERSION & 0xff
+    );
+    let body = serde_json::json!({
+        "version": version_str,
+        "apiMinVersion": 1,
+        "apiMaxVersion": 2
+    });
+    let v = serde_json::to_vec(&body).expect("Should be serializable");
+    Response::builder()
+        .header("Content-Type", "application/json")
+        .body(v)
 }
 
 /// An error object, which is used when the body cannot be parsed as JSON.
