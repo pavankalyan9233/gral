@@ -23,7 +23,7 @@ pub fn api_filter(
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    let version_bin = warp::path!("v1" / "version-binary")
+    let version_bin = warp::path!("v1" / "versionBinary")
         .and(warp::get())
         .map(version_bin);
     let version = warp::path!("v1" / "version")
@@ -34,11 +34,11 @@ pub fn api_filter(
         .and(with_graphs(graphs.clone()))
         .and(warp::body::bytes())
         .and_then(api_create);
-    let drop = warp::path!("v1" / "dropGraph")
+    let drop_bin = warp::path!("v1" / "dropGraphBinary")
         .and(warp::put())
         .and(with_graphs(graphs.clone()))
         .and(warp::body::bytes())
-        .and_then(api_drop);
+        .and_then(api_drop_bin);
     let vertices = warp::path!("v1" / "vertices")
         .and(warp::post())
         .and(with_graphs(graphs.clone()))
@@ -59,10 +59,14 @@ pub fn api_filter(
         .and(with_graphs(graphs.clone()))
         .and(warp::body::bytes())
         .and_then(api_seal_edges);
-    let get_progress = warp::path!("v1" / "getProgress")
+    let get_progress_bin = warp::path!("v1" / "getProgress")
         .and(warp::put())
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
+        .and_then(api_get_progress_bin);
+    let get_progress = warp::path!("v1" / "getProgress" / String)
+        .and(warp::get())
+        .and(with_computations(computations.clone()))
         .and_then(api_get_progress);
     let get_results_by_vertices = warp::path!("v1" / "getResultsByVertices")
         .and(warp::put())
@@ -95,11 +99,12 @@ pub fn api_filter(
     version_bin
         .or(version)
         .or(create)
-        .or(drop)
+        .or(drop_bin)
         .or(vertices)
         .or(seal_vertices)
         .or(edges)
         .or(seal_edges)
+        .or(get_progress_bin)
         .or(get_progress)
         .or(get_results_by_vertices)
         .or(drop_computation)
@@ -342,7 +347,7 @@ fn get_computation(
 }
 
 /// This async function implements the "drop graph" API call.
-async fn api_drop(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
+async fn api_drop_bin(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>, Rejection> {
     // Handle wrong length:
     if bytes.len() < 12 {
         return Err(warp::reject::custom(TooShortBodyLength {
@@ -859,6 +864,9 @@ impl Computation for ConcreteComputation {
         out.write_u64::<BigEndian>(self.number).unwrap();
         Ok(())
     }
+    fn get_result(&self) -> u64 {
+        self.number
+    }
     fn dump_vertex_results(
         &self,
         comp_id: u64,
@@ -1096,7 +1104,7 @@ async fn api_compute(
 }
 
 /// This function gets progress of a computation.
-async fn api_get_progress(
+async fn api_get_progress_bin(
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<Vec<u8>, Rejection> {
@@ -1137,6 +1145,51 @@ async fn api_get_progress(
                 v.write_u8(0).unwrap();
             }
             Ok(v)
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProgressResponse {
+    job_id: String,
+    total: u32,
+    progress: u32,
+    result: Option<String>,
+}
+
+/// This function gets progress of a computation.
+async fn api_get_progress(
+    job_id: String,
+    computations: Arc<Mutex<Computations>>,
+) -> Result<Vec<u8>, Rejection> {
+    let comp_id = u64::from_str_radix(&job_id, 16);
+    if let Err(_) = comp_id {
+        return Err(warp::reject::custom(ComputationNotFound { comp_id: 0 }));
+    }
+    let comp_id = comp_id.unwrap();
+
+    let comps = computations.lock().unwrap();
+    let comp_arc = comps.list.get(&comp_id);
+    match comp_arc {
+        None => {
+            return Err(warp::reject::custom(ComputationNotFound { comp_id }));
+        }
+        Some(comp_arc) => {
+            let comp = comp_arc.lock().unwrap();
+
+            // Write response:
+            let body = ProgressResponse {
+                job_id,
+                total: 1,
+                progress: if comp.is_ready() { 1 } else { 0 },
+                result: if comp.is_ready() {
+                    Some(comp.get_result().to_string())
+                } else {
+                    None
+                },
+            };
+            Ok(serde_json::to_vec(&body).expect("Should be serializable"))
         }
     }
 }

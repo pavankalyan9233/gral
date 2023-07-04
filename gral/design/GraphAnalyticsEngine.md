@@ -68,6 +68,16 @@ varlen  length of error message (can be 0 for empty)
 [u8]    error message in UTF-8
 ```
 
+or in the JSON case:
+
+```
+{
+    "error": true,
+    "errorCode": 17,
+    "errorMessage": "string"
+}
+```
+
 
 ### `GET /v1/version-binary`
 
@@ -316,7 +326,7 @@ If the graph number is not found (or its edges are already sealed), we
 return 404 and an error body as described above.
 
 
-### `POST /v1/compute-binary`
+### `POST /v1/computeBinary`
 
 Triggers a computation for a graph. This call actually only triggers the
 computation and returns immediately.
@@ -492,6 +502,45 @@ u32     number of connected components
 
 If the computation is not found (via its client-id), the response is 404
 with an error body as described above.
+
+
+### `GET /v1/getProgress/{jobId}`
+
+Retrieves a progress report for a computation. One needs the computation-id
+of the computation.
+
+If the computation is found (via its client-id), the response is 200
+with this body:
+
+```
+{
+    "jobId": "JOB_ID",
+    "total": 100,
+    "progress": 50,
+
+```
+
+`total`: total progress (a number which indicates which progress number
+        means completion, can be 1 for yes/no or 100 for percentages or
+        any other positive number)
+
+`progress`: progress so far (as number from 0 to "total progress")
+
+`result`: stringified response, only present if there is a result
+
+For example, the `weaklyConnectedComponents` algorithm could report the
+result in a certain form, like this:
+
+```
+{
+    ...
+    "result": "17"
+}
+```
+
+If the computation is not found (via its client-id), the response is 404
+with an JSON error body as described above.
+
 
 
 ### `PUT /v1/dropComputation`

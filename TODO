@@ -1,10 +1,10 @@
  - JSON API to inquire progress of JOB
  - JSON API to delete a JOB
- - JSON API to list JOBS
- - JSON API to list graphs
+ - Write result back into collection in ArangoDB
  - JSON API to drop graph
  - JSON API to enquire about graph
- - Write result back into collection in ArangoDB
+ - JSON API to list JOBS
+ - JSON API to list graphs
  - Refactor (error handling in module, etc.)
  - Add metrics (rust-prometheus crate)
  - Metrics for ArangoDB import and export

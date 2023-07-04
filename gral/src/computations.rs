@@ -9,6 +9,7 @@ pub trait Computation {
     fn is_ready(&self) -> bool;
     fn cancel(&mut self);
     fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String>;
+    fn get_result(&self) -> u64;
     fn algorithm_id(&self) -> u32;
     fn dump_vertex_results(
         &self,

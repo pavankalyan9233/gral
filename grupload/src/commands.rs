@@ -700,7 +700,7 @@ pub fn drop_graph(args: &GruploadArgs) -> Result<(), String> {
     v.write_u32::<BigEndian>(args.graph_number).unwrap();
 
     let mut url = args.endpoint.clone();
-    url.push_str("/v1/dropGraph");
+    url.push_str("/v1/dropGraphBinary");
     let mut resp = match client.put(url).body(v).send() {
         Ok(resp) => resp,
         Err(err) => panic!("Error: {}", err),
@@ -793,7 +793,7 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
         }
     }
     let mut url = args.endpoint.clone();
-    url.push_str("/v1/compute");
+    url.push_str("/v1/computeBinary");
     let mut resp = match client.post(url).body(v).send() {
         Ok(resp) => resp,
         Err(err) => panic!("Error: {}", err),
@@ -1202,7 +1202,7 @@ pub fn version(args: &GruploadArgs) -> Result<(), String> {
     let client = build_client(args.use_tls, args.identity.clone())?;
 
     let mut url = args.endpoint.clone();
-    url.push_str("/v1/version");
+    url.push_str("/v1/versionBinary");
     let mut resp = match client.get(url).send() {
         Ok(resp) => resp,
         Err(err) => panic!("Error: {}", err),
