@@ -74,6 +74,12 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_drop_computation);
+    let compute_bin = warp::path!("v1" / "compute-binary")
+        .and(warp::post())
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_compute_bin);
     let compute = warp::path!("v1" / "compute")
         .and(warp::post())
         .and(with_graphs(graphs.clone()))
@@ -97,6 +103,7 @@ pub fn api_filter(
         .or(get_progress)
         .or(get_results_by_vertices)
         .or(drop_computation)
+        .or(compute_bin)
         .or(compute)
         .or(get_arangodb_graph)
 }
@@ -144,6 +151,14 @@ struct GetFromArangoDBFailed {
     pub msg: String,
 }
 impl reject::Reject for GetFromArangoDBFailed {}
+
+/// An error object, which is used when the starting of a computation
+/// did not work.
+#[derive(Debug)]
+struct ComputeFailed {
+    pub msg: String,
+}
+impl reject::Reject for ComputeFailed {}
 
 /// An error object, which is used when the body size is unexpected.
 #[derive(Debug)]
@@ -879,7 +894,7 @@ impl Computation for ConcreteComputation {
 }
 
 /// This function triggers a computation:
-async fn api_compute(
+async fn api_compute_bin(
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
@@ -966,6 +981,117 @@ async fn api_compute(
     v.write_u32::<BigEndian>(graph_number).unwrap();
     v.write_u32::<BigEndian>(algorithm).unwrap();
     v.write_u64::<BigEndian>(comp_id).unwrap();
+    Ok(v)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputeRequestResponse {
+    client_id: String,
+    graph_id: String,
+    algorithm: String,
+    job_id: Option<String>,
+}
+
+/// This function triggers a computation:
+async fn api_compute(
+    graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<Vec<u8>, Rejection> {
+    // Parse body and extract integers:
+    let parsed: serde_json::Result<ComputeRequestResponse> = serde_json::from_slice(&bytes[..]);
+    if let Err(e) = parsed {
+        return Err(warp::reject::custom(CannotParseJSON { msg: e.to_string() }));
+    }
+    let mut body = parsed.unwrap();
+
+    // (Note that we have checked the buffer length and so these cannot
+    // fail! Therefore unwrap() is OK here.)
+    let client_id = u64::from_str_radix(&body.client_id, 16);
+    if let Err(_) = client_id {
+        return Err(warp::reject::custom(ComputeFailed {
+            msg: "Could not read clientId as 64bit hex value".to_string(),
+        }));
+    }
+    let _client_id = client_id.unwrap();
+    let graph_number = u32::from_str_radix(&body.graph_id, 16);
+    if let Err(_) = graph_number {
+        return Err(warp::reject::custom(ComputeFailed {
+            msg: "Could not read graphId as 32bit hex value".to_string(),
+        }));
+    }
+    let graph_number = graph_number.unwrap();
+
+    let graph_arc = get_graph(&graphs, graph_number)?;
+
+    {
+        // Check graph:
+        let graph = graph_arc.read().unwrap();
+        check_graph(graph.deref(), graph_number, true)?;
+    }
+
+    let algorithm: u32 = match body.algorithm.as_ref() {
+        "wcc" => 1,
+        "scc" => 2,
+        _ => 0,
+    };
+
+    if algorithm == 0 {
+        return Err(warp::reject::custom(ComputeFailed {
+            msg: format!("Unknown algorithm: {}", body.algorithm),
+        }));
+    }
+
+    let comp_arc = Arc::new(Mutex::new(ConcreteComputation {
+        algorithm,
+        graph: graph_arc.clone(),
+        components: None,
+        shall_stop: false,
+        number: 0,
+    }));
+
+    let mut rng = rand::thread_rng();
+    let mut comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        loop {
+            comp_id = rng.gen::<u64>();
+            if !comps.list.contains_key(&comp_id) {
+                break;
+            }
+        }
+        comps.list.insert(comp_id, comp_arc.clone());
+    }
+    let _join_handle = std::thread::spawn(move || {
+        let (nr, components) = match algorithm {
+            1 => {
+                let graph = graph_arc.read().unwrap();
+                weakly_connected_components(&graph)
+            }
+            2 => {
+                {
+                    // Make sure we have an edge index:
+                    let mut graph = graph_arc.write().unwrap();
+                    if !graph.edges_indexed_from {
+                        info!("Indexing edges by from...");
+                        graph.index_edges(true, false);
+                    }
+                }
+                let graph = graph_arc.read().unwrap();
+                strongly_connected_components(&graph)
+            }
+            _ => std::unreachable!(),
+        };
+        info!("Found {} connected components.", nr);
+        let mut comp = comp_arc.lock().unwrap();
+        comp.components = Some(components);
+        comp.number = nr;
+    });
+    body.job_id = Some(format!("{:08x}", comp_id));
+
+    // Write response:
+    let v = serde_json::to_vec(&body).expect("Should be serializable!");
     Ok(v)
 }
 
@@ -1245,6 +1371,10 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
     } else if let Some(wrong) = err.find::<GetFromArangoDBFailed>() {
         code = StatusCode::BAD_REQUEST;
         message = format!("Could not fetch graph from ArangoDB: {}", wrong.msg);
+        output_json = true;
+    } else if let Some(wrong) = err.find::<ComputeFailed>() {
+        code = StatusCode::BAD_REQUEST;
+        message = format!("Could not start computation: {}", wrong.msg);
         output_json = true;
     } else if let Some(wrong) = err.find::<TooShortBodyLength>() {
         code = StatusCode::BAD_REQUEST;

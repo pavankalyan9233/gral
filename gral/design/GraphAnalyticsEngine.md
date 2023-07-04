@@ -316,7 +316,7 @@ If the graph number is not found (or its edges are already sealed), we
 return 404 and an error body as described above.
 
 
-### `POST /v1/compute`
+### `POST /v1/compute-binary`
 
 Triggers a computation for a graph. This call actually only triggers the
 computation and returns immediately.
@@ -338,6 +338,50 @@ u64     client-id
 u32     number of graph
 u32     algorithm number
 u64     computation-id
+```
+
+The computation-id identifies this particular computation.
+
+If the graph number is not found, we return 404 and an error body as
+described above.
+
+Note that computation IDs are not per graph but global!
+
+Note that a computation keeps the graph alive, even if it was dropped
+in the meantime!
+
+
+### `POST /v1/compute`
+
+Triggers a computation for a graph. This call actually only triggers the
+computation and returns immediately.
+
+Body:
+
+```
+{
+    "clientId": "unique_string_for_this_computation",
+    "graphId": "ID_OF_GRAPH",
+    "algorithm": "ID_OF_ALGORITHM"
+}
+```
+
+So far, we have the following algorithms:
+
+```
+  wcc: weakly connected components
+  scc: strongly connected components
+```
+
+Response is 200 with this body:
+
+```
+{
+    "clientId": "unique_string_for_this_computation",
+    "graphId": "ID_OF_GRAPH",
+    "algorithm": "ID_OF_ALGORITHM",
+    "jobId": "ID OF COMPUTATION JOB"
+}
 ```
 
 The computation-id identifies this particular computation.

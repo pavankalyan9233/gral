@@ -1,4 +1,9 @@
- - JSON API to trigger computations
+ - JSON API to inquire progress of JOB
+ - JSON API to delete a JOB
+ - JSON API to list JOBS
+ - JSON API to list graphs
+ - JSON API to drop graph
+ - JSON API to enquire about graph
  - Write result back into collection in ArangoDB
  - Refactor (error handling in module, etc.)
  - Add metrics (rust-prometheus crate)
