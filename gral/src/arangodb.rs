@@ -1,4 +1,5 @@
-use crate::api::GetArangoDBGraphRequest;
+use crate::api::graphanalyticsengine::GraphAnalyticsEngineLoadDataRequest;
+use crate::args::GralArgs;
 use crate::graphs::{Graph, VertexHash, VertexIndex};
 use bytes::Bytes;
 use log::{debug, info};
@@ -191,16 +192,17 @@ struct DBServerInfo {
 }
 
 async fn get_all_shard_data(
-    req: &GetArangoDBGraphRequest,
+    req: &GraphAnalyticsEngineLoadDataRequest,
+    endpoints: &Vec<String>,
     shard_map: &ShardMap,
     result_channels: Vec<std::sync::mpsc::Sender<Bytes>>,
 ) -> Result<(), String> {
     let begin = SystemTime::now();
 
-    let client = build_client(req.use_tls)?;
+    let use_tls = endpoints[0].starts_with("https://");
+    let client = build_client(use_tls)?;
 
-    let make_url =
-        |path: &str| -> String { req.endpoints[0].clone() + "/_db/" + &req.database + path };
+    let make_url = |path: &str| -> String { endpoints[0].clone() + "/_db/" + &req.database + path };
 
     // Start a single dump context on all involved dbservers, we can do
     // this sequentially, since it is not performance critical, we can
@@ -208,12 +210,14 @@ async fn get_all_shard_data(
     let mut dbservers: Vec<DBServerInfo> = vec![];
     let mut error_happened = false;
     let mut error: String = "".into();
+    let batch_size = req.batch_size.unwrap(); // checked outside!
+    let parallelism = req.parallelism.unwrap(); // checked outside!
     for (server, shard_list) in shard_map.iter() {
         let url = make_url(&format!("/_api/dump/start?dbserver={}", server));
         let body = DumpStartBody {
-            batch_size: req.batch_size,
-            prefetch_count: req.prefetch_count,
-            parallelism: req.dbserver_parallelism,
+            batch_size,
+            prefetch_count: 5,
+            parallelism,
             shards: shard_list.clone(),
         };
         let body_v =
@@ -275,7 +279,7 @@ async fn get_all_shard_data(
         id: u64,
     }
 
-    let par_per_dbserver = (req.parallelism as usize + dbservers.len() - 1) / dbservers.len();
+    let par_per_dbserver = (parallelism as usize + dbservers.len() - 1) / dbservers.len();
     let mut task_set = JoinSet::new();
     let mut endpoints_round_robin: usize = 0;
     let mut consumers_round_robin: usize = 0;
@@ -289,10 +293,10 @@ async fn get_all_shard_data(
             };
             //let client_clone = client.clone(); // the clones will share
             //                                   // the connection pool
-            let client_clone = build_client(req.use_tls)?;
-            let endpoint_clone = req.endpoints[endpoints_round_robin].clone();
+            let client_clone = build_client(use_tls)?;
+            let endpoint_clone = endpoints[endpoints_round_robin].clone();
             endpoints_round_robin += 1;
-            if endpoints_round_robin >= req.endpoints.len() {
+            if endpoints_round_robin >= endpoints.len() {
                 endpoints_round_robin = 0;
             }
             let database_clone = req.database.clone();
@@ -375,15 +379,28 @@ async fn get_all_shard_data(
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct DumpStartBody {
-    batch_size: u32,
+    batch_size: u64,
     prefetch_count: u32,
     parallelism: u32,
     shards: Vec<String>,
 }
 
 pub async fn fetch_graph_from_arangodb(
-    req: &GetArangoDBGraphRequest,
+    req: &GraphAnalyticsEngineLoadDataRequest,
+    args: Arc<Mutex<GralArgs>>,
 ) -> Result<Arc<RwLock<Graph>>, String> {
+    let endpoints: Vec<String>;
+    {
+        let guard = args.lock().unwrap();
+        endpoints = guard
+            .arangodb_endpoints
+            .split(",")
+            .map(|s| s.to_owned())
+            .collect();
+    }
+    if endpoints.is_empty() {
+        return Err("no endpoints given".to_string());
+    }
     let begin = std::time::SystemTime::now();
 
     info!(
@@ -391,13 +408,13 @@ pub async fn fetch_graph_from_arangodb(
         std::time::SystemTime::now().duration_since(begin).unwrap()
     );
 
-    let client = build_client(req.use_tls)?;
+    let use_tls = endpoints[0].starts_with("https://");
+    let client = build_client(use_tls)?;
+    let parallelism = req.parallelism.unwrap(); // checked outside
 
-    let make_url =
-        |path: &str| -> String { req.endpoints[0].clone() + "/_db/" + &req.database + path };
+    let make_url = |path: &str| -> String { endpoints[0].clone() + "/_db/" + &req.database + path };
 
     // First ask for the shard distribution:
-    assert!(!req.endpoints.is_empty()); // checked outside!
     let url = make_url("/_admin/cluster/shardDistribution");
     let resp = client.get(url).send().await;
     let shard_dist =
@@ -435,7 +452,7 @@ pub async fn fetch_graph_from_arangodb(
         let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
         let prog_reported = Arc::new(Mutex::new(0 as u64));
-        for _i in 0..req.nr_threads {
+        for _i in 0..parallelism {
             let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
             senders.push(sender);
             let graph_clone = graph_arc.clone();
@@ -500,16 +517,18 @@ pub async fn fetch_graph_from_arangodb(
                     let mut prog = prog_reported_clone.lock().unwrap();
                     if nr_vertices > *prog + 1000000 as u64 {
                         *prog = nr_vertices;
-                        info!("{:?} Have imported {} vertices.",
-                              std::time::SystemTime::now().duration_since(begin).unwrap(),
-                              *prog);
+                        info!(
+                            "{:?} Have imported {} vertices.",
+                            std::time::SystemTime::now().duration_since(begin).unwrap(),
+                            *prog
+                        );
                     }
                 }
                 Ok(())
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(req, &vertex_map, senders).await?;
+        get_all_shard_data(req, &endpoints, &vertex_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -526,7 +545,7 @@ pub async fn fetch_graph_from_arangodb(
         let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
         let prog_reported = Arc::new(Mutex::new(0 as u64));
-        for _i in 0..req.nr_threads {
+        for _i in 0..parallelism {
             let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
             senders.push(sender);
             let graph_clone = graph_arc.clone();
@@ -578,7 +597,7 @@ pub async fn fetch_graph_from_arangodb(
                             }
                         }
                     }
-                    let mut edges : Vec<(VertexIndex, VertexIndex)> = vec![];
+                    let mut edges: Vec<(VertexIndex, VertexIndex)> = vec![];
                     edges.reserve(froms.len());
                     {
                         // First translate keys to indexes by reading
@@ -591,7 +610,7 @@ pub async fn fetch_graph_from_arangodb(
                             let to_key = &tos[i];
                             let to_opt = graph.index_from_vertex_key(to_key);
                             if from_opt.is_some() && to_opt.is_some() {
-                                edges.push( (from_opt.unwrap(), to_opt.unwrap()) );
+                                edges.push((from_opt.unwrap(), to_opt.unwrap()));
                             } else {
                                 eprintln!("Did not find _from or _to key in vertices!");
                             }
@@ -610,16 +629,18 @@ pub async fn fetch_graph_from_arangodb(
                     let mut prog = prog_reported_clone.lock().unwrap();
                     if nr_edges > *prog + 1000000 as u64 {
                         *prog = nr_edges;
-                        info!("{:?} Have imported {} edges.",
-                              std::time::SystemTime::now().duration_since(begin).unwrap(),
-                              *prog);
+                        info!(
+                            "{:?} Have imported {} edges.",
+                            std::time::SystemTime::now().duration_since(begin).unwrap(),
+                            *prog
+                        );
                     }
                 }
                 Ok(())
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(req, &edge_map, senders).await?;
+        get_all_shard_data(req, &endpoints, &edge_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()

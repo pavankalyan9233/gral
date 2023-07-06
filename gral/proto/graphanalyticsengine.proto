@@ -1,0 +1,125 @@
+// 
+// DISCLAIMER
+// 
+// Copyright 2023 ArangoDB GmbH, Cologne, Germany
+// 
+
+syntax = "proto3";
+
+package arangodb.cloud.internal.graphanalytics.v1;
+
+option go_package = "github.com/arangodb-managed/apis/graphanalytics/v1";
+
+// import "common/v1/icommon.proto";
+// import "common/v1/common.proto";
+
+// import "github.com/golang/protobuf/ptypes/timestamp/timestamp.proto";
+import "google/api/annotations.proto";
+
+// GraphAnalyticsEngineService is the API used interact with graph analytics engines, which belongs to a deployment.
+service GraphAnalyticsEngineService {
+    // Load data fetches data from the deployments and load it into memory of the engine for later processing.
+    // Required permissions:
+    // - graphanalytics.engine.load-data on the graph analytics engine identified by the given ID.
+    rpc GraphAnalyticsEngineLoadData(GraphAnalyticsEngineLoadDataRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
+        option (google.api.http) = {
+            put: "/api/graphanalytics/v1/engines/{engine_id}/loaddata"
+            body: "*"
+        };
+    }
+
+    // Process data which is previously loaded and stores the results in-memory.
+    // Required permissions:
+    // - graphanalytics.engine.process on the graph analytics engine identified by the given ID.
+    rpc GraphAnalyticsEngineProcess(GraphAnalyticsEngineProcessRequest) returns (GraphAnalyticsEngineProcessResponse) {
+        option (google.api.http) = {
+            put: "/api/graphanalytics/v1/engines/{engine_id}/process"
+            body: "*"
+        };
+    }
+
+    // Stores the results from the previous process into the deployment.
+    // Required permissions:
+    // - graphanalytics.engine.store-results on the graph analytics engine identified by the given ID.
+    rpc GraphAnalyticsEngineStoreResults(GraphAnalyticsEngineStoreResultsRequest) returns (GraphAnalyticsEngineStoreResultsResponse) {
+        option (google.api.http) = {
+            put: "/api/graphanalytics/v1/engines/{engine_id}/storeresults"
+            body: "*"
+        };
+    }
+}
+
+// Request arguments for GraphAnalyticsEngineLoadData.
+message GraphAnalyticsEngineLoadDataRequest {
+    // ID of the graph analytics engine to load data in.
+    string engine_id = 1;
+    // Client ID to make request idempotent
+    string client_id = 2;
+    // Database to get graph from
+    string database = 3;
+    // Graph name, this is optional, because one can also use a list of
+    // vertex and edge collections:
+    optional string graph_name = 4;
+    // Optional list of vertex collections, must be given, if graph_name
+    // is not given
+    repeated CollectionDescription vertex_collections = 5;
+    // List of edge collections, must be given, if graph_name
+    // is not given
+    repeated CollectionDescription edge_collections = 6;
+    // Optional numeric value for thread parallelism
+    optional uint32 parallelism = 7;
+    // Optional batch size
+    optional uint64 batch_size = 8;
+    // Map of engine-type specific custom fields (dynamic for this data-load operation)
+    map<string, string> custom_fields = 10;
+}
+
+message CollectionDescription {
+    // Name of collection
+    string name = 1;
+    // List of fields to import apart from default
+    repeated string fields = 2;
+}
+
+// Response arguments from GraphAnalyticsEngineLoadData.
+message GraphAnalyticsEngineLoadDataResponse {
+    // ID of the load data operation
+    string load_data_id = 1;
+    // Client ID
+    string client_id = 2;
+    // Number of vertices
+    uint64 number_of_vertices = 3;
+    // Number of edges
+    uint64 number_of_edges = 4;
+}
+
+// Request arguments for GraphAnalyticsEngineProcess.
+message GraphAnalyticsEngineProcessRequest {    
+    // ID of the graph analytics engine to load data in.
+    string engine_id = 1;
+    // Map of engine-type specific custom fields (dynamic for this process operation)
+    map<string, string> custom_fields = 10;
+    // TODO: Do we want the parallelism, indexEdges, bitsForHash, storeKeys, batchSize, dbserverParallelism, prefetchCount as hard coded fields (here or elsewere)
+}
+
+// Response arguments from GraphAnalyticsEngineProcess.
+message GraphAnalyticsEngineProcessResponse {
+    // ID of the process operation
+    string process_id = 1;
+}
+
+// Request arguments for GraphAnalyticsEngineStoreResults.
+message GraphAnalyticsEngineStoreResultsRequest {
+    // ID of the graph analytics engine to load data in.
+    string engine_id = 1;
+    // ID of the process operation
+    string process_id = 2;
+    // Map of engine-type specific custom fields (dynamic for this store-results operation)
+    map<string, string> custom_fields = 10;
+}
+
+// Response arguments from GraphAnalyticsEngineStoreResults.
+message GraphAnalyticsEngineStoreResultsResponse {
+    // ID of the store results operation
+    string store_results_id = 1;
+}

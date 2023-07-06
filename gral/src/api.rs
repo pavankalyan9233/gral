@@ -1,10 +1,12 @@
 use crate::arangodb::fetch_graph_from_arangodb;
+use crate::args::{with_args, GralArgs};
 use crate::computations::{with_computations, Computation, Computations};
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{with_graphs, Graph, Graphs, KeyOrHash, VertexHash, VertexIndex};
 use crate::VERSION;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
+use graphanalyticsengine::GraphAnalyticsEngineLoadDataRequest;
 use http::Error;
 use log::info;
 use rand::Rng;
@@ -17,11 +19,19 @@ use std::sync::{Arc, Mutex, RwLock};
 use warp::{http::Response, http::StatusCode, reject, Filter, Rejection};
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
+pub mod graphanalyticsengine {
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/arangodb.cloud.internal.graphanalytics.v1.rs"
+    ));
+}
+
 /// The following function puts together the filters for the API.
 /// To this end, it relies on the following async functions below.
 pub fn api_filter(
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
+    args: Arc<Mutex<GralArgs>>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let version_bin = warp::path!("v1" / "versionBinary")
         .and(warp::get())
@@ -93,6 +103,7 @@ pub fn api_filter(
     let get_arangodb_graph = warp::path!("v1" / "getArangoDBGraph")
         .and(warp::post())
         .and(with_graphs(graphs.clone()))
+        .and(with_args(args.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_arangodb_graph);
 
@@ -1323,31 +1334,26 @@ struct GetFromArangoDBResponse {
 
 async fn api_get_arangodb_graph(
     graphs: Arc<Mutex<Graphs>>,
+    args: Arc<Mutex<GralArgs>>,
     bytes: Bytes,
 ) -> Result<warp::reply::Json, Rejection> {
-    let parsed: serde_json::Result<GetArangoDBGraphRequest> = serde_json::from_slice(&bytes[..]);
+    let parsed: serde_json::Result<GraphAnalyticsEngineLoadDataRequest> =
+        serde_json::from_slice(&bytes[..]);
+    //let parsed: serde_json::Result<GetArangoDBGraphRequest> = serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Err(warp::reject::custom(CannotParseJSON { msg: e.to_string() }));
     }
     let mut body = parsed.unwrap();
-    if body.endpoints.is_empty() {
-        return Err(warp::reject::custom(GetFromArangoDBFailed {
-            msg: "no endpoints given".to_string(),
-        }));
-    }
     // Set a few sensible defaults:
-    if body.batch_size == 0 {
-        body.batch_size = 400000;
+    if body.batch_size.is_none() {
+        body.batch_size = Some(400000);
     }
-    if body.prefetch_count == 0 {
-        body.prefetch_count = 5;
-    }
-    if body.dbserver_parallelism == 0 {
-        body.dbserver_parallelism = 5;
+    if body.parallelism.is_none() {
+        body.parallelism = Some(5);
     }
 
     // Fetch from ArangoDB:
-    let graph = fetch_graph_from_arangodb(&body).await;
+    let graph = fetch_graph_from_arangodb(&body, args).await;
     if let Err(e) = graph {
         return Err(warp::reject::custom(GetFromArangoDBFailed {
             msg: e.to_string(),

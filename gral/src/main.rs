@@ -58,9 +58,14 @@ async fn main() {
         });
     let the_graphs = Arc::new(Mutex::new(Graphs { list: vec![] }));
     let the_computations = Arc::new(Mutex::new(Computations::new()));
+    let the_args = Arc::new(Mutex::new(args.clone()));
 
     let apifilters = shutdown
-        .or(api_filter(the_graphs.clone(), the_computations.clone()))
+        .or(api_filter(
+            the_graphs.clone(),
+            the_computations.clone(),
+            the_args.clone(),
+        ))
         .recover(handle_errors);
     let ip_addr: IpAddr = args
         .bind_addr
