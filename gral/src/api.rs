@@ -6,10 +6,7 @@ use crate::graphs::{with_graphs, Graph, Graphs, KeyOrHash, VertexHash, VertexInd
 use crate::VERSION;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
-use graphanalyticsengine::{
-    GraphAnalyticsEngineLoadDataRequest, GraphAnalyticsEngineLoadDataResponse,
-    GraphAnalyticsEngineProcessRequest, GraphAnalyticsEngineProcessResponse,
-};
+use graphanalyticsengine::*;
 use http::Error;
 use log::info;
 use rand::Rng;
@@ -110,6 +107,13 @@ pub fn api_filter(
             .and(with_args(args.clone()))
             .and(warp::body::bytes())
             .and_then(api_get_arangodb_graph);
+    let write_result_back_arangodb =
+        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "storeresults")
+            .and(warp::post())
+            .and(with_graphs(graphs.clone()))
+            .and(with_computations(computations.clone()))
+            .and(warp::body::bytes())
+            .and_then(api_write_result_back_arangodb);
 
     version_bin
         .or(version)
@@ -126,6 +130,7 @@ pub fn api_filter(
         .or(compute_bin)
         .or(compute)
         .or(get_arangodb_graph)
+        .or(write_result_back_arangodb)
 }
 
 fn version_bin() -> Result<Response<Vec<u8>>, Error> {
@@ -1124,6 +1129,51 @@ async fn api_compute(
     Ok(v)
 }
 
+/// This function writes a computation result back to ArangoDB:
+async fn api_write_result_back_arangodb(
+    _engine_id: String,
+    _graphs: Arc<Mutex<Graphs>>,
+    _computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<Vec<u8>, Rejection> {
+    // Parse body and extract integers:
+    let parsed: serde_json::Result<GraphAnalyticsEngineStoreResultsRequest> =
+        serde_json::from_slice(&bytes[..]);
+    if let Err(e) = parsed {
+        return Err(warp::reject::custom(CannotParseJSON { msg: e.to_string() }));
+    }
+    let body = parsed.unwrap();
+
+    let client_id = u64::from_str_radix(&body.client_id, 16);
+    if let Err(_) = client_id {
+        return Err(warp::reject::custom(ComputeFailed {
+            msg: "Could not read clientId as 64bit hex value".to_string(),
+        }));
+    }
+    let _client_id = client_id.unwrap();
+    let job_id = u32::from_str_radix(&body.job_id, 16);
+    if let Err(_) = job_id {
+        return Err(warp::reject::custom(ComputeFailed {
+            msg: "Could not read jobId as 32bit hex value".to_string(),
+        }));
+    }
+    let job_id = job_id.unwrap();
+
+    // TO BE IMPLEMENTED
+
+    let response = GraphAnalyticsEngineStoreResultsResponse {
+        job_id: format!("{:08x}", job_id),
+        client_id: body.client_id,
+        error: true,
+        error_code: 1,
+        error_message: "NOT_YET_IMPLEMENTED".to_string(),
+    };
+
+    // Write response:
+    let v = serde_json::to_vec(&response).expect("Should be serializable!");
+    Ok(v)
+}
+
 /// This function gets progress of a computation.
 async fn api_get_progress_bin(
     computations: Arc<Mutex<Computations>>,
@@ -1307,17 +1357,6 @@ async fn api_drop_computation(
 pub struct CollectionInfo {
     pub name: String,
     pub fields: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GetFromArangoDBResponse {
-    client_id: String,
-    graph_number: u32,
-    number_of_vertices: u64,
-    number_of_edges: u64,
-    bits_for_hash: u32,
-    store_keys: bool,
 }
 
 async fn api_get_arangodb_graph(

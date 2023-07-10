@@ -1,4 +1,3 @@
- - write back not implemented
  - get via AQL not implemented
  - JSON API to delete a JOB
  - JSON API to drop graph
