@@ -201,14 +201,16 @@ message GraphAnalyticsEngineLoadDataAqlRequest {
     string engine_id = 1;
     // Client ID to make request idempotent
     string client_id = 2;
+    // Job ID for results
+    string job_id = 3;
     // Database to get graph from
-    string database = 3;
+    string database = 4;
     // Vertex query
-    string vertex_query = 4;
+    string vertex_query = 5;
     // Edge query
-    string edge_query = 5;
+    string edge_query = 6;
     // Optional batch size
-    uint64 batch_size = 6;
+    uint64 batch_size = 7;
     // Map of engine-type specific custom fields (dynamic for this data-load operation)
     map<string, string> custom_fields = 10;
 }
