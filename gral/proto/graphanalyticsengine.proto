@@ -190,9 +190,9 @@ message GraphAnalyticsEngineLoadDataResponse {
     // Error?
     bool error = 4;
     // Error code, 0 if no error
-    int32 errorCode = 5;
+    int32 error_code = 5;
     // Error message, empty if no error
-    string errorMessage = 6;
+    string error_message = 6;
 }
 
 // Request arguments for GraphAnalyticsEngineLoadDataAql.
@@ -237,9 +237,9 @@ message GraphAnalyticsEngineProcessResponse {
     // Error?
     bool error = 3;
     // Error code, 0 if no error
-    int32 errorCode = 4;
+    int32 error_code = 4;
     // Error message, empty if no error
-    string errorMessage = 5;
+    string error_message = 5;
 }
 
 // Request arguments for GraphAnalyticsEngineStoreResults.
@@ -276,9 +276,9 @@ message GraphAnalyticsEngineStoreResultsResponse {
     // Error?
     bool error = 3;
     // Error code, 0 if no error
-    int32 errorCode = 4;
+    int32 error_code = 4;
     // Error message, empty if no error
-    string errorMessage = 5;
+    string error_message = 5;
 }
 
 // Response arguments from GraphAnalticsEngineListGraphs.
@@ -286,9 +286,9 @@ message GraphAnalyticsEngineListGraphsResponse {
     // Error?
     bool error = 3;
     // Error code, 0 if no error
-    int32 errorCode = 4;
+    int32 error_code = 4;
     // Error message, empty if no error
-    string errorMessage = 5;
+    string error_message = 5;
     // The graphs
     repeated GraphAnalyticsEngineGraph graphs = 6;
 }
@@ -332,9 +332,9 @@ message GraphAnalyticsEngineDeleteGraphResponse {
     // Error?
     bool error = 2;
     // Error code, 0 if no error
-    int32 errorCode = 3;
+    int32 error_code = 3;
     // Error message, empty if no error
-    string errorMessage = 4;
+    string error_message = 4;
 }
 
 // Response arguments from GraphAnalyticsEngineListJobs.
@@ -342,9 +342,9 @@ message GraphAnalyticsEngineListJobsResponse {
     // Error?
     bool error = 1;
     // Error code, 0 if no error
-    int32 errorCode = 2;
+    int32 error_code = 2;
     // Error message, empty if no error
-    string errorMessage = 3;
+    string error_message = 3;
     // The graphs
     repeated GraphAnalyticsEngineJob jobs = 4;
 }
@@ -370,9 +370,9 @@ message GraphAnalyticsEngineDeleteJobResponse {
     // Error?
     bool error = 2;
     // Error code, 0 if no error
-    int32 errorCode = 3;
+    int32 error_code = 3;
     // Error message, empty if no error
-    string errorMessage = 4;
+    string error_message = 4;
 }
 
 // Response for a shutdown request.
@@ -380,7 +380,7 @@ message GraphAnalyticsEngineShutdownResponse {
     // Error?
     bool error = 1;
     // Error code, 0 if no error
-    int32 errorCode = 2;
+    int32 error_code = 2;
     // Error message, empty if no error
-    string errorMessage = 3;
+    string error_message = 3;
 }

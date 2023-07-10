@@ -1,9 +1,13 @@
+ - write back not implemented
+ - get via AQL not implemented
  - JSON API to delete a JOB
- - Write result back into collection in ArangoDB
  - JSON API to drop graph
  - JSON API to enquire about graph
+ - JSON API to enquire about job
  - JSON API to list JOBS
  - JSON API to list graphs
+ - put fetching graph into background, report as job
+ - Write result back into collection in ArangoDB
  - Refactor (error handling in module, etc.)
  - Add metrics (rust-prometheus crate)
  - Metrics for ArangoDB import and export
