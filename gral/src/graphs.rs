@@ -37,6 +37,9 @@ pub struct Edge {
 
 #[derive(Debug)]
 pub struct Graph {
+    // Index in list of graphs:
+    pub graph_id: u32,
+
     // List of hashes by index:
     pub index_to_hash: Vec<VertexHash>,
 
@@ -113,8 +116,9 @@ pub enum KeyOrHash {
 }
 
 impl Graph {
-    pub fn new(store_keys: bool, _bits_for_hash: u8) -> Arc<RwLock<Graph>> {
+    pub fn new(store_keys: bool, _bits_for_hash: u8, id: u32) -> Arc<RwLock<Graph>> {
         Arc::new(RwLock::new(Graph {
+            graph_id: id,
             index_to_hash: vec![],
             hash_to_index: HashMap::new(),
             exceptions: HashMap::new(),

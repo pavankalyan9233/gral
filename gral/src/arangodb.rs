@@ -441,7 +441,7 @@ pub async fn fetch_graph_from_arangodb(
     );
 
     // Generate a graph object:
-    let graph_arc = Graph::new(true, 64);
+    let graph_arc = Graph::new(true, 64, 0);
 
     // Let's first get the vertices:
     {

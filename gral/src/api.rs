@@ -74,10 +74,11 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_progress_bin);
-    let get_progress = warp::path!("v1" / "getProgress" / String)
-        .and(warp::get())
-        .and(with_computations(computations.clone()))
-        .and_then(api_get_progress);
+    let get_progress =
+        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "jobs" / String)
+            .and(warp::get())
+            .and(with_computations(computations.clone()))
+            .and_then(api_get_progress);
     let get_results_by_vertices = warp::path!("v1" / "getResultsByVertices")
         .and(warp::put())
         .and(with_computations(computations.clone()))
@@ -321,7 +322,7 @@ async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>,
             dropped = gg.dropped;
         }
         if dropped {
-            *g = Graph::new(store_keys != 0, 64);
+            *g = Graph::new(store_keys != 0, 64, index);
             found = true;
             break;
         }
@@ -330,7 +331,8 @@ async fn api_create(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8>,
     // or else append to the end:
     if !found {
         index = graphs.list.len() as u32;
-        graphs.list.push(Graph::new(store_keys != 0, 64));
+        let graph = Graph::new(store_keys != 0, 64, index);
+        graphs.list.push(graph);
     }
     // By now, index is always set to some sensible value!
 
@@ -414,7 +416,7 @@ async fn api_drop_bin(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
     if graph_number as usize + 1 == graphs.list.len() {
         graphs.list.pop();
     } else {
-        graphs.list[graph_number as usize] = Graph::new(false, 64);
+        graphs.list[graph_number as usize] = Graph::new(false, 64, graph_number);
         let mut graph = graphs.list[graph_number as usize].write().unwrap();
         graph.dropped = true; // Mark unused
     }
@@ -1285,6 +1287,7 @@ struct ProgressResponse {
 
 /// This function gets progress of a computation.
 async fn api_get_progress(
+    _engine_id: String,
     job_id: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<Vec<u8>, Rejection> {
@@ -1302,19 +1305,22 @@ async fn api_get_progress(
         }
         Some(comp_arc) => {
             let comp = comp_arc.lock().unwrap();
+            let graph_arc = comp.get_graph();
+            let graph = graph_arc.read().unwrap();
 
             // Write response:
-            let body = ProgressResponse {
+            let response = GraphAnalyticsEngineJob {
                 job_id,
+                graph_id: format!("{:x}", graph.graph_id),
                 total: 1,
                 progress: if comp.is_ready() { 1 } else { 0 },
                 result: if comp.is_ready() {
-                    Some(comp.get_result().to_string())
+                    comp.get_result() as i64
                 } else {
-                    None
+                    0
                 },
             };
-            Ok(serde_json::to_vec(&body).expect("Should be serializable"))
+            Ok(serde_json::to_vec(&response).expect("Should be serializable"))
         }
     }
 }
@@ -1464,8 +1470,16 @@ async fn api_get_arangodb_graph(
     // or else append to the end:
     if !found {
         index = graphs.list.len() as u32;
+        {
+            let mut graph = graph.write().unwrap();
+            graph.graph_id = index;
+        }
         graphs.list.push(graph);
     } else {
+        {
+            let mut graph = graph.write().unwrap();
+            graph.graph_id = index;
+        }
         graphs.list[index as usize] = graph;
     }
     // By now, index is always set to some sensible value!
@@ -1559,9 +1573,11 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
     } else if let Some(wrong) = err.find::<ComputationNotFound>() {
         code = StatusCode::NOT_FOUND;
         message = format!("Computation with id {} does not exist", wrong.comp_id);
+        output_json = true;
     } else if let Some(wrong) = err.find::<ComputationNotYetFinished>() {
         code = StatusCode::SERVICE_UNAVAILABLE;
         message = format!("Computation with id {} does not exist", wrong.comp_id);
+        output_json = true;
     } else if let Some(wrong) = err.find::<InternalError>() {
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = wrong.msg.clone();
