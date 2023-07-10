@@ -84,11 +84,16 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_results_by_vertices);
-    let drop_computation = warp::path!("v1" / "dropComputation")
+    let drop_computation_bin = warp::path!("v1" / "dropComputationBinary")
         .and(warp::put())
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
-        .and_then(api_drop_computation);
+        .and_then(api_drop_computation_bin);
+    let drop_computation =
+        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "jobs" / String)
+            .and(warp::delete())
+            .and(with_computations(computations.clone()))
+            .and_then(api_drop_computation);
     let compute_bin = warp::path!("v1" / "compute-binary")
         .and(warp::post())
         .and(with_graphs(graphs.clone()))
@@ -134,6 +139,7 @@ pub fn api_filter(
         .or(get_progress_bin)
         .or(get_progress)
         .or(get_results_by_vertices)
+        .or(drop_computation_bin)
         .or(drop_computation)
         .or(compute_bin)
         .or(compute)
@@ -1325,6 +1331,43 @@ async fn api_get_progress(
     }
 }
 
+/// This function deletes a computation.
+async fn api_drop_computation(
+    _engine_id: String,
+    job_id: String,
+    computations: Arc<Mutex<Computations>>,
+) -> Result<Vec<u8>, Rejection> {
+    let comp_id = u64::from_str_radix(&job_id, 16);
+    if let Err(_) = comp_id {
+        return Err(warp::reject::custom(ComputationNotFound { comp_id: 0 }));
+    }
+    let comp_id = comp_id.unwrap();
+
+    let mut comps = computations.lock().unwrap();
+    let comp_arc = comps.list.get(&comp_id);
+    match comp_arc {
+        None => {
+            return Err(warp::reject::custom(ComputationNotFound { comp_id }));
+        }
+        Some(comp_arc) => {
+            {
+                let mut comp = comp_arc.lock().unwrap();
+                comp.cancel();
+            }
+            comps.list.remove(&comp_id);
+
+            // Write response:
+            let response = GraphAnalyticsEngineDeleteJobResponse {
+                job_id,
+                error: false,
+                error_code: 0,
+                error_message: "".to_string(),
+            };
+            Ok(serde_json::to_vec(&response).expect("Should be serializable"))
+        }
+    }
+}
+
 // The following function implements
 async fn api_get_results_by_vertices(
     computations: Arc<Mutex<Computations>>,
@@ -1370,7 +1413,7 @@ async fn api_get_results_by_vertices(
 }
 
 /// This function drops a computation.
-async fn api_drop_computation(
+async fn api_drop_computation_bin(
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<Vec<u8>, Rejection> {
