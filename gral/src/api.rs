@@ -1345,11 +1345,11 @@ async fn api_get_arangodb_graph(
     }
     let mut body = parsed.unwrap();
     // Set a few sensible defaults:
-    if body.batch_size.is_none() {
-        body.batch_size = Some(400000);
+    if body.batch_size == 0 {
+        body.batch_size = 400000;
     }
-    if body.parallelism.is_none() {
-        body.parallelism = Some(5);
+    if body.parallelism == 0 {
+        body.parallelism = 5;
     }
 
     // Fetch from ArangoDB:

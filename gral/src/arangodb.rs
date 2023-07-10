@@ -210,14 +210,12 @@ async fn get_all_shard_data(
     let mut dbservers: Vec<DBServerInfo> = vec![];
     let mut error_happened = false;
     let mut error: String = "".into();
-    let batch_size = req.batch_size.unwrap(); // checked outside!
-    let parallelism = req.parallelism.unwrap(); // checked outside!
     for (server, shard_list) in shard_map.iter() {
         let url = make_url(&format!("/_api/dump/start?dbserver={}", server));
         let body = DumpStartBody {
-            batch_size,
+            batch_size: req.batch_size,
             prefetch_count: 5,
-            parallelism,
+            parallelism: req.parallelism,
             shards: shard_list.clone(),
         };
         let body_v =
@@ -279,7 +277,7 @@ async fn get_all_shard_data(
         id: u64,
     }
 
-    let par_per_dbserver = (parallelism as usize + dbservers.len() - 1) / dbservers.len();
+    let par_per_dbserver = (req.parallelism as usize + dbservers.len() - 1) / dbservers.len();
     let mut task_set = JoinSet::new();
     let mut endpoints_round_robin: usize = 0;
     let mut consumers_round_robin: usize = 0;
@@ -410,7 +408,6 @@ pub async fn fetch_graph_from_arangodb(
 
     let use_tls = endpoints[0].starts_with("https://");
     let client = build_client(use_tls)?;
-    let parallelism = req.parallelism.unwrap(); // checked outside
 
     let make_url = |path: &str| -> String { endpoints[0].clone() + "/_db/" + &req.database + path };
 
@@ -452,7 +449,7 @@ pub async fn fetch_graph_from_arangodb(
         let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
         let prog_reported = Arc::new(Mutex::new(0 as u64));
-        for _i in 0..parallelism {
+        for _i in 0..req.parallelism {
             let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
             senders.push(sender);
             let graph_clone = graph_arc.clone();
@@ -545,7 +542,7 @@ pub async fn fetch_graph_from_arangodb(
         let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
         let prog_reported = Arc::new(Mutex::new(0 as u64));
-        for _i in 0..parallelism {
+        for _i in 0..req.parallelism {
             let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
             senders.push(sender);
             let graph_clone = graph_arc.clone();

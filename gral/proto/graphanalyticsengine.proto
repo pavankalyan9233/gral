@@ -16,14 +16,55 @@ option go_package = "github.com/arangodb-managed/apis/graphanalytics/v1";
 // import "github.com/golang/protobuf/ptypes/timestamp/timestamp.proto";
 import "google/api/annotations.proto";
 
-// GraphAnalyticsEngineService is the API used interact with graph analytics engines, which belongs to a deployment.
+// GraphAnalyticsEngineService is the API used interact with graph
+// analytics engines, which belongs to a deployment. Note that a
+// GraphAnalyticsEngine has an associated deployment on AG. Every call,
+// which can take longer to complete is asynchronous in the sense that
+// it returns a jobId and the result can/must be retrieved separately.
+// All calls are idempotent and retryable. For POST, PUT and DELETE
+// calls this is achieved via a clientId, which the client has to
+// provide and which must be unique for the call. In this way, every
+// such call can be retried and will always return the same result. All
+// GET calls are naturally idempotent.
+// Here is an overview over the API, note that a GraphAnalyticsEngine has an associated deployment on AG:
+//
+// The following trigger asynchronous operations, which might take longer to complete:
+//  - Load a graph from the deployment via two AQL queries (one for vertices, one for edges) [POST]
+//  - Load a graph via the arangodump protocoll [POST]
+//  - Start computation job [POST]
+//  - Write back result of computation job to deployment [POST]
+//
+// Work with graphs:
+//  - List graphs [GET]
+//  - Get information about a particular graph [GET]
+//  - Delete a graph [DELETE]
+//
+// Work with jobs:
+//  - List jobs [GET]
+//  - Get status/result of one job [GET]
+//  - Delete job [DELETE]
+//
+// Maintenance:
+//  - Get metrics [GET]
+//  - Shut down [DELETE]
+
 service GraphAnalyticsEngineService {
-    // Load data fetches data from the deployments and load it into memory of the engine for later processing.
+    // Load data fetches data from the deployment and loads it into memory of the engine for later processing.
     // Required permissions:
     // - graphanalytics.engine.load-data on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineLoadData(GraphAnalyticsEngineLoadDataRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
-            put: "/api/graphanalytics/v1/engines/{engine_id}/loaddata"
+            post: "/api/graphanalytics/v1/engines/{engine_id}/loaddata"
+            body: "*"
+        };
+    }
+
+    // Load data fetches data from the deployment via AQL and load it into memory of the engine for later processing.
+    // Required permissions:
+    // - graphanalytics.engine.load-data on the graph analytics engine identified by the given ID.
+    rpc GraphAnalyticsEngineLoadDataAql(GraphAnalyticsEngineLoadDataAqlRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
+        option (google.api.http) = {
+            post: "/api/graphanalytics/v1/engines/{engine_id}/loaddataaql"
             body: "*"
         };
     }
@@ -33,7 +74,7 @@ service GraphAnalyticsEngineService {
     // - graphanalytics.engine.process on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineProcess(GraphAnalyticsEngineProcessRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            put: "/api/graphanalytics/v1/engines/{engine_id}/process"
+            post: "/api/graphanalytics/v1/engines/{engine_id}/process"
             body: "*"
         };
     }
@@ -43,8 +84,64 @@ service GraphAnalyticsEngineService {
     // - graphanalytics.engine.store-results on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineStoreResults(GraphAnalyticsEngineStoreResultsRequest) returns (GraphAnalyticsEngineStoreResultsResponse) {
         option (google.api.http) = {
-            put: "/api/graphanalytics/v1/engines/{engine_id}/storeresults"
+            post: "/api/graphanalytics/v1/engines/{engine_id}/storeresults"
             body: "*"
+        };
+    }
+
+    // List the graphs in the engine:
+    rpc GraphAnalyticsEngineListGraphs(GraphAnalyticsEngineId) returns (GraphAnalyticsEngineListGraphsResponse) {
+        option (google.api.http) = {
+            get: "/api/graphanalytics/v1/engines/{engine_id}/graphs"
+        };
+    }
+   
+    // Get information about a specific graph:
+    rpc GraphAnalyticsEngineGetGraph(GraphAnalyticsEngineIdWithGraph) returns (GraphAnalyticsEngineGraph) {
+        option (google.api.http) = {
+            get: "/api/graphanalytics/v1/engines/{engine_id}/graphs/{graph_id}"
+        };
+    }
+
+    // Delete a specific graph:
+    rpc GraphAnalyticsEngineDeleteGraph(GraphAnalyticsEngineIdWithGraph) returns (GraphAnalyticsEngineDeleteGraphResponse) {
+        option (google.api.http) = {
+            delete: "/api/graphanalytics/v1/engines/{engine_id}/graphs/{graph_id}"
+        };
+    }
+
+    // List the jobs in the engine:
+    rpc GraphAnalyticsEngineListJobs(GraphAnalyticsEngineId) returns (GraphAnalyticsEngineListJobsResponse) {
+        option (google.api.http) = {
+            get: "/api/graphanalytics/v1/engines/{engine_id}/jobs"
+        };
+    }
+   
+    // Get information about a specific job (in particular progress and result when done):
+    rpc GraphAnalyticsEngineGetJob(GraphAnalyticsEngineIdWithJob) returns (GraphAnalyticsEngineJob) {
+        option (google.api.http) = {
+            get: "/api/graphanalytics/v1/engines/{engine_id}/jobs/{job_id}"
+        };
+    }
+
+    // Delete a specific graph
+    rpc GraphAnalyticsEngineDeleteJob(GraphAnalyticsEngineIdWithJob) returns (GraphAnalyticsEngineDeleteJobResponse) {
+        option (google.api.http) = {
+            delete: "/api/graphanalytics/v1/engines/{engine_id}/jobs/{job_id}"
+        };
+    }
+
+    // Get metrics, for now, the return type is not defined, therefore commented out:
+    //rpc GraphAnalyticsEngineMetrics(GraphAnalyticsEngineId) returns (PrometheusMetrics) {
+    //    option (google.api.http) = {
+    //        get: "/api/graphanalytics/v1/engines/{engine_id}/metrics"
+    //    };
+    //}
+
+    // Shutdown
+    rpc GraphAnalticsEngineShutdown(GraphAnalyticsEngineId) returns (GraphAnalyticsEngineShutdownResponse) {
+        option(google.api.http) = {
+            delete: "/api/graphanalytics/v1/engines/{engine_id}/shutdown"
         };
     }
 }
@@ -59,17 +156,18 @@ message GraphAnalyticsEngineLoadDataRequest {
     string database = 3;
     // Graph name, this is optional, because one can also use a list of
     // vertex and edge collections:
-    optional string graph_name = 4;
+    string graph_name = 4;
     // Optional list of vertex collections, must be given, if graph_name
-    // is not given
+    // is not given, or if data other than the graph topology is to be
+    // loaded.
     repeated CollectionDescription vertex_collections = 5;
     // List of edge collections, must be given, if graph_name
     // is not given
     repeated CollectionDescription edge_collections = 6;
     // Optional numeric value for thread parallelism
-    optional uint32 parallelism = 7;
+    uint32 parallelism = 7;
     // Optional batch size
-    optional uint64 batch_size = 8;
+    uint64 batch_size = 8;
     // Map of engine-type specific custom fields (dynamic for this data-load operation)
     map<string, string> custom_fields = 10;
 }
@@ -84,36 +182,87 @@ message CollectionDescription {
 // Response arguments from GraphAnalyticsEngineLoadData.
 message GraphAnalyticsEngineLoadDataResponse {
     // ID of the load data operation
-    string load_data_id = 1;
+    string job_id = 1;
     // Client ID
     string client_id = 2;
-    // Number of vertices
-    uint64 number_of_vertices = 3;
-    // Number of edges
-    uint64 number_of_edges = 4;
+    // Graph ID
+    string graph_id = 3;
+    // Error?
+    bool error = 4;
+    // Error code, 0 if no error
+    int32 errorCode = 5;
+    // Error message, empty if no error
+    string errorMessage = 6;
+}
+
+// Request arguments for GraphAnalyticsEngineLoadDataAql.
+message GraphAnalyticsEngineLoadDataAqlRequest {
+    // ID of the graph analytics engine to load data in.
+    string engine_id = 1;
+    // Client ID to make request idempotent
+    string client_id = 2;
+    // Database to get graph from
+    string database = 3;
+    // Vertex query
+    string vertex_query = 4;
+    // Edge query
+    string edge_query = 5;
+    // Optional batch size
+    uint64 batch_size = 6;
+    // Map of engine-type specific custom fields (dynamic for this data-load operation)
+    map<string, string> custom_fields = 10;
 }
 
 // Request arguments for GraphAnalyticsEngineProcess.
 message GraphAnalyticsEngineProcessRequest {    
     // ID of the graph analytics engine to load data in.
     string engine_id = 1;
-    // Map of engine-type specific custom fields (dynamic for this process operation)
+    // Client ID to make request idempotent
+    string client_id = 2;
+    // Graph ID
+    string graph_id = 3;
+    // Name of algorithm:
+    string algorithm = 4;
+   
+    // Map of engine-type and algorithm-type specific custom fields (dynamic for this process operation)
     map<string, string> custom_fields = 10;
-    // TODO: Do we want the parallelism, indexEdges, bitsForHash, storeKeys, batchSize, dbserverParallelism, prefetchCount as hard coded fields (here or elsewere)
 }
 
 // Response arguments from GraphAnalyticsEngineProcess.
 message GraphAnalyticsEngineProcessResponse {
-    // ID of the process operation
-    string process_id = 1;
+    // ID of the job
+    string job_id = 1;
+    // Client ID
+    string client_id = 2;
+    // Error?
+    bool error = 3;
+    // Error code, 0 if no error
+    int32 errorCode = 4;
+    // Error message, empty if no error
+    string errorMessage = 5;
 }
 
 // Request arguments for GraphAnalyticsEngineStoreResults.
 message GraphAnalyticsEngineStoreResultsRequest {
     // ID of the graph analytics engine to load data in.
     string engine_id = 1;
-    // ID of the process operation
-    string process_id = 2;
+    // Client ID to make request idempotent
+    string client_id = 2;
+    // ID of the job
+    string job_id = 3;
+    // The following map maps collection names as found in the
+    // _id entries of vertices to the collections into which
+    // the result data should be written. The list of fields
+    // is the attributes into which the result is written.
+    // An insert operation with overwritemode "update" is used.
+    map<string, CollectionDescription> vertex_collections = 4;
+    // List of edge collections, in case there are results for
+    // edges.
+    map<string, CollectionDescription> edge_collections = 5;
+    // Optional numeric value for thread parallelism
+    uint32 parallelism = 6;
+    // Optional batch size
+    uint64 batch_size = 7;
     // Map of engine-type specific custom fields (dynamic for this store-results operation)
     map<string, string> custom_fields = 10;
 }
@@ -121,5 +270,117 @@ message GraphAnalyticsEngineStoreResultsRequest {
 // Response arguments from GraphAnalyticsEngineStoreResults.
 message GraphAnalyticsEngineStoreResultsResponse {
     // ID of the store results operation
-    string store_results_id = 1;
+    string job_id = 1;
+    // Client ID
+    string client_id = 2;
+    // Error?
+    bool error = 3;
+    // Error code, 0 if no error
+    int32 errorCode = 4;
+    // Error message, empty if no error
+    string errorMessage = 5;
+}
+
+// Response arguments from GraphAnalticsEngineListGraphs.
+message GraphAnalyticsEngineListGraphsResponse {
+    // Error?
+    bool error = 3;
+    // Error code, 0 if no error
+    int32 errorCode = 4;
+    // Error message, empty if no error
+    string errorMessage = 5;
+    // The graphs
+    repeated GraphAnalyticsEngineGraph graphs = 6;
+}
+
+// ID of an engine
+message GraphAnalyticsEngineId {
+    // Engine ID (for path)
+    string engine_id = 1;
+}
+
+// ID of an engine and id of a graph
+message GraphAnalyticsEngineIdWithGraph {
+    // Engine ID (for path)
+    string engine_id = 1;
+    // Graph ID (for path)
+    string graph_id = 2;
+}
+
+// ID of an engine and id of a job
+message GraphAnalyticsEngineIdWithJob {
+    // Engine ID (for path)
+    string engine_id = 1;
+    // Graph ID (for path)
+    string job_id = 2;
+}
+
+// Description of a graph.
+message GraphAnalyticsEngineGraph {
+    // ID of graph
+    string graph_id = 1;
+    // Number of vertices:
+    uint64 number_of_vertices = 2;
+    // Number of edges:
+    uint64 number_of_edges = 3;
+}
+
+// Response for a delete graph request.
+message GraphAnalyticsEngineDeleteGraphResponse {
+    // ID of graph
+    string graph_id = 1;
+    // Error?
+    bool error = 2;
+    // Error code, 0 if no error
+    int32 errorCode = 3;
+    // Error message, empty if no error
+    string errorMessage = 4;
+}
+
+// Response arguments from GraphAnalyticsEngineListJobs.
+message GraphAnalyticsEngineListJobsResponse {
+    // Error?
+    bool error = 1;
+    // Error code, 0 if no error
+    int32 errorCode = 2;
+    // Error message, empty if no error
+    string errorMessage = 3;
+    // The graphs
+    repeated GraphAnalyticsEngineJob jobs = 4;
+}
+
+// Description of a job.
+message GraphAnalyticsEngineJob {
+    // ID of job
+    string job_id = 1;
+    // Graph of job
+    string graph_id = 2;
+    // Total progress, guaranteed to be positive, but could be 1
+    uint32 total = 3;
+    // Progress (0: no progress, equal to total: ready)
+    uint32 progress = 4;
+    // Result (present, if progress == total)
+    int64 result = 5;
+}
+
+// Response for a delete job request.
+message GraphAnalyticsEngineDeleteJobResponse {
+    // ID of job
+    string job_id = 1;
+    // Error?
+    bool error = 2;
+    // Error code, 0 if no error
+    int32 errorCode = 3;
+    // Error message, empty if no error
+    string errorMessage = 4;
+}
+
+// Response for a shutdown request.
+message GraphAnalyticsEngineShutdownResponse {
+    // Error?
+    bool error = 1;
+    // Error code, 0 if no error
+    int32 errorCode = 2;
+    // Error message, empty if no error
+    string errorMessage = 3;
 }
