@@ -22,6 +22,9 @@ async-channel = "1.8.0"
 http = "0.2.9"
 prost = "0.11.9"
 prost-types = "0.11.9"
+pbjson = "0.5.1"
+pbjson-types = "0.5.1"
 
 [build-dependencies]
+pbjson-build = "0.5.1"
 prost-build = "0.11.9"

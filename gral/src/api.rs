@@ -24,6 +24,10 @@ pub mod graphanalyticsengine {
         env!("OUT_DIR"),
         "/arangodb.cloud.internal.graphanalytics.v1.rs"
     ));
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/arangodb.cloud.internal.graphanalytics.v1.serde.rs"
+    ));
 }
 
 /// The following function puts together the filters for the API.
