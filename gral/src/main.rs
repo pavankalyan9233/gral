@@ -39,9 +39,9 @@ async fn main() {
     let (tx_shutdown, rx_shutdown) = oneshot::channel::<()>();
     let tx_arc = Arc::new(Mutex::new(Some(tx_shutdown)));
     let tx_clone = tx_arc.clone();
-    let shutdown = warp::path!("v1" / "shutdown")
+    let shutdown = warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "shutdown")
         .and(warp::delete())
-        .map(move || {
+        .map(move |_engine_id : String| {
             let mut tx = tx_clone.lock().unwrap();
             if tx.is_some() {
                 let tx = tx.take();
