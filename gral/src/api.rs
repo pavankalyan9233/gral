@@ -10,7 +10,6 @@ use graphanalyticsengine::*;
 use http::Error;
 use log::info;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::io::{BufRead, Cursor};
 use std::ops::Deref;
@@ -131,6 +130,16 @@ pub fn api_filter(
             .and(with_computations(computations.clone()))
             .and(warp::body::bytes())
             .and_then(api_get_arangodb_graph_aql);
+    let get_graph =
+        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "graphs" / String)
+            .and(warp::get())
+            .and(with_graphs(graphs.clone()))
+            .and_then(api_get_graph);
+    let drop_graph =
+        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "graphs" / String)
+            .and(warp::delete())
+            .and(with_graphs(graphs.clone()))
+            .and_then(api_drop_graph);
 
     version_bin
         .or(version)
@@ -150,6 +159,8 @@ pub fn api_filter(
         .or(get_arangodb_graph)
         .or(write_result_back_arangodb)
         .or(get_arangodb_graph_aql)
+        .or(get_graph)
+        .or(drop_graph)
 }
 
 fn version_bin() -> Result<Response<Vec<u8>>, Error> {
@@ -1032,15 +1043,6 @@ async fn api_compute_bin(
     Ok(v)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ComputeRequestResponse {
-    client_id: String,
-    graph_id: String,
-    algorithm: String,
-    job_id: Option<String>,
-}
-
 /// This function triggers a computation:
 async fn api_compute(
     _engine_id: String,
@@ -1286,15 +1288,6 @@ async fn api_get_progress_bin(
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ProgressResponse {
-    job_id: String,
-    total: u32,
-    progress: u32,
-    result: Option<String>,
-}
-
 /// This function gets progress of a computation.
 async fn api_get_progress(
     _engine_id: String,
@@ -1370,6 +1363,82 @@ async fn api_drop_computation(
             Ok(serde_json::to_vec(&response).expect("Should be serializable"))
         }
     }
+}
+
+/// This function gets information about a graph:
+async fn api_get_graph(
+    _engine_id: String,
+    graph_id: String,
+    graphs: Arc<Mutex<Graphs>>,
+) -> Result<Vec<u8>, Rejection> {
+    let graph_id = u32::from_str_radix(&graph_id, 16);
+    if let Err(_) = graph_id {
+        return Err(warp::reject::custom(GraphNotFound { number: 0 }));
+    }
+    let graph_id = graph_id.unwrap();
+
+    let graphs = graphs.lock().unwrap();
+    if graph_id as usize >= graphs.list.len() {
+        return Err(warp::reject::custom(GraphNotFound { number: graph_id }));
+    }
+    let graph_arc = graphs.list[graph_id as usize].clone();
+    let graph = graph_arc.read().unwrap();
+    if graph.dropped {
+        return Err(warp::reject::custom(GraphNotFound { number: graph_id }));
+    }
+
+    // Write response:
+    let response = GraphAnalyticsEngineGraph {
+        graph_id: format!("{:x}", graph_id),
+        number_of_vertices: graph.number_of_vertices(),
+        number_of_edges: graph.number_of_edges(),
+    };
+    Ok(serde_json::to_vec(&response).expect("Should be serializable"))
+}
+
+/// This function drops a graph:
+async fn api_drop_graph(
+    _engine_id: String,
+    graph_id: String,
+    graphs: Arc<Mutex<Graphs>>,
+) -> Result<Vec<u8>, Rejection> {
+    let graph_id = u32::from_str_radix(&graph_id, 16);
+    if let Err(_) = graph_id {
+        return Err(warp::reject::custom(GraphNotFound { number: 0 }));
+    }
+    let graph_id = graph_id.unwrap();
+
+    let mut graphs = graphs.lock().unwrap();
+    if graph_id as usize >= graphs.list.len() {
+        return Err(warp::reject::custom(GraphNotFound { number: graph_id }));
+    }
+    {
+        let graph = graphs.list[graph_id as usize].read().unwrap();
+        if graph.dropped {
+            return Err(warp::reject::custom(GraphNotFound { number: graph_id }));
+        }
+    }
+
+    // The following will automatically free graph if no longer used by
+    // a computation:
+    if graph_id as usize + 1 == graphs.list.len() {
+        graphs.list.pop();
+    } else {
+        graphs.list[graph_id as usize] = Graph::new(false, 64, graph_id);
+        let mut graph = graphs.list[graph_id as usize].write().unwrap();
+        graph.dropped = true; // Mark unused
+    }
+
+    info!("Have dropped graph {}!", graph_id);
+
+    // Write response:
+    let response = GraphAnalyticsEngineDeleteGraphResponse {
+        graph_id: format!("{:x}", graph_id),
+        error: false,
+        error_code: 0,
+        error_message: "".to_string(),
+    };
+    Ok(serde_json::to_vec(&response).expect("Should be serializable"))
 }
 
 // The following function implements
@@ -1458,12 +1527,6 @@ async fn api_drop_computation_bin(
     v.write_u64::<BigEndian>(client_id).unwrap();
     v.write_u64::<BigEndian>(comp_id).unwrap();
     Ok(v)
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CollectionInfo {
-    pub name: String,
-    pub fields: Vec<String>,
 }
 
 async fn api_get_arangodb_graph(

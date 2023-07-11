@@ -1,5 +1,3 @@
- - JSON API to enquire about graph
- - JSON API to drop graph
  - JSON API to list JOBS
  - JSON API to list graphs
  - put fetching graph into background, report as job
