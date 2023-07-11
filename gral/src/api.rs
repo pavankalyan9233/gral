@@ -140,6 +140,14 @@ pub fn api_filter(
             .and(warp::delete())
             .and(with_graphs(graphs.clone()))
             .and_then(api_drop_graph);
+    let list_graphs = warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "graphs")
+        .and(warp::get())
+        .and(with_graphs(graphs.clone()))
+        .and_then(api_list_graphs);
+    let list_jobs = warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "jobs")
+        .and(warp::get())
+        .and(with_computations(computations.clone()))
+        .and_then(api_list_jobs);
 
     version_bin
         .or(version)
@@ -161,6 +169,8 @@ pub fn api_filter(
         .or(get_arangodb_graph_aql)
         .or(get_graph)
         .or(drop_graph)
+        .or(list_graphs)
+        .or(list_jobs)
 }
 
 fn version_bin() -> Result<Response<Vec<u8>>, Error> {
@@ -1393,6 +1403,58 @@ async fn api_get_graph(
         number_of_vertices: graph.number_of_vertices(),
         number_of_edges: graph.number_of_edges(),
     };
+    Ok(serde_json::to_vec(&response).expect("Should be serializable"))
+}
+
+/// This function lists graphs:
+async fn api_list_graphs(
+    _engine_id: String,
+    graphs: Arc<Mutex<Graphs>>,
+) -> Result<Vec<u8>, Rejection> {
+    let graphs = graphs.lock().unwrap();
+    let mut response = vec![];
+    for i in 0..graphs.list.len() {
+        let graph = graphs.list[i].read().unwrap();
+        if graph.dropped {
+            continue;
+        }
+
+        // Write response:
+        let g = GraphAnalyticsEngineGraph {
+            graph_id: format!("{:x}", graph.graph_id),
+            number_of_vertices: graph.number_of_vertices(),
+            number_of_edges: graph.number_of_edges(),
+        };
+        response.push(g);
+    }
+    Ok(serde_json::to_vec(&response).expect("Should be serializable"))
+}
+
+async fn api_list_jobs(
+    _engine_id: String,
+    computations: Arc<Mutex<Computations>>,
+) -> Result<Vec<u8>, Rejection> {
+    let comps = computations.lock().unwrap();
+    let mut response: Vec<GraphAnalyticsEngineJob> = vec![];
+    for (job_id, comp_arc) in comps.list.iter() {
+        let comp = comp_arc.lock().unwrap();
+        let graph_arc = comp.get_graph();
+        let graph = graph_arc.read().unwrap();
+
+        // Write response:
+        let j = GraphAnalyticsEngineJob {
+            job_id: format!("{:x}", job_id),
+            graph_id: format!("{:x}", graph.graph_id),
+            total: 1,
+            progress: if comp.is_ready() { 1 } else { 0 },
+            result: if comp.is_ready() {
+                comp.get_result() as i64
+            } else {
+                0
+            },
+        };
+        response.push(j);
+    }
     Ok(serde_json::to_vec(&response).expect("Should be serializable"))
 }
 
