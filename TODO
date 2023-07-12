@@ -1,3 +1,5 @@
+ - report total, progress and error with jobs
+ - job cancellation for load
  - bad 405 response if graph or job not found?
  - bad binary responses when errors in JSON methods
  - check if grupload still works with binary protocol
