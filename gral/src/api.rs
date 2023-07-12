@@ -1,6 +1,8 @@
 use crate::arangodb::fetch_graph_from_arangodb;
 use crate::args::{with_args, GralArgs};
-use crate::computations::{with_computations, Computation, Computations};
+use crate::computations::{
+    with_computations, Computation, Computations, ConcreteComputation, LoadComputation,
+};
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{with_graphs, Graph, Graphs, KeyOrHash, VertexHash, VertexIndex};
 use crate::VERSION;
@@ -9,7 +11,6 @@ use bytes::Bytes;
 use graphanalyticsengine::*;
 use http::Error;
 use log::info;
-use rand::Rng;
 use std::convert::Infallible;
 use std::io::{BufRead, Cursor};
 use std::ops::Deref;
@@ -113,6 +114,7 @@ pub fn api_filter(
         warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "loaddata")
             .and(warp::post())
             .and(with_graphs(graphs.clone()))
+            .and(with_computations(computations.clone()))
             .and(with_args(args.clone()))
             .and(warp::body::bytes())
             .and_then(api_get_arangodb_graph);
@@ -295,10 +297,17 @@ impl reject::Reject for ComputationNotFound {}
 
 /// An error object, which is used if a computation is not yet finished.
 #[derive(Debug)]
-struct ComputationNotYetFinished {
+pub struct ComputationNotYetFinished {
     pub comp_id: u64,
 }
 impl reject::Reject for ComputationNotYetFinished {}
+
+/// An error object, which is used if a load job cannot dump data.
+#[derive(Debug)]
+pub struct CannotDumpVertexData {
+    pub comp_id: u64,
+}
+impl reject::Reject for CannotDumpVertexData {}
 
 /// A general error type for internal errors like out of memory:
 #[derive(Debug)]
@@ -503,7 +512,7 @@ fn read_bytes_or_fail(reader: &mut Cursor<Vec<u8>>, l: u32) -> Result<&[u8], Rej
     Ok(&v[(reader.position() as usize)..((reader.position() + l as u64) as usize)])
 }
 
-fn put_key_or_hash(out: &mut Vec<u8>, koh: &KeyOrHash) {
+pub fn put_key_or_hash(out: &mut Vec<u8>, koh: &KeyOrHash) {
     match koh {
         KeyOrHash::Hash(h) => {
             put_varlen(out, 0);
@@ -899,69 +908,6 @@ async fn api_seal_edges(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<
     Ok(v)
 }
 
-pub struct ConcreteComputation {
-    pub algorithm: u32,
-    pub graph: Arc<RwLock<Graph>>,
-    pub components: Option<Vec<u64>>,
-    pub shall_stop: bool,
-    pub number: u64,
-}
-
-impl Computation for ConcreteComputation {
-    fn is_ready(&self) -> bool {
-        self.components.is_some()
-    }
-    fn cancel(&mut self) {
-        self.shall_stop = true;
-    }
-    fn algorithm_id(&self) -> u32 {
-        return self.algorithm;
-    }
-    fn get_graph(&self) -> Arc<RwLock<Graph>> {
-        return self.graph.clone();
-    }
-    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String> {
-        out.write_u8(8).unwrap();
-        out.write_u64::<BigEndian>(self.number).unwrap();
-        Ok(())
-    }
-    fn get_result(&self) -> u64 {
-        self.number
-    }
-    fn dump_vertex_results(
-        &self,
-        comp_id: u64,
-        kohs: &Vec<KeyOrHash>,
-        out: &mut Vec<u8>,
-    ) -> Result<(), Rejection> {
-        let comps = self.components.as_ref();
-        match comps {
-            None => {
-                return Err(warp::reject::custom(ComputationNotYetFinished { comp_id }));
-            }
-            Some(result) => {
-                let g = self.graph.read().unwrap();
-                for koh in kohs.iter() {
-                    let index = g.index_from_key_or_hash(koh);
-                    match index {
-                        None => {
-                            put_key_or_hash(out, koh);
-                            out.write_u8(0).unwrap();
-                        }
-                        Some(i) => {
-                            put_key_or_hash(out, koh);
-                            out.write_u8(8).unwrap();
-                            out.write_u64::<BigEndian>(result[i.to_u64() as usize])
-                                .unwrap();
-                        }
-                    }
-                }
-                return Ok(());
-            }
-        }
-    }
-}
-
 /// This function triggers a computation:
 async fn api_compute_bin(
     graphs: Arc<Mutex<Graphs>>,
@@ -1004,19 +950,13 @@ async fn api_compute_bin(
         number: 0,
     }));
 
-    let mut rng = rand::thread_rng();
-    let mut comp_id: u64;
+    let comp_id: u64;
     {
         let mut comps = computations.lock().unwrap();
-        loop {
-            comp_id = rng.gen::<u64>();
-            if !comps.list.contains_key(&comp_id) {
-                break;
-            }
-        }
-        comps.list.insert(comp_id, comp_arc.clone());
+        comp_id = comps.register(comp_arc.clone());
     }
-    let _join_handle = std::thread::spawn(move || {
+    // Launch background thread for this computation
+    std::thread::spawn(move || {
         let (nr, components) = match algorithm {
             1 => {
                 let graph = graph_arc.read().unwrap();
@@ -1111,19 +1051,12 @@ async fn api_compute(
         number: 0,
     }));
 
-    let mut rng = rand::thread_rng();
-    let mut comp_id: u64;
+    let comp_id: u64;
     {
         let mut comps = computations.lock().unwrap();
-        loop {
-            comp_id = rng.gen::<u64>();
-            if !comps.list.contains_key(&comp_id) {
-                break;
-            }
-        }
-        comps.list.insert(comp_id, comp_arc.clone());
+        comp_id = comps.register(comp_arc.clone());
     }
-    let _join_handle = std::thread::spawn(move || {
+    std::thread::spawn(move || {
         let (nr, components) = match algorithm {
             1 => {
                 let graph = graph_arc.read().unwrap();
@@ -1594,12 +1527,12 @@ async fn api_drop_computation_bin(
 async fn api_get_arangodb_graph(
     _engine_id: String,
     graphs: Arc<Mutex<Graphs>>,
+    comps: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
     bytes: Bytes,
 ) -> Result<warp::reply::Json, Rejection> {
     let parsed: serde_json::Result<GraphAnalyticsEngineLoadDataRequest> =
         serde_json::from_slice(&bytes[..]);
-    //let parsed: serde_json::Result<GetArangoDBGraphRequest> = serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Err(warp::reject::custom(CannotParseJSON { msg: e.to_string() }));
     }
@@ -1612,14 +1545,10 @@ async fn api_get_arangodb_graph(
         body.parallelism = 5;
     }
 
-    // Fetch from ArangoDB:
-    let graph = fetch_graph_from_arangodb(&body, args).await;
-    if let Err(e) = graph {
-        return Err(warp::reject::custom(GetFromArangoDBFailed {
-            msg: e.to_string(),
-        }));
-    }
-    let graph = graph.unwrap();
+    let graph = Graph::new(true, 64, 0);
+    let graph_clone = graph.clone(); // for background thread
+
+    let client_id = body.client_id.clone();
 
     // And store it amongst the graphs:
     let mut graphs = graphs.lock().unwrap();
@@ -1655,13 +1584,50 @@ async fn api_get_arangodb_graph(
         graphs.list[index as usize] = graph;
     }
     // By now, index is always set to some sensible value!
-
     info!("Have created graph with number {}!", index);
+
+    // Now create a job object:
+    let comp_arc = Arc::new(Mutex::new(LoadComputation {
+        graph: graph_clone.clone(),
+        shall_stop: false,
+        total: 2, // will eventually be overwritten in background thread
+        progress: 0,
+        error_code: 0,
+        error_message: "".to_string(),
+    }));
+    let comp_id: u64;
+    {
+        let mut comps = comps.lock().unwrap();
+        comp_id = comps.register(comp_arc.clone());
+    }
+
+    // Fetch from ArangoDB in a background thread:
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let res =
+                    fetch_graph_from_arangodb(body, args, graph_clone, comp_arc.clone()).await;
+                let mut comp = comp_arc.lock().unwrap();
+                match res {
+                    Ok(()) => {
+                        comp.error_code = 0;
+                        comp.error_message = "".to_string();
+                    }
+                    Err(e) => {
+                        comp.error_code = 1;
+                        comp.error_message = e;
+                    }
+                }
+            });
+    });
 
     // Write response:
     let response = GraphAnalyticsEngineLoadDataResponse {
-        job_id: "bla".to_string(), // will be ID of computation when this is async
-        client_id: body.client_id,
+        job_id: format!("{:x}", comp_id),
+        client_id,
         graph_id: format!("{:x}", index),
         error: false,
         error_code: 0,
@@ -1749,6 +1715,10 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
     } else if let Some(wrong) = err.find::<ComputationNotYetFinished>() {
         code = StatusCode::SERVICE_UNAVAILABLE;
         message = format!("Computation with id {} does not exist", wrong.comp_id);
+        output_json = true;
+    } else if let Some(wrong) = err.find::<CannotDumpVertexData>() {
+        code = StatusCode::BAD_REQUEST;
+        message = format!("Job with id {} cannot dump vertex data", wrong.comp_id);
         output_json = true;
     } else if let Some(wrong) = err.find::<InternalError>() {
         code = StatusCode::INTERNAL_SERVER_ERROR;

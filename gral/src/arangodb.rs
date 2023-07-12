@@ -1,5 +1,6 @@
 use crate::api::graphanalyticsengine::GraphAnalyticsEngineLoadDataRequest;
 use crate::args::GralArgs;
+use crate::computations::LoadComputation;
 use crate::graphs::{Graph, VertexHash, VertexIndex};
 use bytes::Bytes;
 use log::{debug, info};
@@ -384,9 +385,12 @@ struct DumpStartBody {
 }
 
 pub async fn fetch_graph_from_arangodb(
-    req: &GraphAnalyticsEngineLoadDataRequest,
+    req: GraphAnalyticsEngineLoadDataRequest,
     args: Arc<Mutex<GralArgs>>,
-) -> Result<Arc<RwLock<Graph>>, String> {
+    graph_arc: Arc<RwLock<Graph>>,
+    comp_arc: Arc<Mutex<LoadComputation>>,
+) -> Result<(), String> {
+    // Graph object must be new and empty!
     let endpoints: Vec<String>;
     {
         let guard = args.lock().unwrap();
@@ -439,9 +443,6 @@ pub async fn fetch_graph_from_arangodb(
         vertex_map.values().map(|v| v.len()).sum::<usize>(),
         edge_map.values().map(|v| v.len()).sum::<usize>()
     );
-
-    // Generate a graph object:
-    let graph_arc = Graph::new(true, 64, 0);
 
     // Let's first get the vertices:
     {
@@ -525,7 +526,7 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(req, &endpoints, &vertex_map, senders).await?;
+        get_all_shard_data(&req, &endpoints, &vertex_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -535,6 +536,10 @@ pub async fn fetch_graph_from_arangodb(
         }
         let mut graph = graph_arc.write().unwrap();
         graph.seal_vertices();
+    }
+    {
+        let mut comp = comp_arc.lock().unwrap();
+        comp.progress = 1;
     }
 
     // And now the edges:
@@ -637,7 +642,7 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(req, &endpoints, &edge_map, senders).await?;
+        get_all_shard_data(&req, &endpoints, &edge_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -653,5 +658,7 @@ pub async fn fetch_graph_from_arangodb(
             std::time::SystemTime::now().duration_since(begin).unwrap()
         );
     }
-    Ok(graph_arc)
+    let mut comp = comp_arc.lock().unwrap();
+    comp.progress = 2; // done!
+    Ok(())
 }
