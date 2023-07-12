@@ -1,3 +1,8 @@
+ - bad 405 response if graph or job not found?
+ - bad binary responses when errors in JSON methods
+ - check if grupload still works with binary protocol
+ - change grupload to use JSON API where performance does not matter,,
+ - remove binary API where not necessary?
  - put fetching graph into background, report as job
  - Write result back into collection in ArangoDB
  - Refactor (error handling in module, etc.)
