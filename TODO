@@ -1,7 +1,13 @@
  - report total, progress and error with jobs
- - job cancellation for load
  - bad 405 response if graph or job not found?
  - bad binary responses when errors in JSON methods
+ - remove unneeded binary protocol stuff (only push and get results stay binary)
+ - move binary protocol to separate file
+ - move error handling to separate module, adjust for JSON most of the time
+ - Fetch JSON data on graph load, store as vector of serde::json
+ - Give the `compute` API a way to specify a previous job
+ - Implement an aggregation job with different result set
+ - job cancellation for load
  - check if grupload still works with binary protocol
  - change grupload to use JSON API where performance does not matter,,
  - remove binary API where not necessary?
