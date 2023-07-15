@@ -179,6 +179,16 @@ message CollectionDescription {
     repeated string fields = 2;
 }
 
+// Generic error
+message GraphAnalyticsErrorResponse {
+    // Error?
+    bool error = 1;
+    // Error code, 0 if no error
+    int32 error_code = 2;
+    // Error message, empty if no error
+    string error_message = 3;
+}
+
 // Response arguments from GraphAnalyticsEngineLoadData.
 message GraphAnalyticsEngineLoadDataResponse {
     // ID of the load data operation
@@ -363,6 +373,14 @@ message GraphAnalyticsEngineJob {
     uint32 progress = 4;
     // Result (present, if progress == total)
     int64 result = 5;
+    // Error flag
+    bool error = 6;
+    // Error code
+    int32 error_code = 7;
+    // Error message
+    string error_message = 8;
+    // Optional source job
+    string source_job = 9;
 }
 
 // Response for a delete job request.

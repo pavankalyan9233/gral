@@ -5,7 +5,7 @@ use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::{Filter, Rejection};
 
-use crate::api::{put_key_or_hash, CannotDumpVertexData, ComputationNotYetFinished};
+use crate::api_bin::{put_key_or_hash, CannotDumpVertexData, ComputationNotYetFinished};
 use crate::graphs::{Graph, KeyOrHash};
 
 pub trait Computation {
@@ -13,6 +13,8 @@ pub trait Computation {
     fn get_error(&self) -> (i32, String);
     fn cancel(&mut self);
     fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String>;
+    fn get_total(&self) -> u32;
+    fn get_progress(&self) -> u32;
     fn get_result(&self) -> u64;
     fn algorithm_id(&self) -> u32;
     fn dump_vertex_results(
@@ -83,6 +85,16 @@ impl Computation for ConcreteComputation {
         out.write_u64::<BigEndian>(self.number).unwrap();
         Ok(())
     }
+    fn get_total(&self) -> u32 {
+        1
+    }
+    fn get_progress(&self) -> u32 {
+        if self.components.is_some() {
+            1
+        } else {
+            0
+        }
+    }
     fn get_result(&self) -> u64 {
         self.number
     }
@@ -147,6 +159,12 @@ impl Computation for LoadComputation {
     }
     fn dump_result(&self, _out: &mut Vec<u8>) -> Result<(), String> {
         Ok(())
+    }
+    fn get_total(&self) -> u32 {
+        self.total
+    }
+    fn get_progress(&self) -> u32 {
+        self.progress
     }
     fn get_result(&self) -> u64 {
         0

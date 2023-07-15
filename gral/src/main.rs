@@ -6,13 +6,15 @@ use tokio::sync::oneshot;
 use warp::{http::Response, Filter};
 
 mod api;
+mod api_bin;
 mod arangodb;
 mod args;
 mod computations;
 mod conncomp;
 mod graphs;
 
-use crate::api::{api_filter, handle_errors};
+use crate::api::api_filter;
+use crate::api_bin::{api_bin_filter, handle_errors};
 use crate::args::parse_args;
 use crate::computations::Computations;
 use crate::graphs::Graphs;
@@ -41,7 +43,7 @@ async fn main() {
     let tx_clone = tx_arc.clone();
     let shutdown = warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "shutdown")
         .and(warp::delete())
-        .map(move |_engine_id : String| {
+        .map(move |_engine_id: String| {
             let mut tx = tx_clone.lock().unwrap();
             if tx.is_some() {
                 let tx = tx.take();
@@ -62,6 +64,11 @@ async fn main() {
 
     let apifilters = shutdown
         .or(api_filter(
+            the_graphs.clone(),
+            the_computations.clone(),
+            the_args.clone(),
+        ))
+        .or(api_bin_filter(
             the_graphs.clone(),
             the_computations.clone(),
             the_args.clone(),
