@@ -13,7 +13,7 @@
  - change grupload to use JSON API where performance does not matter,,
  - remove binary API where not necessary?
  - Write result back into collection in ArangoDB
- - Add metrics (rust-prometheus crate)
+ ! Add metrics (rust-prometheus crate)
  - Metrics for ArangoDB import and export
  - metric about memory usage
  - AQL query upload (for subgraph import)
