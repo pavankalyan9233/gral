@@ -1,4 +1,5 @@
 use log::info;
+use metrics::increment_counter;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -117,6 +118,7 @@ pub enum KeyOrHash {
 
 impl Graph {
     pub fn new(store_keys: bool, _bits_for_hash: u8, id: u32) -> Arc<RwLock<Graph>> {
+        increment_counter!("gral_mycounter_total");
         Arc::new(RwLock::new(Graph {
             graph_id: id,
             index_to_hash: vec![],

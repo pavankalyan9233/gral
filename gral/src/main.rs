@@ -1,9 +1,10 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use log::info;
+use metrics_exporter_prometheus::PrometheusBuilder;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
-use warp::{http::Response, Filter};
+use warp::{http::Response, http::StatusCode, Filter};
 
 mod api;
 mod api_bin;
@@ -12,6 +13,7 @@ mod args;
 mod computations;
 mod conncomp;
 mod graphs;
+mod metrics;
 
 use crate::api::api_filter;
 use crate::api_bin::{api_bin_filter, handle_errors};
@@ -27,6 +29,11 @@ async fn main() {
         .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Micros))
         .init();
     info!("Hello, this is gral!");
+    let prom_builder = PrometheusBuilder::new();
+    let metrics_handle = prom_builder
+        .install_recorder()
+        .expect("failed to install Prometheus recorder");
+    metrics::init();
 
     let args = match parse_args() {
         Ok(v) => v,
@@ -62,6 +69,11 @@ async fn main() {
     let the_computations = Arc::new(Mutex::new(Computations::new()));
     let the_args = Arc::new(Mutex::new(args.clone()));
 
+    let api_metrics = warp::path!("v2" / "metrics").and(warp::get()).map(move || {
+        let out = metrics_handle.render();
+        warp::reply::with_status(out, StatusCode::OK)
+    });
+
     let apifilters = shutdown
         .or(api_filter(
             the_graphs.clone(),
@@ -73,6 +85,7 @@ async fn main() {
             the_computations.clone(),
             the_args.clone(),
         ))
+        .or(api_metrics)
         .recover(handle_errors);
     let ip_addr: IpAddr = args
         .bind_addr
