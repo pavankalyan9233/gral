@@ -1,6 +1,9 @@
+Opsec:
  - Fetch JSON data on graph load, store as vector of serde::json
  - Give the `compute` API a way to specify a previous job
  - Implement an aggregation job with different result set
+ - Generalize write back of computation result
+
  - job cancellation for load
  - check if grupload still works with binary protocol
  - change grupload to use JSON API where performance does not matter,,
