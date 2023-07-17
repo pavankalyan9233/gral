@@ -1,5 +1,4 @@
- ! bad 405 response if graph or job not found?
- - use 48 bit IDs and 8 byte base64 encoding for IDs for graphs and jobs,
+ - use 64 bit IDs and 11 byte base64 encoding for IDs for graphs and jobs,
    move graphs to IDs
  ! bad binary responses when errors in JSON methods
  - remove unneeded binary protocol stuff (only push and get results stay binary)
