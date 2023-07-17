@@ -185,7 +185,7 @@ fn vertices_one_thread(
     let send_off = |buf: &mut Vec<u8>, count: u32| -> Result<(), String> {
         let mut tmp = count;
         for i in 1..=4 {
-            buf[16 - i] = (tmp & 0xff) as u8;
+            buf[20 - i] = (tmp & 0xff) as u8;
             tmp >>= 8;
         }
         let mut url = endpoint.clone();
@@ -446,7 +446,7 @@ pub fn edges_one_thread(
     let send_off = |buf: &mut Vec<u8>, count: u32| -> Result<(), String> {
         let mut tmp = count;
         for i in 1..=4 {
-            buf[16 - i] = (tmp & 0xff) as u8;
+            buf[20 - i] = (tmp & 0xff) as u8;
             tmp >>= 8;
         }
         let mut url = endpoint.clone();

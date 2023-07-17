@@ -199,7 +199,7 @@ async fn api_compute(
         let g = graphs.list.get(&graph_id);
         if g.is_none() {
             return Ok(err_bad_req(
-                format!("Graph with id {} not found.", graph_id),
+                format!("Graph with id {} not found.", &body.graph_id),
                 StatusCode::NOT_FOUND,
             ));
         }

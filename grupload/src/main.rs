@@ -38,7 +38,7 @@ OPTIONS:
   --max-edges NR           Maximal number of edges (only for create)
                            [default: 1000000]
   --store-keys BOOL        Flag if gral should store the keys [default: true]
-  --graph GRAPHNUMBER      Number of graph to use [default: 0]
+  --graph GRAPHNUMBER      Number of graph to use [default: 'AAAAAAAAAA'
   --vertices FILENAME      Vertex input file (jsonl)
                            [default: 'vertices.jsonl']
   --edges FILENAME         Edge input file (jsonl) [default: 'edges.jsonl']
@@ -49,7 +49,7 @@ OPTIONS:
                            `randomize`) [default: 'V']
   --threads NR             Number of threads to use [default: 1]
   --algorithm NAME         Name of algorithm to trigger [default: 'wcc']
-  --comp-id ID             Computation id [default: 0]
+  --comp-id ID             Computation id [default: 'AAAAAAAAAA']
   --output FILENAME        Output file for data dump [default: 'output.jsonl']
   --index-edges INTEGER    Flags, if gral should index the edges when they are
                            sealed. 1-bit is indexing by from, 2-bit is indexing
@@ -80,6 +80,9 @@ pub fn decode_id(graph_id: &String) -> Result<u64, String> {
         return Err(format!("Cannot base64 decode graph_id {}: {}", graph_id, e,));
     }
     let graph_id_decoded = graph_id_decoded.unwrap();
+    if graph_id_decoded.len() < 8 {
+        return Err(format!("Too short base64 graph_id {}", graph_id));
+    }
     let mut reader = Cursor::new(graph_id_decoded);
     Ok(reader.read_u64::<BigEndian>().unwrap())
 }
@@ -163,7 +166,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
 
     let gr_id: String = pargs
         .opt_value_from_str("--graph")?
-        .unwrap_or("0".to_string());
+        .unwrap_or("AAAAAAAAAAA".to_string());
     let gr_id_dec = decode_id(&gr_id);
     let graph_id: u64 = match gr_id_dec {
         Err(e) => {
@@ -174,7 +177,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
     };
     let co_id: String = pargs
         .opt_value_from_str("--comp-id")?
-        .unwrap_or("0".to_string());
+        .unwrap_or("AAAAAAAAAAA".to_string());
     let co_id_dec = decode_id(&co_id);
     let comp_id: u64 = match co_id_dec {
         Err(e) => {

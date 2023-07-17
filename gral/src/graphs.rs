@@ -422,6 +422,9 @@ pub fn decode_id(graph_id: &String) -> Result<u64, String> {
         return Err(format!("Cannot base64 decode graph_id {}: {}", graph_id, e,));
     }
     let graph_id_decoded = graph_id_decoded.unwrap();
+    if graph_id_decoded.len() < 8 {
+        return Err(format!("Too short base64 graph_id {}", graph_id));
+    }
     let mut reader = Cursor::new(graph_id_decoded);
     Ok(reader.read_u64::<BigEndian>().unwrap())
 }
