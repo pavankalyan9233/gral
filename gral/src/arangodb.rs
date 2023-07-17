@@ -250,7 +250,9 @@ async fn get_all_shard_data(
                 dbserver.dump_id, dbserver.dbserver
             ));
             let resp = client_clone_for_cleanup.delete(url).send().await;
-            let r = handle_arangodb_response(resp, |c| c == StatusCode::OK).await;
+            let r =
+                handle_arangodb_response(resp, |c| c == StatusCode::OK || c == StatusCode::CREATED)
+                    .await;
             if let Err(rr) = r {
                 eprintln!(
                     "An error in cancelling a dump context occurred, dbserver: {}, error: {}",
