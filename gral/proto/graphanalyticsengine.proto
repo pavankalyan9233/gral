@@ -97,7 +97,7 @@ service GraphAnalyticsEngineService {
     }
    
     // Get information about a specific graph:
-    rpc GraphAnalyticsEngineGetGraph(GraphAnalyticsEngineIdWithGraph) returns (GraphAnalyticsEngineGraph) {
+    rpc GraphAnalyticsEngineGetGraph(GraphAnalyticsEngineIdWithGraph) returns (GraphAnalyticsEngineGetGraphResponse) {
         option (google.api.http) = {
             get: "/api/graphanalytics/v1/engines/{engine_id}/graphs/{graph_id}"
         };
@@ -296,13 +296,24 @@ message GraphAnalyticsEngineStoreResultsResponse {
 // Response arguments from GraphAnalticsEngineListGraphs.
 message GraphAnalyticsEngineListGraphsResponse {
     // Error?
-    bool error = 3;
+    bool error = 1;
     // Error code, 0 if no error
-    int32 error_code = 4;
+    int32 error_code = 2;
     // Error message, empty if no error
-    string error_message = 5;
+    string error_message = 3;
     // The graphs
-    repeated GraphAnalyticsEngineGraph graphs = 6;
+    repeated GraphAnalyticsEngineGraph graphs = 4;
+}
+
+message GraphAnalyticsEngineGetGraphResponse {
+    // Error?
+    bool error = 1;
+    // Error code, 0 if no error
+    int32 error_code = 2;
+    // Error message, empty if no error
+    string error_message = 3;
+    // The graph
+    GraphAnalyticsEngineGraph graph = 4;
 }
 
 // ID of an engine

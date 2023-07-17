@@ -1,9 +1,3 @@
- - use 64 bit IDs and 11 byte base64 encoding for IDs for graphs and jobs,
-   move graphs to IDs
- ! bad binary responses when errors in JSON methods
- - remove unneeded binary protocol stuff (only push and get results stay binary)
- ! move binary protocol to separate file
- ! move error handling to separate module, adjust for JSON most of the time
  - Fetch JSON data on graph load, store as vector of serde::json
  - Give the `compute` API a way to specify a previous job
  - Implement an aggregation job with different result set
@@ -12,7 +6,6 @@
  - change grupload to use JSON API where performance does not matter,,
  - remove binary API where not necessary?
  - Write result back into collection in ArangoDB
- ! Add metrics (rust-prometheus crate)
  - Metrics for ArangoDB import and export
  - metric about memory usage
  - AQL query upload (for subgraph import)

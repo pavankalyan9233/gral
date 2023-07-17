@@ -1,4 +1,4 @@
-use crate::{GruploadArgs, TLSClientInfo};
+use crate::{encode_id, GruploadArgs, TLSClientInfo};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand::Rng;
 use reqwest::{blocking::Response, Certificate, Identity, StatusCode};
@@ -144,14 +144,15 @@ pub fn create(args: &mut GruploadArgs) -> Result<(), String> {
     let body = resp.bytes().unwrap();
     let mut cursor = Cursor::new(&body);
     let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
-    let graph_number = cursor.read_u32::<BigEndian>().unwrap();
+    let graph_id = cursor.read_u64::<BigEndian>().unwrap();
     let bits_per_hash = cursor.read_u8().unwrap();
 
     println!(
-        "Graph number: {}, bits per hash: {}",
-        graph_number, bits_per_hash
+        "Graph id: {}, bits per hash: {}",
+        encode_id(graph_id),
+        bits_per_hash
     );
-    args.graph_number = graph_number; // Return number of graph
+    args.graph_id = graph_id; // Return id of graph
     return Ok(());
 }
 
@@ -159,7 +160,7 @@ fn vertices_one_thread(
     use_tls: bool,
     identity: Arc<TLSClientInfo>,
     file_name: &std::path::PathBuf,
-    graph_number: u32,
+    graph_id: u64,
     endpoint: String,
     start: u64,
     finish: u64,
@@ -177,7 +178,7 @@ fn vertices_one_thread(
         buf.clear();
         *client_id = rng.gen::<u64>();
         buf.write_u64::<BigEndian>(*client_id).unwrap();
-        buf.write_u32::<BigEndian>(graph_number).unwrap();
+        buf.write_u64::<BigEndian>(graph_id).unwrap();
         buf.write_u32::<BigEndian>(0).unwrap();
     };
 
@@ -320,8 +321,11 @@ fn vertices_one_thread(
     }
 
     println!(
-        "Vertices uploaded range from {} to {}, graph number: {}, number of vertices: {}",
-        start, finish, graph_number, overall
+        "Vertices uploaded range from {} to {}, graph id: {}, number of vertices: {}",
+        start,
+        finish,
+        encode_id(graph_id),
+        overall
     );
     Ok(())
 }
@@ -341,7 +345,7 @@ pub fn vertices(args: &GruploadArgs) -> Result<(), String> {
             args.use_tls,
             args.identity.clone(),
             &args.vertex_file,
-            args.graph_number,
+            args.graph_id,
             args.endpoint.clone(),
             0,
             total_size,
@@ -359,17 +363,11 @@ pub fn vertices(args: &GruploadArgs) -> Result<(), String> {
         let use_tls = args.use_tls;
         let identity = args.identity.clone();
         let file_name = args.vertex_file.clone();
-        let graph_number = args.graph_number;
+        let graph_id = args.graph_id;
         let endpoint = args.endpoint.clone();
         join.push(spawn(move || -> Result<(), String> {
             vertices_one_thread(
-                use_tls,
-                identity,
-                &file_name,
-                graph_number,
-                endpoint,
-                start,
-                finish,
+                use_tls, identity, &file_name, graph_id, endpoint, start, finish,
             )
         }));
     }
@@ -396,7 +394,7 @@ pub fn seal_vertices(args: &GruploadArgs) -> Result<(), String> {
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
     v.write_u64::<BigEndian>(client_id).unwrap();
-    v.write_u32::<BigEndian>(args.graph_number).unwrap();
+    v.write_u64::<BigEndian>(args.graph_id).unwrap();
 
     let mut url = args.endpoint.clone();
     url.push_str("/v1/sealVertices");
@@ -409,12 +407,13 @@ pub fn seal_vertices(args: &GruploadArgs) -> Result<(), String> {
     let body = resp.bytes().unwrap();
     let mut cursor = Cursor::new(&body);
     let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
-    let graph_number = cursor.read_u32::<BigEndian>().unwrap();
+    let graph_id = cursor.read_u64::<BigEndian>().unwrap();
     let number_of_vertices = cursor.read_u64::<BigEndian>().unwrap();
 
     println!(
-        "Graph number: {}, number of vertices: {}",
-        graph_number, number_of_vertices
+        "Graph id: {}, number of vertices: {}",
+        encode_id(graph_id),
+        number_of_vertices
     );
     Ok(())
 }
@@ -423,7 +422,7 @@ pub fn edges_one_thread(
     use_tls: bool,
     identity: Arc<TLSClientInfo>,
     file_name: String,
-    graph_number: u32,
+    graph_id: u64,
     endpoint: String,
     start: u64,
     finish: u64,
@@ -440,7 +439,7 @@ pub fn edges_one_thread(
         buf.clear();
         *client_id = rng.gen::<u64>();
         buf.write_u64::<BigEndian>(*client_id).unwrap();
-        buf.write_u32::<BigEndian>(graph_number).unwrap();
+        buf.write_u64::<BigEndian>(graph_id).unwrap();
         buf.write_u32::<BigEndian>(0).unwrap();
     };
 
@@ -586,7 +585,10 @@ pub fn edges_one_thread(
 
     println!(
         "Edges uploaded range from {} to {}, graph number: {}, number of edges: {}",
-        start, finish, graph_number, overall
+        start,
+        finish,
+        encode_id(graph_id),
+        overall
     );
     Ok(())
 }
@@ -606,7 +608,7 @@ pub fn edges(args: &GruploadArgs) -> Result<(), String> {
             args.use_tls,
             args.identity.clone(),
             args.edge_file.to_str().unwrap().to_owned(),
-            args.graph_number,
+            args.graph_id,
             args.endpoint.clone(),
             0,
             total_size,
@@ -624,17 +626,11 @@ pub fn edges(args: &GruploadArgs) -> Result<(), String> {
         let use_tls = args.use_tls;
         let identity = args.identity.clone();
         let file_name = args.edge_file.to_str().unwrap().to_owned();
-        let graph_number = args.graph_number;
+        let graph_id = args.graph_id;
         let endpoint = args.endpoint.clone();
         join.push(spawn(move || -> Result<(), String> {
             edges_one_thread(
-                use_tls,
-                identity,
-                file_name,
-                graph_number,
-                endpoint,
-                start,
-                finish,
+                use_tls, identity, file_name, graph_id, endpoint, start, finish,
             )
         }));
     }
@@ -660,7 +656,7 @@ pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
     v.write_u64::<BigEndian>(client_id).unwrap();
-    v.write_u32::<BigEndian>(args.graph_number).unwrap();
+    v.write_u64::<BigEndian>(args.graph_id).unwrap();
     v.write_u32::<BigEndian>(args.index_edges).unwrap();
 
     let mut url = args.endpoint.clone();
@@ -679,25 +675,27 @@ pub fn seal_edges(args: &GruploadArgs) -> Result<(), String> {
     let body = resp.bytes().unwrap();
     let mut cursor = Cursor::new(&body);
     let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
-    let graph_number = cursor.read_u32::<BigEndian>().unwrap();
+    let graph_id = cursor.read_u64::<BigEndian>().unwrap();
     let number_of_vertices = cursor.read_u64::<BigEndian>().unwrap();
     let number_of_edges = cursor.read_u64::<BigEndian>().unwrap();
 
     println!(
         "Graph number: {}, number of vertices: {}, number of edges: {}",
-        graph_number, number_of_vertices, number_of_edges
+        encode_id(graph_id),
+        number_of_vertices,
+        number_of_edges
     );
     Ok(())
 }
 
 pub fn drop_graph(args: &GruploadArgs) -> Result<(), String> {
-    println!("Dropping graph {}...", args.graph_number);
+    println!("Dropping graph {}...", args.graph_id);
     let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
     v.write_u64::<BigEndian>(client_id).unwrap();
-    v.write_u32::<BigEndian>(args.graph_number).unwrap();
+    v.write_u64::<BigEndian>(args.graph_id).unwrap();
 
     let mut url = args.endpoint.clone();
     url.push_str("/v1/dropGraphBinary");
@@ -710,9 +708,9 @@ pub fn drop_graph(args: &GruploadArgs) -> Result<(), String> {
     let body = resp.bytes().unwrap();
     let mut cursor = Cursor::new(&body);
     let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
-    let graph_number = cursor.read_u32::<BigEndian>().unwrap();
+    let graph_id = cursor.read_u64::<BigEndian>().unwrap();
 
-    println!("Graph number: {} dropped.", graph_number,);
+    println!("Graph id: {} dropped.", encode_id(graph_id),);
     Ok(())
 }
 
@@ -776,14 +774,14 @@ pub fn randomize(args: &GruploadArgs) -> Result<(), String> {
 pub fn compute(args: &GruploadArgs) -> Result<(), String> {
     println!(
         "Triggering computation {} for graph {}...",
-        args.algorithm, args.graph_number,
+        args.algorithm, args.graph_id,
     );
     let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
     let client_id = rng.gen::<u64>();
     v.write_u64::<BigEndian>(client_id).unwrap();
-    v.write_u32::<BigEndian>(args.graph_number).unwrap();
+    v.write_u64::<BigEndian>(args.graph_id).unwrap();
 
     match args.algorithm.as_str() {
         "wcc" => v.write_u32::<BigEndian>(1).unwrap(),
@@ -803,13 +801,16 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
     let body = resp.bytes().unwrap();
     let mut cursor = Cursor::new(&body);
     let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
-    let graph_number = cursor.read_u32::<BigEndian>().unwrap();
-    let algorithm = cursor.read_u32::<BigEndian>().unwrap();
+    let graph_id = cursor.read_u64::<BigEndian>().unwrap();
     let comp_id = cursor.read_u64::<BigEndian>().unwrap();
+    let algorithm = cursor.read_u32::<BigEndian>().unwrap();
 
     println!(
-        "{}: graph number: {}, algorithm: {}, computation id:\n{}",
-        args.algorithm, algorithm, graph_number, comp_id,
+        "{}: graph id: {}, algorithm: {}, computation id:\n{}",
+        args.algorithm,
+        algorithm,
+        encode_id(graph_id),
+        encode_id(comp_id),
     );
     Ok(())
 }
@@ -817,7 +818,8 @@ pub fn compute(args: &GruploadArgs) -> Result<(), String> {
 pub fn progress(args: &GruploadArgs) -> Result<(), String> {
     println!(
         "Getting progress of computation {} for graph {}...",
-        args.comp_id, args.graph_number
+        encode_id(args.comp_id),
+        encode_id(args.graph_id)
     );
     let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
@@ -843,7 +845,9 @@ pub fn progress(args: &GruploadArgs) -> Result<(), String> {
     }
     println!(
         "Computation progress for {}: finished {} out of {}",
-        comp_id, progress, total_progress
+        encode_id(comp_id),
+        progress,
+        total_progress
     );
     if progress == total_progress {
         for x in w.iter() {
@@ -857,7 +861,7 @@ fn vertex_results_one_thread(
     use_tls: bool,
     identity: Arc<TLSClientInfo>,
     file_name: &std::path::PathBuf,
-    graph_number: u32,
+    graph_id: u64,
     comp_id: u64,
     endpoint: String,
     start: u64,
@@ -1089,8 +1093,11 @@ fn vertex_results_one_thread(
     }
 
     println!(
-        "Vertex results downloaded range from {} to {}, graph number: {}, number of vertices: {}",
-        start, finish, graph_number, overall
+        "Vertex results downloaded range from {} to {}, graph id: {}, number of vertices: {}",
+        start,
+        finish,
+        encode_id(graph_id),
+        overall
     );
     Ok(())
 }
@@ -1113,7 +1120,7 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
             args.use_tls,
             args.identity.clone(),
             &args.vertex_file,
-            args.graph_number,
+            args.graph_id,
             args.comp_id,
             args.endpoint.clone(),
             0,
@@ -1136,7 +1143,7 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
         let use_tls = args.use_tls;
         let identity = args.identity.clone();
         let file_name = args.vertex_file.clone();
-        let graph_number = args.graph_number;
+        let graph_id = args.graph_id;
         let comp_id = args.comp_id;
         let endpoint = args.endpoint.clone();
         let output_file = args.output_file.clone();
@@ -1146,7 +1153,7 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
                 use_tls,
                 identity,
                 &file_name,
-                graph_number,
+                graph_id,
                 comp_id,
                 endpoint,
                 start,
@@ -1173,7 +1180,7 @@ pub fn vertex_results(args: &GruploadArgs) -> Result<(), String> {
 }
 
 pub fn drop_computation(args: &GruploadArgs) -> Result<(), String> {
-    println!("Dropping computation {}:", args.comp_id);
+    println!("Dropping computation {}:", encode_id(args.comp_id));
     let client = build_client(args.use_tls, args.identity.clone())?;
     let mut v: Vec<u8> = vec![];
     let mut rng = rand::thread_rng();
@@ -1193,7 +1200,7 @@ pub fn drop_computation(args: &GruploadArgs) -> Result<(), String> {
     let mut cursor = Cursor::new(&body);
     let _client_id_back = cursor.read_u64::<BigEndian>().unwrap();
     let comp_id = cursor.read_u64::<BigEndian>().unwrap();
-    println!("Computation {} dropped.", comp_id,);
+    println!("Computation {} dropped.", encode_id(comp_id),);
     Ok(())
 }
 

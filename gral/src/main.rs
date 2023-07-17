@@ -1,6 +1,7 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use log::info;
 use metrics_exporter_prometheus::PrometheusBuilder;
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
@@ -65,7 +66,9 @@ async fn main() {
                 .header("Content-Type", "x-application-gral")
                 .body(v)
         });
-    let the_graphs = Arc::new(Mutex::new(Graphs { list: vec![] }));
+    let the_graphs = Arc::new(Mutex::new(Graphs {
+        list: HashMap::new(),
+    }));
     let the_computations = Arc::new(Mutex::new(Computations::new()));
     let the_args = Arc::new(Mutex::new(args.clone()));
 

@@ -27,6 +27,7 @@ pbjson-types = "0.5.1"
 metrics = "0.21.1"
 metrics-exporter-prometheus = "0.12.1"
 metrics-util = "0.15.1"
+base64 = "0.21.2"
 
 [build-dependencies]
 pbjson-build = "0.5.1"

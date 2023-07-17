@@ -1,16 +1,16 @@
-use crate::api_bin::*;
 use crate::arangodb::fetch_graph_from_arangodb;
 use crate::args::{with_args, GralArgs};
 use crate::computations::{with_computations, Computations, ConcreteComputation, LoadComputation};
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
-use crate::graphs::{with_graphs, Graph, Graphs};
+use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
 use crate::VERSION;
+
 use bytes::Bytes;
 use graphanalyticsengine::*;
 use http::Error;
 use log::info;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use warp::{http::Response, http::StatusCode, Filter, Rejection};
 
 pub mod graphanalyticsengine {
@@ -124,6 +124,28 @@ fn version_json() -> Result<Response<Vec<u8>>, Error> {
         .body(v)
 }
 
+fn check_graph(graph: &Graph, graph_id: u64, edges_must_be_sealed: bool) -> Result<(), String> {
+    if !graph.vertices_sealed {
+        return Err(format!(
+            "Graph vertices not sealed: {}",
+            encode_id(graph_id)
+        ));
+    }
+    if edges_must_be_sealed {
+        if !graph.edges_sealed {
+            return Err(format!("Graph edges not sealed: {}", encode_id(graph_id)));
+        }
+    } else {
+        if graph.edges_sealed {
+            return Err(format!(
+                "Graph edges must not be sealed: {}",
+                encode_id(graph_id)
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// This function triggers a computation:
 async fn api_compute(
     _engine_id: String,
@@ -131,7 +153,7 @@ async fn api_compute(
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
-    let err_bad_req = |e: String| {
+    let err_bad_req = |e: String, c: StatusCode| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineProcessResponse {
                 job_id: "".to_string(),
@@ -141,43 +163,56 @@ async fn api_compute(
                 error_message: e,
             })
             .expect("Could not serialize"),
-            StatusCode::BAD_REQUEST,
+            c,
         )
     };
     // Parse body and extract integers:
     let parsed: serde_json::Result<GraphAnalyticsEngineProcessRequest> =
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
-        return Ok(err_bad_req(format!(
-            "Cannot parse JSON body of request: {}",
-            e.to_string()
-        )));
+        return Ok(err_bad_req(
+            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            StatusCode::BAD_REQUEST,
+        ));
     }
     let body = parsed.unwrap();
 
     let client_id = u64::from_str_radix(&body.client_id, 16);
     if let Err(e) = client_id {
-        return Ok(err_bad_req(format!(
-            "Could not read clientId as 64bit hex value: {}",
-            e.to_string()
-        )));
+        return Ok(err_bad_req(
+            format!(
+                "Could not read clientId as 64bit hex value: {}",
+                e.to_string()
+            ),
+            StatusCode::BAD_REQUEST,
+        ));
     }
     let _client_id = client_id.unwrap();
-    let graph_number = u32::from_str_radix(&body.graph_id, 16);
-    if let Err(e) = graph_number {
-        return Ok(err_bad_req(format!(
-            "Could not read graphId as 32bit hex valu: {}",
-            e.to_string()
-        )));
+    let graph_id = decode_id(&body.graph_id);
+    if let Err(e) = graph_id {
+        return Ok(err_bad_req(e, StatusCode::BAD_REQUEST));
     }
-    let graph_number = graph_number.unwrap();
-
-    let graph_arc = get_graph(&graphs, graph_number)?;
+    let graph_id = graph_id.unwrap();
+    let graph_arc: Arc<RwLock<Graph>>;
+    {
+        let graphs = graphs.lock().unwrap();
+        let g = graphs.list.get(&graph_id);
+        if g.is_none() {
+            return Ok(err_bad_req(
+                format!("Graph with id {} not found.", graph_id),
+                StatusCode::NOT_FOUND,
+            ));
+        }
+        graph_arc = g.unwrap().clone();
+    }
 
     {
         // Check graph:
         let graph = graph_arc.read().unwrap();
-        check_graph(graph.deref(), graph_number, true)?;
+        let r = check_graph(graph.deref(), graph_id, true);
+        if let Err(e) = r {
+            return Ok(err_bad_req(e, StatusCode::BAD_REQUEST));
+        }
     }
 
     let algorithm: u32 = match body.algorithm.as_ref() {
@@ -187,10 +222,10 @@ async fn api_compute(
     };
 
     if algorithm == 0 {
-        return Ok(err_bad_req(format!(
-            "Unknown algorithm: {}",
-            body.algorithm
-        )));
+        return Ok(err_bad_req(
+            format!("Unknown algorithm: {}", body.algorithm),
+            StatusCode::BAD_REQUEST,
+        ));
     }
 
     let comp_arc = Arc::new(Mutex::new(ConcreteComputation {
@@ -494,30 +529,48 @@ async fn api_get_graph(
     _engine_id: String,
     graph_id: String,
     graphs: Arc<Mutex<Graphs>>,
-) -> Result<Vec<u8>, Rejection> {
-    let graph_id = u32::from_str_radix(&graph_id, 16);
-    if let Err(_) = graph_id {
-        return Err(warp::reject::custom(GraphNotFound { number: 0 }));
+) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
+    let not_found_err = |j: String| {
+        warp::reply::with_status(
+            serde_json::to_vec(&GraphAnalyticsEngineGetGraphResponse {
+                error: true,
+                error_code: 404,
+                error_message: j.clone(),
+                graph: None,
+            })
+            .expect("Could not serialize"),
+            StatusCode::NOT_FOUND,
+        )
+    };
+    let graph_id_decoded = decode_id(&graph_id);
+    if let Err(e) = graph_id_decoded {
+        return Ok(not_found_err(e));
     }
-    let graph_id = graph_id.unwrap();
+    let graph_id_decoded = graph_id_decoded.unwrap();
 
     let graphs = graphs.lock().unwrap();
-    if graph_id as usize >= graphs.list.len() {
-        return Err(warp::reject::custom(GraphNotFound { number: graph_id }));
+    let graph_arc = graphs.list.get(&graph_id_decoded);
+    if graph_arc.is_none() {
+        return Ok(not_found_err(format!("Graph {} not found!", graph_id)));
     }
-    let graph_arc = graphs.list[graph_id as usize].clone();
+    let graph_arc = graph_arc.unwrap().clone();
     let graph = graph_arc.read().unwrap();
-    if graph.dropped {
-        return Err(warp::reject::custom(GraphNotFound { number: graph_id }));
-    }
 
     // Write response:
-    let response = GraphAnalyticsEngineGraph {
-        graph_id: format!("{:x}", graph_id),
-        number_of_vertices: graph.number_of_vertices(),
-        number_of_edges: graph.number_of_edges(),
+    let response = GraphAnalyticsEngineGetGraphResponse {
+        error: false,
+        error_code: 0,
+        error_message: "".to_string(),
+        graph: Some(GraphAnalyticsEngineGraph {
+            graph_id: encode_id(graph_id_decoded),
+            number_of_vertices: graph.number_of_vertices(),
+            number_of_edges: graph.number_of_edges(),
+        }),
     };
-    Ok(serde_json::to_vec(&response).expect("Should be serializable"))
+    Ok(warp::reply::with_status(
+        serde_json::to_vec(&response).expect("Should be serializable"),
+        StatusCode::OK,
+    ))
 }
 
 /// This function lists graphs:
@@ -527,15 +580,12 @@ async fn api_list_graphs(
 ) -> Result<Vec<u8>, Rejection> {
     let graphs = graphs.lock().unwrap();
     let mut response = vec![];
-    for i in 0..graphs.list.len() {
-        let graph = graphs.list[i].read().unwrap();
-        if graph.dropped {
-            continue;
-        }
+    for (_id, graph_arc) in graphs.list.iter() {
+        let graph = graph_arc.read().unwrap();
 
         // Write response:
         let g = GraphAnalyticsEngineGraph {
-            graph_id: format!("{:x}", graph.graph_id),
+            graph_id: encode_id(graph.graph_id),
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
         };
@@ -582,44 +632,47 @@ async fn api_drop_graph(
     _engine_id: String,
     graph_id: String,
     graphs: Arc<Mutex<Graphs>>,
-) -> Result<Vec<u8>, Rejection> {
-    let graph_id = u32::from_str_radix(&graph_id, 16);
-    if let Err(_) = graph_id {
-        return Err(warp::reject::custom(GraphNotFound { number: 0 }));
+) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
+    let not_found_err = |j: String| {
+        warp::reply::with_status(
+            serde_json::to_vec(&GraphAnalyticsEngineGetGraphResponse {
+                error: true,
+                error_code: 404,
+                error_message: j.clone(),
+                graph: None,
+            })
+            .expect("Could not serialize"),
+            StatusCode::NOT_FOUND,
+        )
+    };
+    let graph_id_decoded = decode_id(&graph_id);
+    if let Err(e) = graph_id_decoded {
+        return Ok(not_found_err(e));
     }
-    let graph_id = graph_id.unwrap();
+    let graph_id_decoded = graph_id_decoded.unwrap();
 
     let mut graphs = graphs.lock().unwrap();
-    if graph_id as usize >= graphs.list.len() {
-        return Err(warp::reject::custom(GraphNotFound { number: graph_id }));
-    }
-    {
-        let graph = graphs.list[graph_id as usize].read().unwrap();
-        if graph.dropped {
-            return Err(warp::reject::custom(GraphNotFound { number: graph_id }));
-        }
+    let graph_arc = graphs.list.get(&graph_id_decoded);
+    if graph_arc.is_none() {
+        return Ok(not_found_err(format!("Graph {} not found!", graph_id)));
     }
 
     // The following will automatically free graph if no longer used by
     // a computation:
-    if graph_id as usize + 1 == graphs.list.len() {
-        graphs.list.pop();
-    } else {
-        graphs.list[graph_id as usize] = Graph::new(false, 64, graph_id);
-        let mut graph = graphs.list[graph_id as usize].write().unwrap();
-        graph.dropped = true; // Mark unused
-    }
-
+    graphs.list.remove(&graph_id_decoded);
     info!("Have dropped graph {}!", graph_id);
 
     // Write response:
     let response = GraphAnalyticsEngineDeleteGraphResponse {
-        graph_id: format!("{:x}", graph_id),
+        graph_id: encode_id(graph_id_decoded),
         error: false,
         error_code: 0,
         error_message: "".to_string(),
     };
-    Ok(serde_json::to_vec(&response).expect("Should be serializable"))
+    Ok(warp::reply::with_status(
+        serde_json::to_vec(&response).expect("Should be serializable"),
+        StatusCode::OK,
+    ))
 }
 
 async fn api_get_arangodb_graph(
@@ -661,39 +714,9 @@ async fn api_get_arangodb_graph(
 
     // And store it amongst the graphs:
     let mut graphs = graphs.lock().unwrap();
-    // First try to find an empty spot:
-    let mut index: u32 = 0;
-    let mut found: bool = false;
-    for g in graphs.list.iter_mut() {
-        // Lock graph mutex:
-        let dropped: bool;
-        {
-            let gg = g.read().unwrap();
-            dropped = gg.dropped;
-        }
-        if dropped {
-            found = true;
-            break;
-        }
-        index += 1;
-    }
-    // or else append to the end:
-    if !found {
-        index = graphs.list.len() as u32;
-        {
-            let mut graph = graph.write().unwrap();
-            graph.graph_id = index;
-        }
-        graphs.list.push(graph);
-    } else {
-        {
-            let mut graph = graph.write().unwrap();
-            graph.graph_id = index;
-        }
-        graphs.list[index as usize] = graph;
-    }
-    // By now, index is always set to some sensible value!
-    info!("Have created graph with number {}!", index);
+    let graph_id = graphs.register(graph_clone.clone());
+
+    info!("Have created graph with id {}!", encode_id(graph_id));
 
     // Now create a job object:
     let comp_arc = Arc::new(Mutex::new(LoadComputation {
@@ -735,9 +758,9 @@ async fn api_get_arangodb_graph(
 
     // Write response:
     let response = GraphAnalyticsEngineLoadDataResponse {
-        job_id: format!("{:x}", comp_id),
+        job_id: encode_id(comp_id),
         client_id,
-        graph_id: format!("{:x}", index),
+        graph_id: encode_id(graph_id),
         error: false,
         error_code: 0,
         error_message: "".to_string(),

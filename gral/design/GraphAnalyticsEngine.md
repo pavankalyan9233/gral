@@ -150,7 +150,7 @@ Response body (for 201):
 
 ```
 u64       client-id
-u32       number of graph, for later reference
+u64       id of graph, for later reference
 u8        bitsForHash: 64 or 128
 ```
 
@@ -173,7 +173,7 @@ second time the key is sent.
 
 ```
 u64      client-id
-u32      number of graph
+u64      id of graph
 u32      number of vertices in this batch
 
 and then repeated as often as the number of vertices says:
@@ -226,18 +226,18 @@ Body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 ```
 
 Response is 200 with this body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 u64     number of vertices
 ```
 
-If the graph number is not found (or is already sealed), we return 404 and 
+If the graph id is not found (or is already sealed), we return 404 and 
 an error body as described above.
 
 
@@ -257,7 +257,7 @@ edge.
 
 ```
 u64      client-id
-u32      number of graph
+u64      id of graph
 u32      number of edges in this batch
 
 and then repeated as often as the number of edges says:
@@ -305,7 +305,7 @@ Body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 u32     index edges, if non-zero, an edge index will be computed for the graph
         If bit 1 (least significant bit) is set, edges will be indexed by from
         If bit 2 (second least sign. bit) is set, edges will be indexed by to
@@ -317,12 +317,12 @@ Response is 200 with this body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 u64     number of vertices
 u64     number of edges
 ```
 
-If the graph number is not found (or its edges are already sealed), we
+If the graph id is not found (or its edges are already sealed), we
 return 404 and an error body as described above.
 
 
@@ -335,7 +335,7 @@ Body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 u32     algorithm number:
           1: weakly connected components
           2: strongly connected components
@@ -345,14 +345,14 @@ Response is 200 with this body:
 
 ```
 u64     client-id
-u32     number of graph
-u32     algorithm number
+u64     id of graph
 u64     computation-id
+u32     algorithm number
 ```
 
 The computation-id identifies this particular computation.
 
-If the graph number is not found, we return 404 and an error body as
+If the graph id is not found, we return 404 and an error body as
 described above.
 
 Note that computation IDs are not per graph but global!
@@ -396,7 +396,7 @@ Response is 200 with this body:
 
 The computation-id identifies this particular computation.
 
-If the graph number is not found, we return 404 and an error body as
+If the graph id is not found, we return 404 and an error body as
 described above.
 
 Note that computation IDs are not per graph but global!
@@ -414,20 +414,20 @@ Body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 ```
 
 Response is 200 with this body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 u64     computation-id
 ```
 
 The computation-id identifies this particular computation.
 
-If the graph number is not found, we return 404 and an error body as
+If the graph id is not found, we return 404 and an error body as
 described above.
 
 Note that computation IDs are not per graph but global!
@@ -445,20 +445,20 @@ Body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 ```
 
 Response is 200 with this body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 u64     computation-id
 ```
 
 The computation-id identifies this particular computation.
 
-If the graph number is not found, we return 404 and an error body as
+If the graph id is not found, we return 404 and an error body as
 described above.
 
 Note that computation IDs are not per graph but global!
@@ -654,14 +654,14 @@ Body:
 
 ```
 u64     client-id
-u32     number of graph
+u64     id of graph
 ```
 
 If all is well, 200 is returned with this body:
 
 ```
 u64     client-id
-u32     number of graph [redundent, but we leave it in for now]
+u64     id of graph [redundent, but we leave it in for now]
 ```
 
 If the graph is not found, 404 is returned with an error body as
@@ -678,7 +678,7 @@ of data than requested, both w.r.t. number of vertices and number of bytes.
 Body:
 
 ```
-u32    number of graph
+u64    id of graph
 u64    start index to dump
 u32    batch size limit in number of vertices (will be adhered to)
 u32    batch size limit in bytes (might overshoot by one vertex)
@@ -687,7 +687,7 @@ u32    batch size limit in bytes (might overshoot by one vertex)
 If all is well, 200 is returned with this body:
 
 ```
-u32    number of graph [redundent, but we leave it in for now]
+u64    id of graph [redundent, but we leave it in for now]
 u64    start index of this batch
 u64    final index of this batch plus 1
 u64    total number of vertices in the graph
@@ -714,7 +714,7 @@ of data than requested, both w.r.t. number of edges and number of bytes.
 Body:
 
 ```
-u32    number of graph
+u64    id of graph
 u64    start index to dump
 u32    batch size limit in number of edges (will be adhered to)
 u32    batch size limit in bytes (might overshoot by one edge)
@@ -723,7 +723,7 @@ u32    batch size limit in bytes (might overshoot by one edge)
 If all is well, 200 is returned with this body:
 
 ```
-u32    number of graph [redundent, but we leave it in for now]
+u64    id of graph [redundent, but we leave it in for now]
 u64    start index of this batch
 u64    final index of this batch plus 1
 u64    total number of edges in the graph

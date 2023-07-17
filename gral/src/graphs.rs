@@ -1,9 +1,12 @@
+use base64::{engine::general_purpose, Engine as _};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use log::info;
 use metrics::increment_counter;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::io::Cursor;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
@@ -39,7 +42,7 @@ pub struct Edge {
 #[derive(Debug)]
 pub struct Graph {
     // Index in list of graphs:
-    pub graph_id: u32,
+    pub graph_id: u64,
 
     // List of hashes by index:
     pub index_to_hash: Vec<VertexHash>,
@@ -84,9 +87,6 @@ pub struct Graph {
     // store keys?
     pub store_keys: bool,
 
-    // dropped indicates that the graph is no longer there
-    pub dropped: bool,
-
     // sealed?
     pub vertices_sealed: bool,
     pub edges_sealed: bool,
@@ -97,7 +97,26 @@ pub struct Graph {
 }
 
 pub struct Graphs {
-    pub list: Vec<Arc<RwLock<Graph>>>,
+    pub list: HashMap<u64, Arc<RwLock<Graph>>>,
+}
+
+impl Graphs {
+    pub fn register(&mut self, graph: Arc<RwLock<Graph>>) -> u64 {
+        let mut rng = rand::thread_rng();
+        let mut graph_id: u64;
+        loop {
+            graph_id = rng.gen::<u64>();
+            if !self.list.contains_key(&graph_id) {
+                break;
+            }
+        }
+        {
+            let mut guard = graph.write().unwrap();
+            guard.graph_id = graph_id;
+        }
+        self.list.insert(graph_id, graph);
+        graph_id
+    }
 }
 
 pub fn with_graphs(
@@ -117,7 +136,7 @@ pub enum KeyOrHash {
 }
 
 impl Graph {
-    pub fn new(store_keys: bool, _bits_for_hash: u8, id: u32) -> Arc<RwLock<Graph>> {
+    pub fn new(store_keys: bool, _bits_for_hash: u8, id: u64) -> Arc<RwLock<Graph>> {
         increment_counter!("gral_mycounter_total");
         Arc::new(RwLock::new(Graph {
             graph_id: id,
@@ -135,7 +154,6 @@ impl Graph {
             edges_by_to: vec![],
             edge_index_by_to: vec![],
             store_keys,
-            dropped: false,
             vertices_sealed: false,
             edges_sealed: false,
             edges_indexed_from: false,
@@ -390,4 +408,20 @@ impl Graph {
             self.edge_data.extend_from_slice(&data);
         }
     }
+}
+
+pub fn encode_id(id: u64) -> String {
+    let mut v: Vec<u8> = vec![];
+    v.write_u64::<BigEndian>(id).unwrap();
+    general_purpose::URL_SAFE_NO_PAD.encode(&v)
+}
+
+pub fn decode_id(graph_id: &String) -> Result<u64, String> {
+    let graph_id_decoded = general_purpose::URL_SAFE_NO_PAD.decode(graph_id.as_bytes());
+    if let Err(e) = graph_id_decoded {
+        return Err(format!("Cannot base64 decode graph_id {}: {}", graph_id, e,));
+    }
+    let graph_id_decoded = graph_id_decoded.unwrap();
+    let mut reader = Cursor::new(graph_id_decoded);
+    Ok(reader.read_u64::<BigEndian>().unwrap())
 }

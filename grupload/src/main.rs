@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
+use base64::{engine::general_purpose, Engine as _};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use reqwest::{Certificate, Identity};
 use std::cmp::min;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Cursor, Read};
 use std::sync::Arc;
 
 mod commands;
@@ -66,13 +68,29 @@ pub struct TLSClientInfo {
     client_identity: Vec<u8>,
 }
 
+pub fn encode_id(id: u64) -> String {
+    let mut v: Vec<u8> = vec![];
+    v.write_u64::<BigEndian>(id).unwrap();
+    general_purpose::URL_SAFE_NO_PAD.encode(&v)
+}
+
+pub fn decode_id(graph_id: &String) -> Result<u64, String> {
+    let graph_id_decoded = general_purpose::URL_SAFE_NO_PAD.decode(graph_id.as_bytes());
+    if let Err(e) = graph_id_decoded {
+        return Err(format!("Cannot base64 decode graph_id {}: {}", graph_id, e,));
+    }
+    let graph_id_decoded = graph_id_decoded.unwrap();
+    let mut reader = Cursor::new(graph_id_decoded);
+    Ok(reader.read_u64::<BigEndian>().unwrap())
+}
+
 #[derive(Debug)]
 pub struct GruploadArgs {
     command: String,
     store_keys: bool,
     max_vertices: u64,
     max_edges: u64,
-    graph_number: u32,
+    graph_id: u64,
     vertex_file: std::path::PathBuf,
     edge_file: std::path::PathBuf,
     endpoint: String,
@@ -143,13 +161,39 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         std::process::exit(0);
     }
 
+    let gr_id: String = pargs
+        .opt_value_from_str("--graph")?
+        .unwrap_or("0".to_string());
+    let gr_id_dec = decode_id(&gr_id);
+    let graph_id: u64 = match gr_id_dec {
+        Err(e) => {
+            eprintln!("Could not base64 decode graph id {}: {}, using 0", gr_id, e);
+            0
+        }
+        Ok(id) => id,
+    };
+    let co_id: String = pargs
+        .opt_value_from_str("--comp-id")?
+        .unwrap_or("0".to_string());
+    let co_id_dec = decode_id(&co_id);
+    let comp_id: u64 = match co_id_dec {
+        Err(e) => {
+            eprintln!(
+                "Could not base64 decode computation id {}: {}, using 0",
+                co_id, e
+            );
+            0
+        }
+        Ok(id) => id,
+    };
+
     let mut args = GruploadArgs {
         store_keys: pargs.opt_value_from_str("--store-keys")?.unwrap_or(true),
         max_vertices: pargs
             .opt_value_from_str("--max-vertices")?
             .unwrap_or(1000000),
         max_edges: pargs.opt_value_from_str("--max-edges")?.unwrap_or(1000000),
-        graph_number: pargs.opt_value_from_str("--graph")?.unwrap_or(0),
+        graph_id,
         vertex_file: pargs
             .opt_value_from_str("--vertices")?
             .unwrap_or("vertices.jsonl".into()),
@@ -167,7 +211,7 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
         algorithm: pargs
             .opt_value_from_str("--algorithm")?
             .unwrap_or("wcc".into()),
-        comp_id: pargs.opt_value_from_str("--comp-id")?.unwrap_or(0),
+        comp_id,
         output_file: pargs
             .opt_value_from_str("--output")?
             .unwrap_or("output_jsonl".into()),
