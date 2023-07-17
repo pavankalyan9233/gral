@@ -222,7 +222,10 @@ async fn get_all_shard_data(
         let body_v =
             serde_json::to_vec::<DumpStartBody>(&body).expect("could not serialize DumpStartBody");
         let resp = client.post(url).body(body_v).send().await;
-        let r = handle_arangodb_response(resp, |c| c == StatusCode::NO_CONTENT).await;
+        let r = handle_arangodb_response(resp, |c| {
+            c == StatusCode::NO_CONTENT || c == StatusCode::OK || c == StatusCode::CREATED
+        })
+        .await;
         if let Err(rr) = r {
             error = rr;
             error_happened = true;
