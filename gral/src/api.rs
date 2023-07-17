@@ -267,7 +267,7 @@ async fn api_compute(
         comp.number = nr;
     });
     let response = GraphAnalyticsEngineProcessResponse {
-        job_id: format!("{:08x}", comp_id),
+        job_id: encode_id(comp_id),
         client_id: body.client_id,
         error: false,
         error_code: 0,
@@ -451,7 +451,7 @@ async fn api_get_job(
             let (error_code, error_message) = comp.get_error();
             let response = GraphAnalyticsEngineJob {
                 job_id,
-                graph_id: format!("{:x}", graph.graph_id),
+                graph_id: encode_id(graph.graph_id),
                 total: comp.get_total(),
                 progress: comp.get_progress(),
                 result: if comp.is_ready() {
@@ -608,8 +608,8 @@ async fn api_list_jobs(
         // Write response:
         let (error_code, error_message) = comp.get_error();
         let j = GraphAnalyticsEngineJob {
-            job_id: format!("{:x}", job_id),
-            graph_id: format!("{:x}", graph.graph_id),
+            job_id: encode_id(*job_id),
+            graph_id: encode_id(graph.graph_id),
             total: 1,
             progress: if comp.is_ready() { 1 } else { 0 },
             result: if comp.is_ready() {
