@@ -1,6 +1,7 @@
 Opsec:
  - Fetch JSON data on graph load, store as vector of serde::json
- - Give the `compute` API a way to specify a previous job
+ - Give the `compute` API a way to specify a previous job, or store a
+   computation result with a graph.
  - Implement an aggregation job with different result set
  - Generalize write back of computation result
 

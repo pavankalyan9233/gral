@@ -378,7 +378,15 @@ async fn api_vertices(graphs: Arc<Mutex<Graphs>>, bytes: Bytes) -> Result<Vec<u8
         // Whole batch is rejected, if there is an empty key or the input
         // is too short! Note that previous vertices might already have
         // been inserted! This is allowed according to the API!
-        graph.insert_vertex(i, hash, key, data, &mut exceptional, &mut exceptional_keys)
+        graph.insert_vertex(
+            i,
+            hash,
+            key,
+            data,
+            None,
+            &mut exceptional,
+            &mut exceptional_keys,
+        )
     }
 
     // Write response:

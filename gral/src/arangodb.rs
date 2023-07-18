@@ -5,7 +5,7 @@ use crate::graphs::{Graph, VertexHash, VertexIndex};
 use bytes::Bytes;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
@@ -435,6 +435,14 @@ pub async fn fetch_graph_from_arangodb(
         .map(|ci| -> String { ci.name.clone() })
         .collect();
     let vertex_map = compute_shard_map(&shard_dist, &vertex_coll_list)?;
+    let vertex_coll_field_map: Arc<RwLock<HashMap<String, Vec<String>>>> =
+        Arc::new(RwLock::new(HashMap::new()));
+    {
+        let mut guard = vertex_coll_field_map.write().unwrap();
+        for vc in req.vertex_collections.iter() {
+            guard.insert(vc.name.clone(), vc.fields.clone());
+        }
+    }
     let edge_coll_list = req
         .edge_collections
         .iter()
@@ -460,7 +468,9 @@ pub async fn fetch_graph_from_arangodb(
             senders.push(sender);
             let graph_clone = graph_arc.clone();
             let prog_reported_clone = prog_reported.clone();
+            let vertex_coll_field_map_clone = vertex_coll_field_map.clone();
             let consumer = std::thread::spawn(move || -> Result<(), String> {
+                let vcf_map = vertex_coll_field_map_clone.read().unwrap();
                 let begin = std::time::SystemTime::now();
                 while let Ok(resp) = receiver.recv() {
                     let body = std::str::from_utf8(resp.as_ref())
@@ -472,6 +482,9 @@ pub async fn fetch_graph_from_arangodb(
                     );
                     let mut vertex_keys: Vec<Vec<u8>> = vec![];
                     vertex_keys.reserve(400000);
+                    let mut vertex_json: Vec<Value> = vec![];
+                    let mut json_initialized = false;
+                    let mut fields: Vec<String> = vec![];
                     for line in body.lines() {
                         let v: Value = match serde_json::from_str(line) {
                             Err(err) => {
@@ -488,6 +501,28 @@ pub async fn fetch_graph_from_arangodb(
                                 let mut buf = vec![];
                                 buf.extend_from_slice((&i[..]).as_bytes());
                                 vertex_keys.push(buf);
+                                if !json_initialized {
+                                    json_initialized = true;
+                                    let pos = i.find("/");
+                                    match pos {
+                                        None => {
+                                            fields = vec![];
+                                        }
+                                        Some(p) => {
+                                            let collname = (&i[0..p]).to_string();
+                                            let flds = vcf_map.get(&collname);
+                                            match flds {
+                                                None => {
+                                                    fields = vec![];
+                                                }
+                                                Some(v) => {
+                                                    fields = v.clone();
+                                                    vertex_json.reserve(400000);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             _ => {
                                 return Err(format!(
@@ -496,24 +531,42 @@ pub async fn fetch_graph_from_arangodb(
                                 ));
                             }
                         }
+                        // If we get here, we have to extract the field
+                        // values in `fields` from the json and store it
+                        // to vertex_json:
+                        if !fields.is_empty() {
+                            if fields.len() == 1 {
+                                vertex_json.push(v[&fields[0]].clone());
+                            } else {
+                                let mut j = json!({});
+                                for f in fields.iter() {
+                                    j[&f] = v[&f].clone();
+                                }
+                                vertex_json.push(j);
+                            }
+                        }
                     }
                     let nr_vertices: u64;
                     {
                         let mut graph = graph_clone.write().unwrap();
-                        let mut i: u32 = 0;
                         let mut exceptional: Vec<(u32, VertexHash)> = vec![];
                         let mut exceptional_keys: Vec<Vec<u8>> = vec![];
-                        for k in &vertex_keys {
+                        for i in 0..vertex_keys.len() {
+                            let k = &vertex_keys[i];
                             let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
                             graph.insert_vertex(
-                                i,
+                                i as u32,
                                 hash,
                                 k.clone(),
                                 vec![],
+                                if vertex_json.is_empty() {
+                                    None
+                                } else {
+                                    Some(vertex_json[i].clone())
+                                },
                                 &mut exceptional,
                                 &mut exceptional_keys,
                             );
-                            i += 1;
                         }
                         nr_vertices = graph.number_of_vertices();
                     }

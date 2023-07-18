@@ -3,6 +3,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use log::info;
 use metrics::increment_counter;
 use rand::Rng;
+use serde_json::{json, Value};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -62,6 +63,10 @@ pub struct Graph {
     // more entry to mark the end of the last one:
     pub vertex_data: Vec<u8>,
     pub vertex_data_offsets: Vec<u64>,
+
+    // JSON data for vertices. If all data was empty, it is allowed that
+    // the following vector is empty:
+    pub vertex_json: Vec<Value>,
 
     // Edges as from/to tuples:
     pub edges: Vec<Edge>,
@@ -146,6 +151,7 @@ impl Graph {
             index_to_key: vec![],
             vertex_data: vec![],
             vertex_data_offsets: vec![],
+            vertex_json: vec![],
             edges: vec![],
             edge_data: vec![],
             edge_data_offsets: vec![],
@@ -167,6 +173,7 @@ impl Graph {
         hash: VertexHash,
         key: Vec<u8>,  // cannot be empty
         data: Vec<u8>, // can be empty
+        json: Option<Value>,
         exceptional: &mut Vec<(u32, VertexHash)>,
         exceptional_keys: &mut Vec<Vec<u8>>,
     ) {
@@ -214,6 +221,25 @@ impl Graph {
             // Insert data:
             self.vertex_data_offsets.push(pos);
             self.vertex_data.extend_from_slice(&data);
+        }
+        match json {
+            None => {
+                // We only add things here lazily as soon as some non-empty
+                // data has been detected to save memory:
+                if !self.vertex_json.is_empty() {
+                    self.vertex_json.push(json!(null));
+                }
+            }
+            Some(j) => {
+                // Now we have to pay for our laziness:
+                if self.vertex_json.is_empty() {
+                    for _i in 0..index.to_u64() {
+                        self.vertex_json.push(json!(null));
+                    }
+                }
+                // Insert data:
+                self.vertex_json.push(j);
+            }
         }
     }
 
