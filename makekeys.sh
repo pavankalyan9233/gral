@@ -32,7 +32,7 @@ openssl x509 -req -in key-csr.pem -CA ca.pem -days 3650 -CAkey ca-key.pem -out c
 
 cat ca.pem cert.pem key.pem > keyfile.pem
 ln cert.pem ca.crt
-ln cert.key ca.key
+ln key.pem ca.key
 
 # Client authentication:
 
