@@ -195,6 +195,8 @@ struct DBServerInfo {
 async fn get_all_shard_data(
     req: &GraphAnalyticsEngineLoadDataRequest,
     endpoints: &Vec<String>,
+    username: &String,
+    password: &String,
     shard_map: &ShardMap,
     result_channels: Vec<std::sync::mpsc::Sender<Bytes>>,
 ) -> Result<(), String> {
@@ -221,7 +223,12 @@ async fn get_all_shard_data(
         };
         let body_v =
             serde_json::to_vec::<DumpStartBody>(&body).expect("could not serialize DumpStartBody");
-        let resp = client.post(url).body(body_v).send().await;
+        let resp = client
+            .post(url)
+            .basic_auth(&username, Some(&password))
+            .body(body_v)
+            .send()
+            .await;
         let r = handle_arangodb_response(resp, |c| {
             c == StatusCode::NO_CONTENT || c == StatusCode::OK || c == StatusCode::CREATED
         })
@@ -252,7 +259,11 @@ async fn get_all_shard_data(
                 "/_api/dump/{}?dbserver={}",
                 dbserver.dump_id, dbserver.dbserver
             ));
-            let resp = client_clone_for_cleanup.delete(url).send().await;
+            let resp = client_clone_for_cleanup
+                .delete(url)
+                .basic_auth(&username, Some(&password))
+                .send()
+                .await;
             let r =
                 handle_arangodb_response(resp, |c| c == StatusCode::OK || c == StatusCode::CREATED)
                     .await;
@@ -299,6 +310,8 @@ async fn get_all_shard_data(
             //                                   // the connection pool
             let client_clone = build_client(use_tls)?;
             let endpoint_clone = endpoints[endpoints_round_robin].clone();
+            let username_clone = username.clone();
+            let password_clone = password.clone();
             endpoints_round_robin += 1;
             if endpoints_round_robin >= endpoints.len() {
                 endpoints_round_robin = 0;
@@ -330,7 +343,11 @@ async fn get_all_shard_data(
                         task_info.dbserver.dbserver,
                         task_info.current_batch_id
                     );
-                    let resp = client_clone.post(url).send().await;
+                    let resp = client_clone
+                        .post(url)
+                        .basic_auth(&username_clone, Some(&password_clone))
+                        .send()
+                        .await;
                     let resp = handle_arangodb_response(resp, |c| {
                         c == StatusCode::OK || c == StatusCode::NO_CONTENT
                     })
@@ -397,6 +414,8 @@ pub async fn fetch_graph_from_arangodb(
 ) -> Result<(), String> {
     // Graph object must be new and empty!
     let endpoints: Vec<String>;
+    let username: String;
+    let password: String;
     {
         let guard = args.lock().unwrap();
         endpoints = guard
@@ -404,6 +423,8 @@ pub async fn fetch_graph_from_arangodb(
             .split(",")
             .map(|s| s.to_owned())
             .collect();
+        username = guard.arangodb_username.clone();
+        password = guard.arangodb_password.clone();
     }
     if endpoints.is_empty() {
         return Err("no endpoints given".to_string());
@@ -422,7 +443,11 @@ pub async fn fetch_graph_from_arangodb(
 
     // First ask for the shard distribution:
     let url = make_url("/_admin/cluster/shardDistribution");
-    let resp = client.get(url).send().await;
+    let resp = client
+        .get(url)
+        .basic_auth(&username, Some(&password))
+        .send()
+        .await;
     let shard_dist =
         handle_arangodb_response_with_parsed_body::<ShardDistribution>(resp, StatusCode::OK)
             .await?;
@@ -584,7 +609,7 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(&req, &endpoints, &vertex_map, senders).await?;
+        get_all_shard_data(&req, &endpoints, &username, &password, &vertex_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -700,7 +725,7 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(&req, &endpoints, &edge_map, senders).await?;
+        get_all_shard_data(&req, &endpoints, &username, &password, &edge_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()

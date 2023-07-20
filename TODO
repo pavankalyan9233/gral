@@ -1,5 +1,4 @@
 Opsec:
- - Adjust config options by environment variables for AG integration.
  - Implement an aggregation job with different result set
  - Generalize write back of computation result
 

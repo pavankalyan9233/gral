@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use log::info;
+use log::{info, LevelFilter};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -26,8 +26,10 @@ pub const VERSION: u32 = 0x00100;
 
 #[tokio::main]
 async fn main() {
-    env_logger::builder()
+    env_logger::Builder::new()
         .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Micros))
+        .filter_level(LevelFilter::Info)
+        .parse_env("RUST_LOG")
         .init();
     info!("Hello, this is gral!");
     let prom_builder = PrometheusBuilder::new();
@@ -99,8 +101,8 @@ async fn main() {
         if args.use_auth {
             let (_addr, server) = warp::serve(apifilters)
                 .tls()
-                .cert_path(args.cert)
-                .key_path(args.key)
+                .cert_path(args.keyfile.clone())
+                .key_path(args.keyfile)
                 .client_auth_required_path("tls/authca.pem")
                 .bind_with_graceful_shutdown((ip_addr, args.port), async move {
                     rx_shutdown.await.unwrap();
@@ -111,8 +113,8 @@ async fn main() {
         } else {
             let (_addr, server) = warp::serve(apifilters)
                 .tls()
-                .cert_path(args.cert)
-                .key_path(args.key)
+                .cert_path(args.keyfile.clone())
+                .key_path(args.keyfile)
                 .bind_with_graceful_shutdown((ip_addr, args.port), async move {
                     rx_shutdown.await.unwrap();
                     info!("Received shutdown...");
