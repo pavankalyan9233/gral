@@ -101,8 +101,8 @@ async fn main() {
         if args.use_auth {
             let (_addr, server) = warp::serve(apifilters)
                 .tls()
-                .cert_path(args.keyfile.clone())
-                .key_path(args.keyfile)
+                .cert_path(&args.cert)
+                .key_path(&args.key)
                 .client_auth_required_path("tls/authca.pem")
                 .bind_with_graceful_shutdown((ip_addr, args.port), async move {
                     rx_shutdown.await.unwrap();
@@ -113,8 +113,8 @@ async fn main() {
         } else {
             let (_addr, server) = warp::serve(apifilters)
                 .tls()
-                .cert_path(args.keyfile.clone())
-                .key_path(args.keyfile)
+                .cert_path(&args.cert)
+                .key_path(&args.key)
                 .bind_with_graceful_shutdown((ip_addr, args.port), async move {
                     rx_shutdown.await.unwrap();
                     info!("Received shutdown...");

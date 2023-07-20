@@ -31,13 +31,23 @@ OPTIONS:
   --arangodb-pw-path    Path for file with password for access to ArangoDB
                         [default: 'secret.password']
   --arangodb-jwt-secret Path name with jwt secret [default: 'secret.jwt']
+
+The following environment variables can set defaults for the above
+options (command line options have higher precedence!):
+
+  HTTP_PORT               Sets the default for --bind-port
+  ARANGODB_ENDPOINT       Sets the default for --arangodb-endpoints
+  ARANGODB_USER           Sets the default for --arangodb-username
+  ARANGODB_PASSWORD_FILE  Sets the default for --arangodb-pwr-path
+  ARANGODB_JWT
+  ARANGODB_CA_CERTS       Sets the path with 'ca.crt' for --cert and
+                          sets the path with 'ca.key' for --key
 ";
 
 #[derive(Debug, Clone)]
 pub struct GralArgs {
     pub use_tls: bool,
     pub use_auth: bool,
-    pub keyfile: std::path::PathBuf,
     pub cert: std::path::PathBuf,
     pub key: std::path::PathBuf,
     pub authca: std::path::PathBuf,
@@ -94,20 +104,17 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
     let default_endpoint = my_get_env("ARANGODB_ENDPOINT", "https://localhost:8529");
     let default_jwt_path = my_get_env("ARANGODB_JWT", "");
     let default_passwd_path = my_get_env("ARANGODB_PASSWORD_FILE", "secret.password");
-    let default_keyfile = my_get_env("ARANGODB_CA_CERTS", "tls/keyfile.pem");
+    let default_keypath = my_get_env("ARANGODB_CA_CERTS", "./tls");
 
     let mut args = GralArgs {
         use_tls: pargs.opt_value_from_str("--use-tls")?.unwrap_or(true),
         use_auth: pargs.opt_value_from_str("--use-auth")?.unwrap_or(false),
-        keyfile: pargs
-            .opt_value_from_str("--keyfile")?
-            .unwrap_or(default_keyfile.into()),
         cert: pargs
             .opt_value_from_str("--cert")?
-            .unwrap_or("tls/cert.pem".into()),
+            .unwrap_or((default_keypath.clone() + "/ca.crt").into()),
         key: pargs
             .opt_value_from_str("--key")?
-            .unwrap_or("tls/key.pem".into()),
+            .unwrap_or((default_keypath.clone() + "/ca.key").into()),
         authca: pargs
             .opt_value_from_str("--authca")?
             .unwrap_or("tls/authca.pem".into()),

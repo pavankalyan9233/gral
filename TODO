@@ -1,4 +1,5 @@
 Opsec:
+ - Adjust API paths
  - Implement an aggregation job with different result set
  - Generalize write back of computation result
 
