@@ -28,7 +28,7 @@ pub const VERSION: u32 = 0x00100;
 async fn main() {
     env_logger::Builder::new()
         .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Micros))
-        .filter_level(LevelFilter::Info)
+        .filter_level(LevelFilter::Trace)
         .parse_env("RUST_LOG")
         .init();
     info!("Hello, this is gral!");
