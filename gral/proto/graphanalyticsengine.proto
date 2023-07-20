@@ -382,16 +382,14 @@ message GraphAnalyticsEngineJob {
     uint32 total = 3;
     // Progress (0: no progress, equal to total: ready)
     uint32 progress = 4;
-    // Result (present, if progress == total)
-    int64 result = 5;
     // Error flag
-    bool error = 6;
+    bool error = 5;
     // Error code
-    int32 error_code = 7;
+    int32 error_code = 6;
     // Error message
-    string error_message = 8;
+    string error_message = 7;
     // Optional source job
-    string source_job = 9;
+    string source_job = 8;
 }
 
 // Response for a delete job request.

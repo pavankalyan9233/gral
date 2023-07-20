@@ -1,6 +1,8 @@
 use crate::arangodb::fetch_graph_from_arangodb;
 use crate::args::{with_args, GralArgs};
-use crate::computations::{with_computations, Computations, ConcreteComputation, LoadComputation};
+use crate::computations::{
+    with_computations, ComponentsComputation, Computations, LoadComputation,
+};
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
 use crate::VERSION;
@@ -228,12 +230,13 @@ async fn api_compute(
         ));
     }
 
-    let comp_arc = Arc::new(Mutex::new(ConcreteComputation {
+    let comp_arc = Arc::new(Mutex::new(ComponentsComputation {
         algorithm,
         graph: graph_arc.clone(),
         components: None,
+        next_in_component: None,
         shall_stop: false,
-        number: 0,
+        number: None,
     }));
 
     let comp_id: u64;
@@ -242,7 +245,7 @@ async fn api_compute(
         comp_id = comps.register(comp_arc.clone());
     }
     std::thread::spawn(move || {
-        let (nr, components) = match algorithm {
+        let (nr, components, next) = match algorithm {
             1 => {
                 let graph = graph_arc.read().unwrap();
                 weakly_connected_components(&graph)
@@ -264,7 +267,8 @@ async fn api_compute(
         info!("Found {} connected components.", nr);
         let mut comp = comp_arc.lock().unwrap();
         comp.components = Some(components);
-        comp.number = nr;
+        comp.next_in_component = Some(next);
+        comp.number = Some(nr);
     });
     let response = GraphAnalyticsEngineProcessResponse {
         job_id: encode_id(comp_id),
@@ -420,7 +424,6 @@ async fn api_get_job(
                 graph_id: "".into(),
                 total: 0,
                 progress: 0,
-                result: 0,
                 source_job: "".into(),
                 error: true,
                 error_code: 404,
@@ -454,11 +457,6 @@ async fn api_get_job(
                 graph_id: encode_id(graph.graph_id),
                 total: comp.get_total(),
                 progress: comp.get_progress(),
-                result: if comp.is_ready() {
-                    comp.get_result() as i64
-                } else {
-                    0
-                },
                 error: error_code != 0,
                 error_code,
                 error_message,
@@ -612,11 +610,6 @@ async fn api_list_jobs(
             graph_id: encode_id(graph.graph_id),
             total: 1,
             progress: if comp.is_ready() { 1 } else { 0 },
-            result: if comp.is_ready() {
-                comp.get_result() as i64
-            } else {
-                0
-            },
             error: error_code != 0,
             error_code,
             error_message,

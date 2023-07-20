@@ -1,29 +1,38 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use rand::Rng;
+use std::any::Any;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::{Filter, Rejection};
 
-use crate::api_bin::{put_key_or_hash, CannotDumpVertexData, ComputationNotYetFinished};
+use crate::api_bin::{put_key_or_hash, ComputationNotYetFinished};
 use crate::graphs::{Graph, KeyOrHash};
 
 pub trait Computation {
     fn is_ready(&self) -> bool;
     fn get_error(&self) -> (i32, String);
     fn cancel(&mut self);
-    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String>;
     fn get_total(&self) -> u32;
     fn get_progress(&self) -> u32;
-    fn get_result(&self) -> u64;
+    fn get_graph(&self) -> Arc<RwLock<Graph>>;
     fn algorithm_id(&self) -> u32;
+    fn as_any(&self) -> &dyn Any;
+}
+
+pub trait ComputationWithResultPerVertex {
+    fn get_number_of_components(&self) -> u64;
+    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String>;
     fn dump_vertex_results(
         &self,
         comp_id: u64,
         hashes: &Vec<KeyOrHash>,
         out: &mut Vec<u8>,
     ) -> Result<(), warp::Rejection>;
-    fn get_graph(&self) -> Arc<RwLock<Graph>>;
+}
+
+pub trait ComputationWithListResult {
+    fn get_batch(&self, out: &mut Vec<u8>) -> Result<(), String>;
 }
 
 pub struct Computations {
@@ -56,15 +65,16 @@ pub fn with_computations(
     warp::any().map(move || computations.clone())
 }
 
-pub struct ConcreteComputation {
+pub struct ComponentsComputation {
     pub algorithm: u32,
     pub graph: Arc<RwLock<Graph>>,
     pub components: Option<Vec<u64>>,
+    pub next_in_component: Option<Vec<i64>>,
     pub shall_stop: bool,
-    pub number: u64,
+    pub number: Option<u64>,
 }
 
-impl Computation for ConcreteComputation {
+impl Computation for ComponentsComputation {
     fn is_ready(&self) -> bool {
         self.components.is_some()
     }
@@ -80,11 +90,6 @@ impl Computation for ConcreteComputation {
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         return self.graph.clone();
     }
-    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String> {
-        out.write_u8(8).unwrap();
-        out.write_u64::<BigEndian>(self.number).unwrap();
-        Ok(())
-    }
     fn get_total(&self) -> u32 {
         1
     }
@@ -95,8 +100,20 @@ impl Computation for ConcreteComputation {
             0
         }
     }
-    fn get_result(&self) -> u64 {
-        self.number
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl ComputationWithResultPerVertex for ComponentsComputation {
+    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String> {
+        out.write_u8(8).unwrap();
+        out.write_u64::<BigEndian>(match self.number {
+            None => 0,
+            Some(nr) => nr,
+        })
+        .unwrap();
+        Ok(())
     }
     fn dump_vertex_results(
         &self,
@@ -130,6 +147,12 @@ impl Computation for ConcreteComputation {
             }
         }
     }
+    fn get_number_of_components(&self) -> u64 {
+        match self.number {
+            None => 0,
+            Some(nr) => nr,
+        }
+    }
 }
 
 pub struct LoadComputation {
@@ -157,24 +180,13 @@ impl Computation for LoadComputation {
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         return self.graph.clone();
     }
-    fn dump_result(&self, _out: &mut Vec<u8>) -> Result<(), String> {
-        Ok(())
-    }
     fn get_total(&self) -> u32 {
         self.total
     }
     fn get_progress(&self) -> u32 {
         self.progress
     }
-    fn get_result(&self) -> u64 {
-        0
-    }
-    fn dump_vertex_results(
-        &self,
-        comp_id: u64,
-        _kohs: &Vec<KeyOrHash>,
-        _out: &mut Vec<u8>,
-    ) -> Result<(), Rejection> {
-        Err(warp::reject::custom(CannotDumpVertexData { comp_id }))
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

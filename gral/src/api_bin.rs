@@ -10,7 +10,10 @@ use warp::{http::Response, http::StatusCode, reject, Filter, Rejection};
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 use crate::args::GralArgs;
-use crate::computations::{with_computations, Computation, Computations, ConcreteComputation};
+use crate::computations::{
+    with_computations, ComponentsComputation, Computation, ComputationWithResultPerVertex,
+    Computations,
+};
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{encode_id, with_graphs, Graph, Graphs, KeyOrHash, VertexHash, VertexIndex};
 use crate::VERSION;
@@ -684,12 +687,13 @@ async fn api_compute_bin(
         return Err(warp::reject::custom(UnknownAlgorithm { algorithm }));
     }
 
-    let comp_arc = Arc::new(Mutex::new(ConcreteComputation {
+    let comp_arc = Arc::new(Mutex::new(ComponentsComputation {
         algorithm,
         graph: graph_arc.clone(),
         components: None,
+        next_in_component: None,
         shall_stop: false,
-        number: 0,
+        number: None,
     }));
 
     let comp_id: u64;
@@ -699,7 +703,7 @@ async fn api_compute_bin(
     }
     // Launch background thread for this computation
     std::thread::spawn(move || {
-        let (nr, components) = match algorithm {
+        let (nr, components, next) = match algorithm {
             1 => {
                 let graph = graph_arc.read().unwrap();
                 weakly_connected_components(&graph)
@@ -721,7 +725,8 @@ async fn api_compute_bin(
         info!("Found {} connected components.", nr);
         let mut comp = comp_arc.lock().unwrap();
         comp.components = Some(components);
-        comp.number = nr;
+        comp.next_in_component = Some(next);
+        comp.number = Some(nr);
     });
 
     // Write response:
@@ -769,9 +774,11 @@ async fn api_get_progress_bin(
             v.reserve(256);
             v.write_u64::<BigEndian>(comp_id).unwrap();
             v.write_u32::<BigEndian>(1).unwrap();
-            if comp.is_ready() {
+            let downcast = comp.as_any().downcast_ref::<ComponentsComputation>();
+            if comp.is_ready() && downcast.is_some() {
+                let compcomp = downcast.unwrap();
                 v.write_u32::<BigEndian>(1).unwrap();
-                comp.dump_result(&mut v).unwrap();
+                compcomp.dump_result(&mut v).unwrap();
             } else {
                 v.write_u32::<BigEndian>(0).unwrap();
                 v.write_u8(0).unwrap();
@@ -881,7 +888,18 @@ async fn api_get_results_by_vertices(
     let computation = computation_arc.lock().unwrap();
     v.write_u32::<BigEndian>(computation.algorithm_id())
         .unwrap();
-    computation.dump_vertex_results(comp_id, &input, &mut v)?;
+    let downcast = computation.as_any().downcast_ref::<ComponentsComputation>();
+    match downcast {
+        Some(compcomp) => {
+            compcomp.dump_vertex_results(comp_id, &input, &mut v)?;
+        }
+        None => {
+            return Err(warp::reject::custom(ComputationDoesNotHaveComponents {
+                comp_id,
+            }));
+        }
+    }
+
     Ok(v)
 }
 
@@ -927,6 +945,13 @@ pub struct ComputationNotYetFinished {
     pub comp_id: u64,
 }
 impl reject::Reject for ComputationNotYetFinished {}
+
+/// An error object, which is used if a computation does not have components.
+#[derive(Debug)]
+pub struct ComputationDoesNotHaveComponents {
+    pub comp_id: u64,
+}
+impl reject::Reject for ComputationDoesNotHaveComponents {}
 
 /// An error object, which is used when a graph's vertices are already
 /// sealed and the client wants to add more vertices.
@@ -986,7 +1011,6 @@ impl reject::Reject for UnknownAlgorithm {}
 pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallible> {
     let code;
     let message: String;
-    let mut output_json = false;
 
     if err.is_not_found() {
         code = StatusCode::NOT_FOUND;
@@ -1044,15 +1068,18 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
     } else if let Some(wrong) = err.find::<ComputationNotFound>() {
         code = StatusCode::NOT_FOUND;
         message = format!("Computation with id {:x} does not exist", wrong.comp_id);
-        output_json = true;
     } else if let Some(wrong) = err.find::<ComputationNotYetFinished>() {
         code = StatusCode::SERVICE_UNAVAILABLE;
         message = format!("Computation with id {} does not exist", wrong.comp_id);
-        output_json = true;
+    } else if let Some(wrong) = err.find::<ComputationDoesNotHaveComponents>() {
+        code = StatusCode::BAD_REQUEST;
+        message = format!(
+            "Computation with id {} does have components as result",
+            wrong.comp_id
+        );
     } else if let Some(wrong) = err.find::<CannotDumpVertexData>() {
         code = StatusCode::BAD_REQUEST;
         message = format!("Job with id {} cannot dump vertex data", wrong.comp_id);
-        output_json = true;
     } else if let Some(wrong) = err.find::<InternalError>() {
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = wrong.msg.clone();
@@ -1066,19 +1093,9 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
         message = "UNHANDLED_REJECTION".to_string();
     }
 
-    if !output_json {
-        let mut v = Vec::new();
-        v.write_u32::<BigEndian>(code.as_u16() as u32).unwrap();
-        put_varlen(&mut v, message.len() as u32);
-        v.extend_from_slice(message.as_bytes());
-        Ok(warp::reply::with_status(v, code))
-    } else {
-        let body = serde_json::json!({
-            "error": true,
-            "errorCode": code.as_u16(),
-            "errorMessage": message
-        });
-        let v = serde_json::to_vec(&body).expect("Should be serializable");
-        Ok(warp::reply::with_status(v, code))
-    }
+    let mut v = Vec::new();
+    v.write_u32::<BigEndian>(code.as_u16() as u32).unwrap();
+    put_varlen(&mut v, message.len() as u32);
+    v.extend_from_slice(message.as_bytes());
+    Ok(warp::reply::with_status(v, code))
 }

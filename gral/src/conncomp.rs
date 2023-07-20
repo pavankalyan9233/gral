@@ -2,7 +2,7 @@ use crate::graphs::Graph;
 use log::info;
 use std::time::Instant;
 
-pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
+pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
     // Returns the number of weakly connected components and a vector
     // of as many numbers as there are vertices, which contains for each
     // index the id of the weakly connected component of the vertex.
@@ -81,13 +81,13 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
         start.elapsed(),
         nr_components
     );
-    (nr_components, mini)
+    (nr_components, mini, next)
 }
 
 // We use the terminology as in Knuth:
 // https://www-cs-faculty.stanford.edu/~knuth/fasc12a+.pdf
 
-pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
+pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
     // Returns the number of strongly connected components and a vector
     // of as many numbers as there are vertices, which contains for each
     // index the id of the strongly connected component of the vertex.
@@ -101,8 +101,12 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
     let sent = nr_v; // SENT in Knuth
 
     // Working data, all number of vertices sized:
-    info!("{:?} Computing strongly connected components, number of vertices: {}, number of edges: {}",
-             start.elapsed(), nr_v, g.number_of_edges());
+    info!(
+        "{:?} Computing strongly connected components, number of vertices: {}, number of edges: {}",
+        start.elapsed(),
+        nr_v,
+        g.number_of_edges()
+    );
     info!("{:?} Allocating data...", start.elapsed());
     let mut parent: Vec<u64> = vec![];
     let mut arc: Vec<u64> = vec![];
@@ -236,5 +240,9 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>) {
         start.elapsed(),
         count
     );
-    return (count, rep);
+    return (
+        count,
+        rep,
+        vec![], /* FIXME: Provide component list later */
+    );
 }
