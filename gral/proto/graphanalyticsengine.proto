@@ -233,8 +233,10 @@ message GraphAnalyticsEngineProcessRequest {
     string client_id = 2;
     // Graph ID
     string graph_id = 3;
+    // ID of a previous job to take the input from
+    string job_id = 4;
     // Name of algorithm:
-    string algorithm = 4;
+    string algorithm = 5;
    
     // Map of engine-type and algorithm-type specific custom fields (dynamic for this process operation)
     map<string, string> custom_fields = 10;

@@ -1,7 +1,7 @@
 use crate::arangodb::fetch_graph_from_arangodb;
 use crate::args::{with_args, GralArgs};
 use crate::computations::{
-    with_computations, ComponentsComputation, Computations, LoadComputation,
+    with_computations, ComponentsComputation, Computation, Computations, LoadComputation,
 };
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
@@ -208,6 +208,27 @@ async fn api_compute(
         graph_arc = g.unwrap().clone();
     }
 
+    // Computation ID is optional:
+    let mut _prev_comp: Option<Arc<Mutex<dyn Computation + Send>>> = None;
+    if !body.job_id.is_empty() {
+        let comp_id = decode_id(&body.job_id);
+        if let Err(e) = comp_id {
+            return Ok(err_bad_req(
+                format!("Could not decode job id {}: {}.", &body.job_id, e),
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+        let comps = computations.lock().unwrap();
+        let comp = comps.list.get(&comp_id.unwrap());
+        if comp.is_none() {
+            return Ok(err_bad_req(
+                format!("Could not find previous job id {}.", &body.job_id),
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+        _prev_comp = Some(comp.unwrap().clone());
+    }
+
     {
         // Check graph:
         let graph = graph_arc.read().unwrap();
@@ -220,6 +241,7 @@ async fn api_compute(
     let algorithm: u32 = match body.algorithm.as_ref() {
         "wcc" => 1,
         "scc" => 2,
+        "aggregate_components" => 3,
         _ => 0,
     };
 
@@ -230,7 +252,8 @@ async fn api_compute(
         ));
     }
 
-    let comp_arc = Arc::new(Mutex::new(ComponentsComputation {
+    let comp_arc;
+    comp_arc = Arc::new(Mutex::new(ComponentsComputation {
         algorithm,
         graph: graph_arc.clone(),
         components: None,
