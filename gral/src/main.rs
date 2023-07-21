@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use log::{info, LevelFilter};
+use log::info;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -28,7 +28,7 @@ pub const VERSION: u32 = 0x00100;
 async fn main() {
     env_logger::Builder::new()
         .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Micros))
-        .filter_level(LevelFilter::Trace)
+        //.filter_level(LevelFilter::Trace)
         .parse_env("RUST_LOG")
         .init();
     info!("Hello, this is gral!");
@@ -47,6 +47,16 @@ async fn main() {
     };
 
     info!("{:#?}", args);
+
+    let log_incoming = warp::log::custom(|info| {
+        info!(
+            "{} {} {} {:?}",
+            info.method(),
+            info.path(),
+            info.status(),
+            info.elapsed(),
+        );
+    });
 
     let (tx_shutdown, rx_shutdown) = oneshot::channel::<()>();
     let tx_arc = Arc::new(Mutex::new(Some(tx_shutdown)));
@@ -80,6 +90,7 @@ async fn main() {
     });
 
     let apifilters = shutdown
+        .with(log_incoming)
         .or(api_filter(
             the_graphs.clone(),
             the_computations.clone(),
