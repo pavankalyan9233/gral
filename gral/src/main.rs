@@ -1,5 +1,5 @@
 use byteorder::{BigEndian, WriteBytesExt};
-use log::info;
+use log::{info, LevelFilter};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -28,7 +28,7 @@ pub const VERSION: u32 = 0x00100;
 async fn main() {
     env_logger::Builder::new()
         .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Micros))
-        //.filter_level(LevelFilter::Trace)
+        .filter_level(LevelFilter::Info)
         .parse_env("RUST_LOG")
         .init();
     info!("Hello, this is gral!");
