@@ -107,7 +107,7 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
     let default_keypath = my_get_env("ARANGODB_CA_CERTS", "./tls");
 
     let mut args = GralArgs {
-        use_tls: pargs.opt_value_from_str("--use-tls")?.unwrap_or(true),
+        use_tls: pargs.opt_value_from_str("--use-tls")?.unwrap_or(false),
         use_auth: pargs.opt_value_from_str("--use-auth")?.unwrap_or(false),
         cert: pargs
             .opt_value_from_str("--cert")?
