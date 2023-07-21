@@ -60,6 +60,9 @@ OPTIONS:
                            [default: 'tls/ca.pem']
   --client-identity PATH   Path to client certificate and private key as PEM
                            [default: 'tls/client-keyfile.pem']
+  --with-extra-field       If set to a non-empty value, an extra field with
+                           that name and a string value is created for every
+                           vertex.
 ";
 
 #[derive(Debug)]
@@ -108,6 +111,7 @@ pub struct GruploadArgs {
     cacert_filename: std::path::PathBuf,
     client_identity_filename: std::path::PathBuf,
     identity: Arc<TLSClientInfo>,
+    extra_field: String,
 }
 
 fn upload(args: &mut GruploadArgs) -> Result<(), String> {
@@ -230,6 +234,9 @@ fn parse_args() -> Result<GruploadArgs, pico_args::Error> {
             cacert: vec![],
             client_identity: vec![],
         }),
+        extra_field: pargs
+            .opt_value_from_str("--with-extra-field")?
+            .unwrap_or("".into()),
         command: pargs.opt_free_from_str()?.unwrap_or("empty".into()),
     };
 

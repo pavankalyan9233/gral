@@ -717,6 +717,16 @@ pub fn drop_graph(args: &GruploadArgs) -> Result<(), String> {
 pub fn randomize(args: &GruploadArgs) -> Result<(), String> {
     println!("Creating new random graph on disk...");
 
+    let extra_choices = vec![
+        "new",
+        "old",
+        "inprogress",
+        "done",
+        "rejected",
+        "highprio",
+        "lost",
+        "joke",
+    ];
     let mut rng = rand::thread_rng();
 
     let cap = args.vertex_coll_name.len() + 1 + args.key_size as usize;
@@ -736,7 +746,21 @@ pub fn randomize(args: &GruploadArgs) -> Result<(), String> {
         let dig = digest(i.to_string());
         let key = &dig[0..args.key_size as usize];
         let id = make_id(key);
-        let r = write!(out, "{{\"_key\":\"{}\",\"_id\":\"{}\"}}\n", key, id);
+        let extra = if args.extra_field.is_empty() {
+            "".to_string()
+        } else {
+            let choice = rng.gen::<u32>() & 0x7f;
+            format!(
+                ",\"{}\":\"{}\"",
+                args.extra_field,
+                extra_choices[u32::count_ones(choice) as usize]
+            )
+        };
+        let r = write!(
+            out,
+            "{{\"_key\":\"{}\",\"_id\":\"{}\"{}}}\n",
+            key, id, extra
+        );
         if let Err(rr) = r {
             return Err(format!("Error during vertex write: {:?}", rr));
         }
