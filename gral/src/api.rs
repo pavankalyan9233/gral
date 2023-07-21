@@ -1,7 +1,9 @@
+use crate::aggregation::aggregate_over_components;
 use crate::arangodb::fetch_graph_from_arangodb;
 use crate::args::{with_args, GralArgs};
 use crate::computations::{
-    with_computations, ComponentsComputation, Computation, Computations, LoadComputation,
+    with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
+    LoadComputation,
 };
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
@@ -209,7 +211,7 @@ async fn api_compute(
     }
 
     // Computation ID is optional:
-    let mut _prev_comp: Option<Arc<Mutex<dyn Computation + Send>>> = None;
+    let mut prev_comp: Option<Arc<Mutex<dyn Computation + Send>>> = None;
     if !body.job_id.is_empty() {
         let comp_id = decode_id(&body.job_id);
         if let Err(e) = comp_id {
@@ -226,7 +228,7 @@ async fn api_compute(
                 StatusCode::BAD_REQUEST,
             ));
         }
-        _prev_comp = Some(comp.unwrap().clone());
+        prev_comp = Some(comp.unwrap().clone());
     }
 
     {
@@ -245,54 +247,105 @@ async fn api_compute(
         _ => 0,
     };
 
-    if algorithm == 0 {
-        return Ok(err_bad_req(
-            format!("Unknown algorithm: {}", body.algorithm),
-            StatusCode::BAD_REQUEST,
-        ));
-    }
+    let generic_comp_arc: Arc<Mutex<dyn Computation + Send>>;
+    match algorithm {
+        1 | 2 => {
+            let comp_arc = Arc::new(Mutex::new(ComponentsComputation {
+                algorithm,
+                graph: graph_arc.clone(),
+                components: None,
+                next_in_component: None,
+                shall_stop: false,
+                number: None,
+            }));
+            generic_comp_arc = comp_arc.clone();
+            std::thread::spawn(move || {
+                let (nr, components, next) = match algorithm {
+                    1 => {
+                        let graph = graph_arc.read().unwrap();
+                        weakly_connected_components(&graph)
+                    }
+                    2 => {
+                        {
+                            // Make sure we have an edge index:
+                            let mut graph = graph_arc.write().unwrap();
+                            if !graph.edges_indexed_from {
+                                info!("Indexing edges by from...");
+                                graph.index_edges(true, false);
+                            }
+                        }
+                        let graph = graph_arc.read().unwrap();
+                        strongly_connected_components(&graph)
+                    }
+                    _ => std::unreachable!(),
+                };
+                info!("Found {} connected components.", nr);
+                let mut comp = comp_arc.lock().unwrap();
+                comp.components = Some(components);
+                comp.next_in_component = Some(next);
+                comp.number = Some(nr);
+            });
+        }
+        3 => {
+            if prev_comp.is_none() {
+                return Ok(err_bad_req(
+                    "Aggregation algorithm needs previous computation as absis to work".to_string(),
+                    StatusCode::BAD_REQUEST,
+                ));
+            }
+            let prev_comp = prev_comp.unwrap();
+            let guard = prev_comp.lock().unwrap();
+            let downcast = guard.as_any().downcast_ref::<ComponentsComputation>();
+            if downcast.is_none() {
+                // Wrong actual type!
+                return Ok(err_bad_req(
+                    "Aggregation algorithm needs previous component computation as basis to
+                        work"
+                        .to_string(),
+                    StatusCode::BAD_REQUEST,
+                ));
+            }
+            let comp_arc = Arc::new(Mutex::new(AggregationComputation {
+                graph: graph_arc.clone(),
+                compcomp: prev_comp.clone(),
+                shall_stop: false,
+                total: 1,
+                progress: 0,
+                error_code: 0,
+                error_message: "".to_string(),
+                result: vec![],
+            }));
+            generic_comp_arc = comp_arc.clone();
+            let prev_comp_clone = prev_comp.clone();
+            std::thread::spawn(move || {
+                // Lock first the computation, then the graph!
+                let guard = prev_comp_clone.lock().unwrap();
+                let compcomp = guard
+                    .as_any()
+                    .downcast_ref::<ComponentsComputation>()
+                    .unwrap();
+                // already checked outside!
 
-    let comp_arc;
-    comp_arc = Arc::new(Mutex::new(ComponentsComputation {
-        algorithm,
-        graph: graph_arc.clone(),
-        components: None,
-        next_in_component: None,
-        shall_stop: false,
-        number: None,
-    }));
+                let graph = graph_arc.read().unwrap();
+                let res = aggregate_over_components(&graph, compcomp);
+                info!("Aggregated over {} connected components.", 0);
+                let mut comp = comp_arc.lock().unwrap();
+                comp.result = res;
+            });
+        }
+        _ => {
+            return Ok(err_bad_req(
+                format!("Unknown algorithm: {}", body.algorithm),
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+    };
 
     let comp_id: u64;
     {
         let mut comps = computations.lock().unwrap();
-        comp_id = comps.register(comp_arc.clone());
+        comp_id = comps.register(generic_comp_arc.clone());
     }
-    std::thread::spawn(move || {
-        let (nr, components, next) = match algorithm {
-            1 => {
-                let graph = graph_arc.read().unwrap();
-                weakly_connected_components(&graph)
-            }
-            2 => {
-                {
-                    // Make sure we have an edge index:
-                    let mut graph = graph_arc.write().unwrap();
-                    if !graph.edges_indexed_from {
-                        info!("Indexing edges by from...");
-                        graph.index_edges(true, false);
-                    }
-                }
-                let graph = graph_arc.read().unwrap();
-                strongly_connected_components(&graph)
-            }
-            _ => std::unreachable!(),
-        };
-        info!("Found {} connected components.", nr);
-        let mut comp = comp_arc.lock().unwrap();
-        comp.components = Some(components);
-        comp.next_in_component = Some(next);
-        comp.number = Some(nr);
-    });
     let response = GraphAnalyticsEngineProcessResponse {
         job_id: encode_id(comp_id),
         client_id: body.client_id,

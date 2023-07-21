@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use warp::{http::Response, http::StatusCode, Filter};
 
+mod aggregation;
 mod api;
 mod api_bin;
 mod arangodb;
