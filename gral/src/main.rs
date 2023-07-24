@@ -29,7 +29,7 @@ pub const VERSION: u32 = 0x00100;
 async fn main() {
     env_logger::Builder::new()
         .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Micros))
-        .filter_level(LevelFilter::Trace)
+        .filter_level(LevelFilter::Info)
         .parse_env("RUST_LOG")
         .init();
     info!("Hello, this is gral!");
@@ -56,9 +56,9 @@ async fn main() {
     let (tx_shutdown, rx_shutdown) = oneshot::channel::<()>();
     let tx_arc = Arc::new(Mutex::new(Some(tx_shutdown)));
     let tx_clone = tx_arc.clone();
-    let shutdown = warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "shutdown")
+    let shutdown = warp::path!("v1" / "shutdown")
         .and(warp::delete())
-        .map(move |_engine_id: String| {
+        .map(move || {
             let mut tx = tx_clone.lock().unwrap();
             if tx.is_some() {
                 let tx = tx.take();

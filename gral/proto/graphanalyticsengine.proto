@@ -54,7 +54,7 @@ service GraphAnalyticsEngineService {
     // - graphanalytics.engine.load-data on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineLoadData(GraphAnalyticsEngineLoadDataRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
-            post: "/api/graphanalytics/v1/engines/{engine_id}/loaddata"
+            post: "/v2/loaddata"
             body: "*"
         };
     }
@@ -64,7 +64,7 @@ service GraphAnalyticsEngineService {
     // - graphanalytics.engine.load-data on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineLoadDataAql(GraphAnalyticsEngineLoadDataAqlRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
-            post: "/api/graphanalytics/v1/engines/{engine_id}/loaddataaql"
+            post: "/v2/loaddataaql"
             body: "*"
         };
     }
@@ -74,7 +74,7 @@ service GraphAnalyticsEngineService {
     // - graphanalytics.engine.process on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineProcess(GraphAnalyticsEngineProcessRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            post: "/api/graphanalytics/v1/engines/{engine_id}/process"
+            post: "/v2/process"
             body: "*"
         };
     }
@@ -84,7 +84,7 @@ service GraphAnalyticsEngineService {
     // - graphanalytics.engine.store-results on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineStoreResults(GraphAnalyticsEngineStoreResultsRequest) returns (GraphAnalyticsEngineStoreResultsResponse) {
         option (google.api.http) = {
-            post: "/api/graphanalytics/v1/engines/{engine_id}/storeresults"
+            post: "/v2/storeresults"
             body: "*"
         };
     }
@@ -92,42 +92,42 @@ service GraphAnalyticsEngineService {
     // List the graphs in the engine:
     rpc GraphAnalyticsEngineListGraphs(GraphAnalyticsEngineId) returns (GraphAnalyticsEngineListGraphsResponse) {
         option (google.api.http) = {
-            get: "/api/graphanalytics/v1/engines/{engine_id}/graphs"
+            get: "/v2/graphs"
         };
     }
    
     // Get information about a specific graph:
     rpc GraphAnalyticsEngineGetGraph(GraphAnalyticsEngineIdWithGraph) returns (GraphAnalyticsEngineGetGraphResponse) {
         option (google.api.http) = {
-            get: "/api/graphanalytics/v1/engines/{engine_id}/graphs/{graph_id}"
+            get: "/v2/graphs/{graph_id}"
         };
     }
 
     // Delete a specific graph:
     rpc GraphAnalyticsEngineDeleteGraph(GraphAnalyticsEngineIdWithGraph) returns (GraphAnalyticsEngineDeleteGraphResponse) {
         option (google.api.http) = {
-            delete: "/api/graphanalytics/v1/engines/{engine_id}/graphs/{graph_id}"
+            delete: "/v2/graphs/{graph_id}"
         };
     }
 
     // List the jobs in the engine:
     rpc GraphAnalyticsEngineListJobs(GraphAnalyticsEngineId) returns (GraphAnalyticsEngineListJobsResponse) {
         option (google.api.http) = {
-            get: "/api/graphanalytics/v1/engines/{engine_id}/jobs"
+            get: "/v2/jobs"
         };
     }
    
     // Get information about a specific job (in particular progress and result when done):
     rpc GraphAnalyticsEngineGetJob(GraphAnalyticsEngineIdWithJob) returns (GraphAnalyticsEngineJob) {
         option (google.api.http) = {
-            get: "/api/graphanalytics/v1/engines/{engine_id}/jobs/{job_id}"
+            get: "/v2/jobs/{job_id}"
         };
     }
 
     // Delete a specific job
     rpc GraphAnalyticsEngineDeleteJob(GraphAnalyticsEngineIdWithJob) returns (GraphAnalyticsEngineDeleteJobResponse) {
         option (google.api.http) = {
-            delete: "/api/graphanalytics/v1/engines/{engine_id}/jobs/{job_id}"
+            delete: "/v2/{job_id}"
         };
     }
 
@@ -141,7 +141,7 @@ service GraphAnalyticsEngineService {
     // Shutdown
     rpc GraphAnalticsEngineShutdown(GraphAnalyticsEngineId) returns (GraphAnalyticsEngineShutdownResponse) {
         option(google.api.http) = {
-            delete: "/api/graphanalytics/v1/engines/{engine_id}/shutdown"
+            delete: "/v2/shutdown"
         };
     }
 }

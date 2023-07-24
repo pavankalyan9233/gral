@@ -35,64 +35,55 @@ pub fn api_filter(
     computations: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    let version = warp::path!("v1" / "version")
+    let version = warp::path!("v2" / "version")
         .and(warp::get())
         .map(version_json);
     let get_job = warp::get()
-        .and(warp::path!(
-            "api" / "graphanalytics" / "v1" / "engines" / String / "jobs" / String
-        ))
+        .and(warp::path!("v2" / "jobs" / String))
         .and(with_computations(computations.clone()))
         .and_then(api_get_job);
     let drop_job = warp::delete()
-        .and(warp::path!(
-            "api" / "graphanalytics" / "v1" / "engines" / String / "jobs" / String
-        ))
+        .and(warp::path!("v2" / "jobs" / String))
         .and(with_computations(computations.clone()))
         .and_then(api_drop_job);
-    let compute = warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "process")
+    let compute = warp::path!("v2" / "process")
         .and(warp::post())
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_compute);
-    let get_arangodb_graph =
-        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "loaddata")
-            .and(warp::post())
-            .and(with_graphs(graphs.clone()))
-            .and(with_computations(computations.clone()))
-            .and(with_args(args.clone()))
-            .and(warp::body::bytes())
-            .and_then(api_get_arangodb_graph);
-    let write_result_back_arangodb =
-        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "storeresults")
-            .and(warp::post())
-            .and(with_graphs(graphs.clone()))
-            .and(with_computations(computations.clone()))
-            .and(warp::body::bytes())
-            .and_then(api_write_result_back_arangodb);
-    let get_arangodb_graph_aql =
-        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "loaddataaql")
-            .and(warp::post())
-            .and(with_graphs(graphs.clone()))
-            .and(with_computations(computations.clone()))
-            .and(warp::body::bytes())
-            .and_then(api_get_arangodb_graph_aql);
-    let get_graph =
-        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "graphs" / String)
-            .and(warp::get())
-            .and(with_graphs(graphs.clone()))
-            .and_then(api_get_graph);
-    let drop_graph =
-        warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "graphs" / String)
-            .and(warp::delete())
-            .and(with_graphs(graphs.clone()))
-            .and_then(api_drop_graph);
+    let get_arangodb_graph = warp::path!("v2" / "loaddata")
+        .and(warp::post())
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(with_args(args.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_get_arangodb_graph);
+    let write_result_back_arangodb = warp::path!("v2" / "storeresults")
+        .and(warp::post())
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_write_result_back_arangodb);
+    let get_arangodb_graph_aql = warp::path!("v2" / "loaddataaql")
+        .and(warp::post())
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_get_arangodb_graph_aql);
+    let get_graph = warp::path!("v2" / "graphs" / String)
+        .and(warp::get())
+        .and(with_graphs(graphs.clone()))
+        .and_then(api_get_graph);
+    let drop_graph = warp::path!("v2" / "graphs" / String)
+        .and(warp::delete())
+        .and(with_graphs(graphs.clone()))
+        .and_then(api_drop_graph);
     let list_graphs = warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "graphs")
         .and(warp::get())
         .and(with_graphs(graphs.clone()))
         .and_then(api_list_graphs);
-    let list_jobs = warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "jobs")
+    let list_jobs = warp::path!("v2" / "jobs")
         .and(warp::get())
         .and(with_computations(computations.clone()))
         .and_then(api_list_jobs);
@@ -152,7 +143,6 @@ fn check_graph(graph: &Graph, graph_id: u64, edges_must_be_sealed: bool) -> Resu
 
 /// This function triggers a computation:
 async fn api_compute(
-    _engine_id: String,
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
@@ -366,7 +356,6 @@ async fn api_compute(
 
 /// This function writes a computation result back to ArangoDB:
 async fn api_write_result_back_arangodb(
-    _engine_id: String,
     _graphs: Arc<Mutex<Graphs>>,
     _computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
@@ -429,7 +418,6 @@ async fn api_write_result_back_arangodb(
 
 /// This function writes a computation result back to ArangoDB:
 async fn api_get_arangodb_graph_aql(
-    _engine_id: String,
     _graphs: Arc<Mutex<Graphs>>,
     _computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
@@ -448,7 +436,7 @@ async fn api_get_arangodb_graph_aql(
             StatusCode::BAD_REQUEST,
         )
     };
-    // Parse body and extract integers:
+    // Parse body:
     let parsed: serde_json::Result<GraphAnalyticsEngineLoadDataAqlRequest> =
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
@@ -494,7 +482,6 @@ async fn api_get_arangodb_graph_aql(
 
 /// This function gets progress of a computation.
 async fn api_get_job(
-    _engine_id: String,
     job_id: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -553,7 +540,6 @@ async fn api_get_job(
 
 /// This function deletes a job.
 async fn api_drop_job(
-    _engine_id: String,
     job_id: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -605,7 +591,6 @@ async fn api_drop_job(
 
 /// This function gets information about a graph:
 async fn api_get_graph(
-    _engine_id: String,
     graph_id: String,
     graphs: Arc<Mutex<Graphs>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -673,10 +658,7 @@ async fn api_list_graphs(
     Ok(serde_json::to_vec(&response).expect("Should be serializable"))
 }
 
-async fn api_list_jobs(
-    _engine_id: String,
-    computations: Arc<Mutex<Computations>>,
-) -> Result<Vec<u8>, Rejection> {
+async fn api_list_jobs(computations: Arc<Mutex<Computations>>) -> Result<Vec<u8>, Rejection> {
     let comps = computations.lock().unwrap();
     let mut response: Vec<GraphAnalyticsEngineJob> = vec![];
     for (job_id, comp_arc) in comps.list.iter() {
@@ -703,7 +685,6 @@ async fn api_list_jobs(
 
 /// This function drops a graph:
 async fn api_drop_graph(
-    _engine_id: String,
     graph_id: String,
     graphs: Arc<Mutex<Graphs>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -750,7 +731,6 @@ async fn api_drop_graph(
 }
 
 async fn api_get_arangodb_graph(
-    _engine_id: String,
     graphs: Arc<Mutex<Graphs>>,
     comps: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
