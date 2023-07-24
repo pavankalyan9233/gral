@@ -171,11 +171,12 @@ async fn api_compute(
     }
     let body = parsed.unwrap();
 
-    let client_id = u64::from_str_radix(&body.client_id, 16);
+    let client_id = decode_id(&body.client_id);
     if let Err(e) = client_id {
         return Ok(err_bad_req(
             format!(
-                "Could not read clientId as 64bit hex value: {}",
+                "Could not decode clientId {}: {}",
+                body.client_id,
                 e.to_string()
             ),
             StatusCode::BAD_REQUEST,
@@ -384,18 +385,20 @@ async fn api_write_result_back_arangodb(
     }
     let body = parsed.unwrap();
 
-    let client_id = u64::from_str_radix(&body.client_id, 16);
+    let client_id = decode_id(&body.client_id);
     if let Err(e) = client_id {
         return Ok(err_bad_req(format!(
-            "Could not read clientId as 64bit hex value: {}",
+            "Could not decode clientId {}: {}",
+            body.client_id,
             e.to_string()
         )));
     }
     let _client_id = client_id.unwrap();
-    let job_id = u32::from_str_radix(&body.job_id, 16);
+    let job_id = decode_id(&body.job_id);
     if let Err(e) = job_id {
         return Ok(err_bad_req(format!(
-            "Could not read jobId as 32bit hex value: {}",
+            "Could not decode jobId {}: {}",
+            body.job_id,
             e.to_string()
         )));
     }
@@ -447,18 +450,20 @@ async fn api_get_arangodb_graph_aql(
     }
     let body = parsed.unwrap();
 
-    let client_id = u64::from_str_radix(&body.client_id, 16);
+    let client_id = decode_id(&body.client_id);
     if let Err(e) = client_id {
         return Ok(err_bad_req(format!(
-            "Could not read clientId as 64bit hex value: {}",
+            "Could not decode clientId {}: {}",
+            body.client_id,
             e.to_string()
         )));
     }
     let _client_id = client_id.unwrap();
-    let job_id = u32::from_str_radix(&body.job_id, 16);
+    let job_id = decode_id(&body.job_id);
     if let Err(e) = job_id {
         return Ok(err_bad_req(format!(
-            "Could not read jobId as 32bit hex value: {}",
+            "Could not decode jobId {}: {}",
+            body.job_id,
             e.to_string()
         )));
     }
@@ -485,7 +490,7 @@ async fn api_get_job(
     job_id: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
-    let not_found_err = |j: &String| {
+    let not_found_err = |j: String| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineJob {
                 job_id: j.clone(),
@@ -495,15 +500,18 @@ async fn api_get_job(
                 source_job: "".into(),
                 error: true,
                 error_code: 404,
-                error_message: format!("Job {} not found", j),
+                error_message: j,
             })
             .unwrap(),
             StatusCode::NOT_FOUND,
         )
     };
-    let comp_id = u64::from_str_radix(&job_id, 16);
-    if let Err(_) = comp_id {
-        return Ok(not_found_err(&job_id));
+    let comp_id = decode_id(&job_id);
+    if let Err(e) = comp_id {
+        return Ok(not_found_err(format!(
+            "Could not decode jobId {}: {}",
+            job_id, e
+        )));
     }
     let comp_id = comp_id.unwrap();
 
@@ -511,7 +519,7 @@ async fn api_get_job(
     let comp_arc = comps.list.get(&comp_id);
     match comp_arc {
         None => {
-            return Ok(not_found_err(&job_id));
+            return Ok(not_found_err(format!("Could not find jobId {}", job_id)));
         }
         Some(comp_arc) => {
             let comp = comp_arc.lock().unwrap();
@@ -543,21 +551,24 @@ async fn api_drop_job(
     job_id: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
-    let not_found_err = |j: &String| {
+    let not_found_err = |j: String| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineDeleteJobResponse {
                 job_id: j.clone(),
                 error: true,
                 error_code: 404,
-                error_message: format!("Job {} not found", j),
+                error_message: j,
             })
             .unwrap(),
             StatusCode::NOT_FOUND,
         )
     };
-    let comp_id = u64::from_str_radix(&job_id, 16);
-    if let Err(_) = comp_id {
-        return Ok(not_found_err(&job_id));
+    let comp_id = decode_id(&job_id);
+    if let Err(e) = comp_id {
+        return Ok(not_found_err(format!(
+            "Could not decode job id {}: {}",
+            job_id, e
+        )));
     }
     let comp_id = comp_id.unwrap();
 
@@ -565,7 +576,7 @@ async fn api_drop_job(
     let comp_arc = comps.list.get(&comp_id);
     match comp_arc {
         None => {
-            return Ok(not_found_err(&job_id));
+            return Ok(not_found_err(format!("Could not find job {}", job_id)));
         }
         Some(comp_arc) => {
             {
