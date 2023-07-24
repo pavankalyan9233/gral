@@ -1,6 +1,7 @@
 Opsec:
- - Adjust API paths
- - Implement an aggregation job with different result set
+ - better progress tracking in jobs
+ - interrupt jobs
+ - report job type in API output
  - Generalize write back of computation result
 
  - job cancellation for load
