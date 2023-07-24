@@ -40,6 +40,9 @@ pub fn aggregate_over_components(
 
             let extract_string = |pos: usize| -> Option<&str> {
                 let v = &graph.vertex_json[pos];
+                if v.is_string() {
+                    return v.as_str();
+                }
                 if v.is_object() {
                     let s = &v[&attribute];
                     return s.as_str(); // Will return None if no string!
@@ -51,6 +54,7 @@ pub fn aggregate_over_components(
                 let s = st.to_string(); // Make a copy
                 map.insert(s, 1);
             }
+            let mut count: u64 = 1;
             while j != -1 {
                 if let Some(s) = extract_string(j as usize) {
                     match map.get_mut(s) {
@@ -64,8 +68,9 @@ pub fn aggregate_over_components(
                     };
                 }
                 j = next[j as usize];
+                count += 1;
             }
-            c.size = map.len() as u64;
+            c.size = count;
             c.aggregation = map;
             result.push(c);
             if result.len() % 100000 == 0 {
@@ -79,5 +84,10 @@ pub fn aggregate_over_components(
         }
     }
     info!("Aggregation took time {:?}.", start.elapsed());
+    /*
+    for c in result.iter() {
+        info!("Component: {:?}", c);
+    }
+    */
     result
 }

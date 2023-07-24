@@ -191,6 +191,7 @@ impl Computation for LoadComputation {
     }
 }
 
+#[derive(Debug)]
 pub struct Component {
     pub representative: u64,
     pub size: u64,

@@ -324,7 +324,7 @@ async fn api_compute(
                 // already checked outside!
 
                 let res = aggregate_over_components(compcomp, attr);
-                info!("Aggregated over {} connected components.", 0);
+                info!("Aggregated over {} connected components.", res.len());
                 let mut comp = comp_arc.lock().unwrap();
                 comp.result = res;
             });
