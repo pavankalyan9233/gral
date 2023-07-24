@@ -305,9 +305,15 @@ async fn api_compute(
                     StatusCode::BAD_REQUEST,
                 ));
             }
+            let attr = body.custom_fields.get("aggregationAttribute");
+            let attr = match attr {
+                Some(s) => s.clone(),
+                None => "value".to_string(),
+            };
             let comp_arc = Arc::new(Mutex::new(AggregationComputation {
                 graph: graph_arc.clone(),
                 compcomp: prev_comp.clone(),
+                aggregation_attribute: attr.to_string(),
                 shall_stop: false,
                 total: 1,
                 progress: 0,
@@ -326,8 +332,7 @@ async fn api_compute(
                     .unwrap();
                 // already checked outside!
 
-                let graph = graph_arc.read().unwrap();
-                let res = aggregate_over_components(&graph, compcomp);
+                let res = aggregate_over_components(compcomp, attr);
                 info!("Aggregated over {} connected components.", 0);
                 let mut comp = comp_arc.lock().unwrap();
                 comp.result = res;

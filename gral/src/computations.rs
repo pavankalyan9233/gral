@@ -200,6 +200,7 @@ pub struct Component {
 pub struct AggregationComputation {
     pub graph: Arc<RwLock<Graph>>,
     pub compcomp: Arc<Mutex<dyn Computation + Send>>,
+    pub aggregation_attribute: String,
     pub shall_stop: bool,
     pub total: u32,
     pub progress: u32,
