@@ -2,7 +2,7 @@ use crate::api::graphanalyticsengine::{
     GraphAnalyticsEngineLoadDataRequest, GraphAnalyticsEngineStoreResultsRequest,
 };
 use crate::args::GralArgs;
-use crate::computations::{Computation, LoadComputation, StoreComputation};
+use crate::computations::{AggregationComputation, Computation, LoadComputation, StoreComputation};
 use crate::graphs::{Graph, VertexHash, VertexIndex};
 use bytes::Bytes;
 use log::{debug, info};
@@ -748,8 +748,48 @@ pub async fn fetch_graph_from_arangodb(
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+struct Batch {
+    body: Bytes,
+    collection: String,
+}
+
+async fn batch_sender(
+    mut receiver: tokio::sync::mpsc::Receiver<Batch>,
+    endpoint: String,
+    use_tls: bool,
+    username: String,
+    password: String,
+    database: String,
+) -> Result<(), String> {
+    let begin = std::time::SystemTime::now();
+    let client = build_client(use_tls)?;
+    while let Some(batch) = receiver.recv().await {
+        let batch_clone = batch.clone();
+        debug!(
+            "{:?} Sending off batch, body size: {}",
+            std::time::SystemTime::now().duration_since(begin),
+            batch.body.len()
+        );
+        let url = format!(
+            "{}/_db/{}/_api/document/{}?overwriteMode=update&silent=true",
+            endpoint, database, batch.collection
+        );
+        let resp = client
+            .post(url)
+            .basic_auth(&username, Some(&password))
+            .body(batch_clone.body)
+            .send()
+            .await;
+        let _resp =
+            handle_arangodb_response(resp, |c| c == StatusCode::OK || c == StatusCode::CREATED)
+                .await?;
+    }
+    Ok(())
+}
+
 pub async fn write_result_to_arangodb(
-    _req: GraphAnalyticsEngineStoreResultsRequest,
+    req: GraphAnalyticsEngineStoreResultsRequest,
     args: Arc<Mutex<GralArgs>>,
     result_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>,
     _comp_arc: Arc<RwLock<StoreComputation>>,
@@ -772,28 +812,87 @@ pub async fn write_result_to_arangodb(
     }
     let begin = std::time::SystemTime::now();
 
+    let use_tls = endpoints[0].starts_with("https://");
+
+    // For now, we only do the case of an aggregation result and do the
+    // one result per vertex case later. Furthermore, we only use one
+    // thread to produce the data and then multiple async workers to
+    // send them off:
+    {
+        let result = result_comp_arc.read().unwrap();
+        let downcast = result.as_any().downcast_ref::<AggregationComputation>();
+        if downcast.is_none() {
+            return Err("Can only write back AggregationComputation for now!".to_string());
+        }
+    }
+
     info!(
         "{:?} Writing result back to ArangoDB...",
         std::time::SystemTime::now().duration_since(begin).unwrap()
     );
 
-    let use_tls = endpoints[0].starts_with("https://");
+    let mut senders: Vec<tokio::sync::mpsc::Sender<Batch>> = vec![];
+    let mut task_set = JoinSet::new();
+    let mut endpoints_round_robin: usize = 0;
+    for _i in 0..req.parallelism {
+        let (sender, receiver) = tokio::sync::mpsc::channel::<Batch>(10);
+        senders.push(sender);
+        let endpoint_clone = endpoints[endpoints_round_robin].clone();
+        let username_clone = username.clone();
+        let password_clone = password.clone();
+        endpoints_round_robin += 1;
+        if endpoints_round_robin >= endpoints.len() {
+            endpoints_round_robin = 0;
+        }
+        let database_clone = req.database.clone();
+        task_set.spawn(batch_sender(
+            receiver,
+            endpoint_clone,
+            use_tls,
+            username_clone,
+            password_clone,
+            database_clone,
+        ));
+    }
+    // Spawn producer thread which partitions the data:
+    let producer = std::thread::spawn(move || -> Result<(), String> {
+        let result = result_comp_arc.read().unwrap();
+        let ac = result
+            .as_any()
+            .downcast_ref::<AggregationComputation>()
+            .unwrap();
+        // TODO
+        for c in ac.result.iter() {
+            println!("Doing component with {} vertices.", c.size);
+        }
+        Ok(())
+    });
 
-    // For now, we only do the case of an aggregation result and do the
-    // one result per vertex case later:
-    let _result = result_comp_arc.read().unwrap();
+    let mut error_msg: String = "".to_string();
+    let res = producer.join().unwrap();
+    if let Err(e) = res {
+        error_msg.push_str(&e[..]);
+        error_msg.push_str(" ");
+    }
 
-    /*
-    let client = build_client(use_tls)?;
+    // Join async workers:
+    while let Some(res) = task_set.join_next().await {
+        let r = res.unwrap();
+        match r {
+            Ok(_) => {
+                debug!("Got OK result!");
+            }
+            Err(msg) => {
+                debug!("Got error result: {}", msg);
+                error_msg.push_str(&msg[..]);
+                error_msg.push_str(" ");
+            }
+        }
+    }
 
-    let make_url = |path: &str| -> String { endpoints[0].clone() + "/_db/" + &req.database + path };
-    */
-    // Plan:
-    // Create n bounded channels for batches of results
-    // Spawn n consumer async jobs, which pull from channel and write to
-    //   ArangoDB.
-    // Spawn n produced threads by partitioning the data
-    // Join threads
-    // Report result
-    Ok(())
+    if error_msg.is_empty() {
+        Ok(())
+    } else {
+        Err(error_msg)
+    }
 }
