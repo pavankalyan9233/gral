@@ -362,7 +362,6 @@ async fn api_write_result_back_arangodb(
     args: Arc<Mutex<GralArgs>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
-    info!("In api_write_result_back_arangodb");
     let err_bad_req = |e: String, sc: StatusCode| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineStoreResultsResponse {
@@ -422,8 +421,6 @@ async fn api_write_result_back_arangodb(
         result_comp = compfound.unwrap().clone();
     }
 
-    info!("Found previous computation");
-
     // Set a few sensible defaults:
     if body.batch_size == 0 {
         body.batch_size = 400000;
@@ -447,28 +444,22 @@ async fn api_write_result_back_arangodb(
         error_code: 0,
         error_message: "".to_string(),
     }));
-    info!("Created job object");
     let comp_id: u64;
     {
         let mut comps = computations.lock().unwrap();
         comp_id = comps.register(comp_arc.clone());
     }
 
-    info!("Hello background");
-
     // Write to ArangoDB in a background thread:
     std::thread::spawn(move || {
-        info!("In background thread!");
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .unwrap()
             .block_on(async {
-                info!("I am in async background job");
                 let res =
                     write_result_to_arangodb(body, args, result_comp.clone(), comp_arc.clone())
                         .await;
-                info!("Back from write_result_to_arangodb");
                 let mut comp = comp_arc.write().unwrap();
                 match res {
                     Ok(()) => {

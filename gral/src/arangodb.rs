@@ -796,7 +796,6 @@ pub async fn write_result_to_arangodb(
     result_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>,
     comp_arc: Arc<RwLock<StoreComputation>>,
 ) -> Result<(), String> {
-    info!("Hello write_result_to_arangodb");
     let endpoints: Vec<String>;
     let username: String;
     let password: String;
@@ -857,11 +856,9 @@ pub async fn write_result_to_arangodb(
             database_clone,
         ));
     }
-    info!("Have launched {} async workers.", senders.len());
 
     // Spawn producer thread which partitions the data:
     let producer = std::thread::spawn(move || -> Result<(), String> {
-        info!("Producer thread here.");
         let result = result_comp_arc.read().unwrap();
         let ac = result
             .as_any()
@@ -878,9 +875,9 @@ pub async fn write_result_to_arangodb(
 
         let mut first = true;
         let mut count: u64 = 0;
+        let mut batch_count: u64 = 0;
         let mut sender_round_robin = 0;
         for c in ac.result.iter() {
-            info!("Working on component {:?}...", c);
             if !first {
                 cur_batch
                     .write_u8(',' as u8)
@@ -892,19 +889,15 @@ pub async fn write_result_to_arangodb(
             cur_batch.extend_from_slice(s.as_bytes());
             count += 1;
             if count >= req.batch_size {
-                info!("Batch complete!");
                 cur_batch
                     .write_u8(']' as u8)
                     .expect("Assumed to be able to write");
-                info!("Body: {}", std::str::from_utf8(&cur_batch).unwrap());
                 if let Err(e) = senders[sender_round_robin].blocking_send(Batch {
                     body: cur_batch.into(),
                     collection: req.target_collection.clone(),
                 }) {
-                    info!("Could not send batch through channel: {:?}", e);
                     return Err(format!("Could not send batch through channel: {:?}", e));
                 }
-                info!("Have sent batch successfully.");
 
                 sender_round_robin += 1;
                 if sender_round_robin >= senders.len() {
@@ -913,6 +906,15 @@ pub async fn write_result_to_arangodb(
                 cur_batch = new_batch(req.batch_size as usize);
                 first = true;
                 count = 0;
+                batch_count += 1;
+                if batch_count % 1000 == 0 {
+                    info!(
+                        "{:?} Have written {} components out of {}.",
+                        std::time::SystemTime::now().duration_since(begin).unwrap(),
+                        batch_count * req.batch_size,
+                        ac.result.len()
+                    );
+                }
             }
         }
         if count > 0 {
@@ -929,17 +931,13 @@ pub async fn write_result_to_arangodb(
         Ok(())
     });
 
-    info!("Joining producer thread...");
     let mut error_msg: String = "".to_string();
     let res = producer.join().unwrap();
-    info!("Producer has joined.");
     if let Err(e) = res {
-        info!("Error by producer: {}", e);
         error_msg.push_str(&e[..]);
         error_msg.push_str(" ");
     }
 
-    info!("Joining async workers...");
     // Join async workers:
     while let Some(res) = task_set.join_next().await {
         let r = res.unwrap();
@@ -959,7 +957,10 @@ pub async fn write_result_to_arangodb(
     let mut comp = comp_arc.write().unwrap();
     comp.progress = 1;
 
-    info!("Joined async workers.");
+    info!(
+        "{:?} Write results done.",
+        std::time::SystemTime::now().duration_since(begin).unwrap()
+    );
     if error_msg.is_empty() {
         Ok(())
     } else {
