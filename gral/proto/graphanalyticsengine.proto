@@ -90,56 +90,56 @@ service GraphAnalyticsEngineService {
     }
 
     // List the graphs in the engine:
-    rpc GraphAnalyticsEngineListGraphs(GraphAnalyticsEngineId) returns (GraphAnalyticsEngineListGraphsResponse) {
+    rpc GraphAnalyticsEngineListGraphs(Empty) returns (GraphAnalyticsEngineListGraphsResponse) {
         option (google.api.http) = {
             get: "/v2/graphs"
         };
     }
    
     // Get information about a specific graph:
-    rpc GraphAnalyticsEngineGetGraph(GraphAnalyticsEngineIdWithGraph) returns (GraphAnalyticsEngineGetGraphResponse) {
+    rpc GraphAnalyticsEngineGetGraph(GraphAnalyticsEngineGraphId) returns (GraphAnalyticsEngineGetGraphResponse) {
         option (google.api.http) = {
             get: "/v2/graphs/{graph_id}"
         };
     }
 
     // Delete a specific graph:
-    rpc GraphAnalyticsEngineDeleteGraph(GraphAnalyticsEngineIdWithGraph) returns (GraphAnalyticsEngineDeleteGraphResponse) {
+    rpc GraphAnalyticsEngineDeleteGraph(GraphAnalyticsEngineGraphId) returns (GraphAnalyticsEngineDeleteGraphResponse) {
         option (google.api.http) = {
             delete: "/v2/graphs/{graph_id}"
         };
     }
 
     // List the jobs in the engine:
-    rpc GraphAnalyticsEngineListJobs(GraphAnalyticsEngineId) returns (GraphAnalyticsEngineListJobsResponse) {
+    rpc GraphAnalyticsEngineListJobs(Empty) returns (GraphAnalyticsEngineListJobsResponse) {
         option (google.api.http) = {
             get: "/v2/jobs"
         };
     }
    
     // Get information about a specific job (in particular progress and result when done):
-    rpc GraphAnalyticsEngineGetJob(GraphAnalyticsEngineIdWithJob) returns (GraphAnalyticsEngineJob) {
+    rpc GraphAnalyticsEngineGetJob(GraphAnalyticsEngineJobId) returns (GraphAnalyticsEngineJob) {
         option (google.api.http) = {
             get: "/v2/jobs/{job_id}"
         };
     }
 
     // Delete a specific job
-    rpc GraphAnalyticsEngineDeleteJob(GraphAnalyticsEngineIdWithJob) returns (GraphAnalyticsEngineDeleteJobResponse) {
+    rpc GraphAnalyticsEngineDeleteJob(GraphAnalyticsEngineJobId) returns (GraphAnalyticsEngineDeleteJobResponse) {
         option (google.api.http) = {
             delete: "/v2/{job_id}"
         };
     }
 
     // Get metrics, for now, the return type is not defined, therefore commented out:
-    //rpc GraphAnalyticsEngineMetrics(GraphAnalyticsEngineId) returns (PrometheusMetrics) {
+    //rpc GraphAnalyticsEngineMetrics(Empty) returns (PrometheusMetrics) {
     //    option (google.api.http) = {
-    //        get: "/api/graphanalytics/v1/engines/{engine_id}/metrics"
+    //        get: "/v2/metrics"
     //    };
     //}
 
     // Shutdown
-    rpc GraphAnalticsEngineShutdown(GraphAnalyticsEngineId) returns (GraphAnalyticsEngineShutdownResponse) {
+    rpc GraphAnalticsEngineShutdown(Empty) returns (GraphAnalyticsEngineShutdownResponse) {
         option(google.api.http) = {
             delete: "/v2/shutdown"
         };
@@ -148,8 +148,6 @@ service GraphAnalyticsEngineService {
 
 // Request arguments for GraphAnalyticsEngineLoadData.
 message GraphAnalyticsEngineLoadDataRequest {
-    // ID of the graph analytics engine to load data in.
-    string engine_id = 1;
     // Client ID to make request idempotent
     string client_id = 2;
     // Database to get graph from
@@ -207,8 +205,6 @@ message GraphAnalyticsEngineLoadDataResponse {
 
 // Request arguments for GraphAnalyticsEngineLoadDataAql.
 message GraphAnalyticsEngineLoadDataAqlRequest {
-    // ID of the graph analytics engine to load data in.
-    string engine_id = 1;
     // Client ID to make request idempotent
     string client_id = 2;
     // Job ID for results
@@ -227,8 +223,6 @@ message GraphAnalyticsEngineLoadDataAqlRequest {
 
 // Request arguments for GraphAnalyticsEngineProcess.
 message GraphAnalyticsEngineProcessRequest {    
-    // ID of the graph analytics engine to load data in.
-    string engine_id = 1;
     // Client ID to make request idempotent
     string client_id = 2;
     // Graph ID
@@ -258,25 +252,27 @@ message GraphAnalyticsEngineProcessResponse {
 
 // Request arguments for GraphAnalyticsEngineStoreResults.
 message GraphAnalyticsEngineStoreResultsRequest {
-    // ID of the graph analytics engine to load data in.
-    string engine_id = 1;
     // Client ID to make request idempotent
     string client_id = 2;
     // ID of the job
     string job_id = 3;
+    // Database in ArangoDB to use:
+    string database = 4;
     // The following map maps collection names as found in the
     // _id entries of vertices to the collections into which
     // the result data should be written. The list of fields
     // is the attributes into which the result is written.
     // An insert operation with overwritemode "update" is used.
-    map<string, CollectionDescription> vertex_collections = 4;
+    map<string, CollectionDescription> vertex_collections = 5;
     // List of edge collections, in case there are results for
     // edges.
-    map<string, CollectionDescription> edge_collections = 5;
+    map<string, CollectionDescription> edge_collections = 6;
     // Optional numeric value for thread parallelism
-    uint32 parallelism = 6;
+    uint32 parallelism = 7;
     // Optional batch size
-    uint64 batch_size = 7;
+    uint64 batch_size = 8;
+    // Target collection for non-graph results:
+    string target_collection = 9;
     // Map of engine-type specific custom fields (dynamic for this store-results operation)
     map<string, string> custom_fields = 10;
 }
@@ -318,24 +314,14 @@ message GraphAnalyticsEngineGetGraphResponse {
     GraphAnalyticsEngineGraph graph = 4;
 }
 
-// ID of an engine
-message GraphAnalyticsEngineId {
-    // Engine ID (for path)
-    string engine_id = 1;
-}
-
 // ID of an engine and id of a graph
-message GraphAnalyticsEngineIdWithGraph {
-    // Engine ID (for path)
-    string engine_id = 1;
+message GraphAnalyticsEngineGraphId {
     // Graph ID (for path)
     string graph_id = 2;
 }
 
 // ID of an engine and id of a job
-message GraphAnalyticsEngineIdWithJob {
-    // Engine ID (for path)
-    string engine_id = 1;
+message GraphAnalyticsEngineJobId {
     // Graph ID (for path)
     string job_id = 2;
 }
@@ -392,6 +378,8 @@ message GraphAnalyticsEngineJob {
     string error_message = 7;
     // Optional source job
     string source_job = 8;
+    // Computation type:
+    string comp_type = 9;
 }
 
 // Response for a delete job request.
@@ -415,3 +403,7 @@ message GraphAnalyticsEngineShutdownResponse {
     // Error message, empty if no error
     string error_message = 3;
 }
+
+// Empty input:
+message Empty {}
+

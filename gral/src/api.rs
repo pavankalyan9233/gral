@@ -1,9 +1,9 @@
 use crate::aggregation::aggregate_over_components;
-use crate::arangodb::fetch_graph_from_arangodb;
+use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
 use crate::args::{with_args, GralArgs};
 use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
-    LoadComputation,
+    LoadComputation, StoreComputation,
 };
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
@@ -61,8 +61,8 @@ pub fn api_filter(
         .and_then(api_get_arangodb_graph);
     let write_result_back_arangodb = warp::path!("v2" / "storeresults")
         .and(warp::post())
-        .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
+        .and(with_args(args.clone()))
         .and(warp::body::bytes())
         .and_then(api_write_result_back_arangodb);
     let get_arangodb_graph_aql = warp::path!("v2" / "loaddataaql")
@@ -202,7 +202,7 @@ async fn api_compute(
     }
 
     // Computation ID is optional:
-    let mut prev_comp: Option<Arc<Mutex<dyn Computation + Send>>> = None;
+    let mut prev_comp: Option<Arc<RwLock<dyn Computation + Send + Sync>>> = None;
     if !body.job_id.is_empty() {
         let comp_id = decode_id(&body.job_id);
         if let Err(e) = comp_id {
@@ -238,10 +238,10 @@ async fn api_compute(
         _ => 0,
     };
 
-    let generic_comp_arc: Arc<Mutex<dyn Computation + Send>>;
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
     match algorithm {
         1 | 2 => {
-            let comp_arc = Arc::new(Mutex::new(ComponentsComputation {
+            let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
                 algorithm,
                 graph: graph_arc.clone(),
                 components: None,
@@ -271,7 +271,7 @@ async fn api_compute(
                     _ => std::unreachable!(),
                 };
                 info!("Found {} connected components.", nr);
-                let mut comp = comp_arc.lock().unwrap();
+                let mut comp = comp_arc.write().unwrap();
                 comp.components = Some(components);
                 comp.next_in_component = Some(next);
                 comp.number = Some(nr);
@@ -285,7 +285,7 @@ async fn api_compute(
                 ));
             }
             let prev_comp = prev_comp.unwrap();
-            let guard = prev_comp.lock().unwrap();
+            let guard = prev_comp.read().unwrap();
             let downcast = guard.as_any().downcast_ref::<ComponentsComputation>();
             if downcast.is_none() {
                 // Wrong actual type!
@@ -301,7 +301,7 @@ async fn api_compute(
                 Some(s) => s.clone(),
                 None => "value".to_string(),
             };
-            let comp_arc = Arc::new(Mutex::new(AggregationComputation {
+            let comp_arc = Arc::new(RwLock::new(AggregationComputation {
                 graph: graph_arc.clone(),
                 compcomp: prev_comp.clone(),
                 aggregation_attribute: attr.to_string(),
@@ -316,7 +316,7 @@ async fn api_compute(
             let prev_comp_clone = prev_comp.clone();
             std::thread::spawn(move || {
                 // Lock first the computation, then the graph!
-                let guard = prev_comp_clone.lock().unwrap();
+                let guard = prev_comp_clone.read().unwrap();
                 let compcomp = guard
                     .as_any()
                     .downcast_ref::<ComponentsComputation>()
@@ -325,7 +325,7 @@ async fn api_compute(
 
                 let res = aggregate_over_components(compcomp, attr);
                 info!("Aggregated over {} connected components.", res.len());
-                let mut comp = comp_arc.lock().unwrap();
+                let mut comp = comp_arc.write().unwrap();
                 comp.result = res;
             });
         }
@@ -357,61 +357,128 @@ async fn api_compute(
 
 /// This function writes a computation result back to ArangoDB:
 async fn api_write_result_back_arangodb(
-    _graphs: Arc<Mutex<Graphs>>,
-    _computations: Arc<Mutex<Computations>>,
+    computations: Arc<Mutex<Computations>>,
+    args: Arc<Mutex<GralArgs>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
-    let err_bad_req = |e: String| {
+    let err_bad_req = |e: String, sc: StatusCode| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineStoreResultsResponse {
                 job_id: "".to_string(),
                 client_id: "".to_string(),
                 error: true,
-                error_code: 400,
+                error_code: sc.as_u16() as i32,
                 error_message: e,
             })
             .expect("Could not serialize"),
             StatusCode::BAD_REQUEST,
         )
     };
-    // Parse body and extract integers:
+    // Parse body:
     let parsed: serde_json::Result<GraphAnalyticsEngineStoreResultsRequest> =
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
-        return Ok(err_bad_req(format!(
-            "Could not parse JSON body: {}",
-            e.to_string()
-        )));
+        return Ok(err_bad_req(
+            format!("Could not parse JSON body: {}", e.to_string()),
+            StatusCode::BAD_REQUEST,
+        ));
     }
-    let body = parsed.unwrap();
+    let mut body = parsed.unwrap();
 
     let client_id = decode_id(&body.client_id);
     if let Err(e) = client_id {
-        return Ok(err_bad_req(format!(
-            "Could not decode clientId {}: {}",
-            body.client_id,
-            e.to_string()
-        )));
+        return Ok(err_bad_req(
+            format!(
+                "Could not decode clientId {}: {}",
+                body.client_id,
+                e.to_string()
+            ),
+            StatusCode::BAD_REQUEST,
+        ));
     }
-    let _client_id = client_id.unwrap();
+    let client_id = client_id.unwrap();
+
     let job_id = decode_id(&body.job_id);
     if let Err(e) = job_id {
-        return Ok(err_bad_req(format!(
-            "Could not decode jobId {}: {}",
-            body.job_id,
-            e.to_string()
-        )));
+        return Ok(err_bad_req(
+            format!("Could not decode jobId {}: {}", body.job_id, e.to_string()),
+            StatusCode::BAD_REQUEST,
+        ));
     }
     let job_id = job_id.unwrap();
 
-    // TO BE IMPLEMENTED
+    let result_comp: Arc<RwLock<dyn Computation + Send + Sync>>;
+    {
+        let comps = computations.lock().unwrap();
+        let compfound = comps.list.get(&job_id);
+        if compfound.is_none() {
+            return Ok(err_bad_req(
+                format!("Job {} not found.", job_id),
+                StatusCode::NOT_FOUND,
+            ));
+        }
+        result_comp = compfound.unwrap().clone();
+    }
+
+    // Set a few sensible defaults:
+    if body.batch_size == 0 {
+        body.batch_size = 400000;
+    }
+    if body.parallelism == 0 {
+        body.parallelism = 5;
+    }
+    if body.database.is_empty() {
+        body.database = "_system".to_string();
+    }
+    if body.target_collection.is_empty() {
+        body.target_collection = encode_id(job_id);
+    }
+
+    // Now create a job object:
+    let comp_arc = Arc::new(RwLock::new(StoreComputation {
+        comp: result_comp.clone(),
+        shall_stop: false,
+        total: 2, // will eventually be overwritten in background thread
+        progress: 0,
+        error_code: 0,
+        error_message: "".to_string(),
+    }));
+    let comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        comp_id = comps.register(comp_arc.clone());
+    }
+
+    // Write to ArangoDB in a background thread:
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let res =
+                    write_result_to_arangodb(body, args, result_comp.clone(), comp_arc.clone())
+                        .await;
+                let mut comp = comp_arc.write().unwrap();
+                match res {
+                    Ok(()) => {
+                        comp.error_code = 0;
+                        comp.error_message = "".to_string();
+                    }
+                    Err(e) => {
+                        comp.error_code = 1;
+                        comp.error_message = e;
+                    }
+                }
+            });
+    });
 
     let response = GraphAnalyticsEngineStoreResultsResponse {
-        job_id: format!("{:08x}", job_id),
-        client_id: body.client_id,
-        error: true,
-        error_code: 1,
-        error_message: "NOT_YET_IMPLEMENTED".to_string(),
+        job_id: encode_id(comp_id),
+        client_id: encode_id(client_id),
+        error: false,
+        error_code: 0,
+        error_message: "".to_string(),
     };
 
     // Write response:
@@ -485,6 +552,18 @@ async fn api_get_arangodb_graph_aql(
     Ok(warp::reply::with_status(v, StatusCode::OK))
 }
 
+fn id_to_type(id: u32) -> String {
+    match id {
+        0 => "loaddata",
+        1 => "wcc",
+        2 => "scc",
+        3 => "aggregation",
+        4 => "storedata",
+        _ => "",
+    }
+    .to_string()
+}
+
 /// This function gets progress of a computation.
 async fn api_get_job(
     job_id: String,
@@ -501,6 +580,7 @@ async fn api_get_job(
                 error: true,
                 error_code: 404,
                 error_message: j,
+                comp_type: "".to_string(),
             })
             .unwrap(),
             StatusCode::NOT_FOUND,
@@ -522,7 +602,7 @@ async fn api_get_job(
             return Ok(not_found_err(format!("Could not find jobId {}", job_id)));
         }
         Some(comp_arc) => {
-            let comp = comp_arc.lock().unwrap();
+            let comp = comp_arc.read().unwrap();
             let graph_arc = comp.get_graph();
             let graph = graph_arc.read().unwrap();
 
@@ -537,6 +617,7 @@ async fn api_get_job(
                 error_code,
                 error_message,
                 source_job: "".to_string(),
+                comp_type: id_to_type(comp.algorithm_id()),
             };
             Ok(warp::reply::with_status(
                 serde_json::to_vec(&response).expect("Should be serializable"),
@@ -580,7 +661,7 @@ async fn api_drop_job(
         }
         Some(comp_arc) => {
             {
-                let mut comp = comp_arc.lock().unwrap();
+                let mut comp = comp_arc.write().unwrap();
                 comp.cancel();
             }
             comps.list.remove(&comp_id);
@@ -673,7 +754,7 @@ async fn api_list_jobs(computations: Arc<Mutex<Computations>>) -> Result<Vec<u8>
     let comps = computations.lock().unwrap();
     let mut response: Vec<GraphAnalyticsEngineJob> = vec![];
     for (job_id, comp_arc) in comps.list.iter() {
-        let comp = comp_arc.lock().unwrap();
+        let comp = comp_arc.read().unwrap();
         let graph_arc = comp.get_graph();
         let graph = graph_arc.read().unwrap();
 
@@ -688,6 +769,7 @@ async fn api_list_jobs(computations: Arc<Mutex<Computations>>) -> Result<Vec<u8>
             error_code,
             error_message,
             source_job: "".to_string(),
+            comp_type: id_to_type(comp.algorithm_id()),
         };
         response.push(j);
     }
@@ -784,7 +866,7 @@ async fn api_get_arangodb_graph(
     info!("Have created graph with id {}!", encode_id(graph_id));
 
     // Now create a job object:
-    let comp_arc = Arc::new(Mutex::new(LoadComputation {
+    let comp_arc = Arc::new(RwLock::new(LoadComputation {
         graph: graph_clone.clone(),
         shall_stop: false,
         total: 2, // will eventually be overwritten in background thread
@@ -807,7 +889,7 @@ async fn api_get_arangodb_graph(
             .block_on(async {
                 let res =
                     fetch_graph_from_arangodb(body, args, graph_clone, comp_arc.clone()).await;
-                let mut comp = comp_arc.lock().unwrap();
+                let mut comp = comp_arc.write().unwrap();
                 match res {
                     Ok(()) => {
                         comp.error_code = 0;

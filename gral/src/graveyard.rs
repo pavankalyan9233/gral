@@ -147,7 +147,7 @@ async fn api_weakly_connected_components(
         check_graph(graph.deref(), graph_number, true)?;
     }
 
-    let comp_arc = Arc::new(Mutex::new(WeaklyConnectedComponentsComputation {
+    let comp_arc = Arc::new(RwLock::new(WeaklyConnectedComponentsComputation {
         graph: graph_arc.clone(),
         components: None,
         shall_stop: false,

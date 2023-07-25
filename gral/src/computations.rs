@@ -36,7 +36,7 @@ pub trait ComputationWithListResult {
 }
 
 pub struct Computations {
-    pub list: HashMap<u64, Arc<Mutex<dyn Computation + Send>>>,
+    pub list: HashMap<u64, Arc<RwLock<dyn Computation + Send + Sync>>>,
 }
 
 impl Computations {
@@ -45,7 +45,7 @@ impl Computations {
             list: HashMap::new(),
         }
     }
-    pub fn register(&mut self, comp: Arc<Mutex<dyn Computation + Send>>) -> u64 {
+    pub fn register(&mut self, comp: Arc<RwLock<dyn Computation + Send + Sync>>) -> u64 {
         let mut rng = rand::thread_rng();
         let mut comp_id: u64;
         loop {
@@ -200,7 +200,7 @@ pub struct Component {
 
 pub struct AggregationComputation {
     pub graph: Arc<RwLock<Graph>>,
-    pub compcomp: Arc<Mutex<dyn Computation + Send>>,
+    pub compcomp: Arc<RwLock<dyn Computation + Send + Sync>>,
     pub aggregation_attribute: String,
     pub shall_stop: bool,
     pub total: u32,
@@ -225,6 +225,43 @@ impl Computation for AggregationComputation {
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         return self.graph.clone();
+    }
+    fn get_total(&self) -> u32 {
+        self.total
+    }
+    fn get_progress(&self) -> u32 {
+        self.progress
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+pub struct StoreComputation {
+    pub comp: Arc<RwLock<dyn Computation + Send + Sync>>,
+    pub shall_stop: bool,
+    pub total: u32,
+    pub progress: u32,
+    pub error_code: i32,
+    pub error_message: String,
+}
+
+impl Computation for StoreComputation {
+    fn is_ready(&self) -> bool {
+        self.progress == self.total
+    }
+    fn get_error(&self) -> (i32, String) {
+        (self.error_code, self.error_message.clone())
+    }
+    fn cancel(&mut self) {
+        self.shall_stop = true;
+    }
+    fn algorithm_id(&self) -> u32 {
+        4
+    }
+    fn get_graph(&self) -> Arc<RwLock<Graph>> {
+        let comp = self.comp.read().unwrap();
+        return comp.get_graph();
     }
     fn get_total(&self) -> u32 {
         self.total

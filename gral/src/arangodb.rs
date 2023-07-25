@@ -1,6 +1,8 @@
-use crate::api::graphanalyticsengine::GraphAnalyticsEngineLoadDataRequest;
+use crate::api::graphanalyticsengine::{
+    GraphAnalyticsEngineLoadDataRequest, GraphAnalyticsEngineStoreResultsRequest,
+};
 use crate::args::GralArgs;
-use crate::computations::LoadComputation;
+use crate::computations::{Computation, LoadComputation, StoreComputation};
 use crate::graphs::{Graph, VertexHash, VertexIndex};
 use bytes::Bytes;
 use log::{debug, info};
@@ -410,7 +412,7 @@ pub async fn fetch_graph_from_arangodb(
     req: GraphAnalyticsEngineLoadDataRequest,
     args: Arc<Mutex<GralArgs>>,
     graph_arc: Arc<RwLock<Graph>>,
-    comp_arc: Arc<Mutex<LoadComputation>>,
+    comp_arc: Arc<RwLock<LoadComputation>>,
 ) -> Result<(), String> {
     // Graph object must be new and empty!
     let endpoints: Vec<String>;
@@ -621,7 +623,7 @@ pub async fn fetch_graph_from_arangodb(
         graph.seal_vertices();
     }
     {
-        let mut comp = comp_arc.lock().unwrap();
+        let mut comp = comp_arc.write().unwrap();
         comp.progress = 1;
     }
 
@@ -741,7 +743,57 @@ pub async fn fetch_graph_from_arangodb(
             std::time::SystemTime::now().duration_since(begin).unwrap()
         );
     }
-    let mut comp = comp_arc.lock().unwrap();
+    let mut comp = comp_arc.write().unwrap();
     comp.progress = 2; // done!
+    Ok(())
+}
+
+pub async fn write_result_to_arangodb(
+    _req: GraphAnalyticsEngineStoreResultsRequest,
+    args: Arc<Mutex<GralArgs>>,
+    result_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>,
+    _comp_arc: Arc<RwLock<StoreComputation>>,
+) -> Result<(), String> {
+    let endpoints: Vec<String>;
+    let username: String;
+    let password: String;
+    {
+        let guard = args.lock().unwrap();
+        endpoints = guard
+            .arangodb_endpoints
+            .split(",")
+            .map(|s| s.to_owned())
+            .collect();
+        username = guard.arangodb_username.clone();
+        password = guard.arangodb_password.clone();
+    }
+    if endpoints.is_empty() {
+        return Err("no endpoints given".to_string());
+    }
+    let begin = std::time::SystemTime::now();
+
+    info!(
+        "{:?} Writing result back to ArangoDB...",
+        std::time::SystemTime::now().duration_since(begin).unwrap()
+    );
+
+    let use_tls = endpoints[0].starts_with("https://");
+
+    // For now, we only do the case of an aggregation result and do the
+    // one result per vertex case later:
+    let _result = result_comp_arc.read().unwrap();
+
+    /*
+    let client = build_client(use_tls)?;
+
+    let make_url = |path: &str| -> String { endpoints[0].clone() + "/_db/" + &req.database + path };
+    */
+    // Plan:
+    // Create n bounded channels for batches of results
+    // Spawn n consumer async jobs, which pull from channel and write to
+    //   ArangoDB.
+    // Spawn n produced threads by partitioning the data
+    // Join threads
+    // Report result
     Ok(())
 }

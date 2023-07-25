@@ -687,7 +687,7 @@ async fn api_compute_bin(
         return Err(warp::reject::custom(UnknownAlgorithm { algorithm }));
     }
 
-    let comp_arc = Arc::new(Mutex::new(ComponentsComputation {
+    let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
         algorithm,
         graph: graph_arc.clone(),
         components: None,
@@ -723,7 +723,7 @@ async fn api_compute_bin(
             _ => std::unreachable!(),
         };
         info!("Found {} connected components.", nr);
-        let mut comp = comp_arc.lock().unwrap();
+        let mut comp = comp_arc.write().unwrap();
         comp.components = Some(components);
         comp.next_in_component = Some(next);
         comp.number = Some(nr);
@@ -766,7 +766,7 @@ async fn api_get_progress_bin(
             return Err(warp::reject::custom(ComputationNotFound { comp_id }));
         }
         Some(comp_arc) => {
-            let comp = comp_arc.lock().unwrap();
+            let comp = comp_arc.write().unwrap();
 
             // Write response:
             let mut v = Vec::new();
@@ -816,7 +816,7 @@ async fn api_drop_computation_bin(
         }
         Some(comp_arc) => {
             {
-                let mut comp = comp_arc.lock().unwrap();
+                let mut comp = comp_arc.write().unwrap();
                 comp.cancel();
             }
             comps.list.remove(&comp_id);
@@ -835,7 +835,7 @@ async fn api_drop_computation_bin(
 fn get_computation(
     computations: &Arc<Mutex<Computations>>,
     comp_id: u64,
-) -> Result<Arc<Mutex<dyn Computation + Send + 'static>>, Rejection> {
+) -> Result<Arc<RwLock<dyn Computation + Send + Sync + 'static>>, Rejection> {
     let comps = computations.lock().unwrap();
     let comp = comps.list.get(&comp_id);
     match comp {
@@ -885,7 +885,7 @@ async fn api_get_results_by_vertices(
     v.write_u32::<BigEndian>(number).unwrap();
 
     // Now lock computation:
-    let computation = computation_arc.lock().unwrap();
+    let computation = computation_arc.read().unwrap();
     v.write_u32::<BigEndian>(computation.algorithm_id())
         .unwrap();
     let downcast = computation.as_any().downcast_ref::<ComponentsComputation>();
