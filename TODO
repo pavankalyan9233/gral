@@ -1,8 +1,8 @@
 Opsec:
  - better progress tracking in jobs
  - interrupt jobs
- - report job type in API output
- - Generalize write back of computation result
+ - Generalize write back of computation result to components computation
+ - create target collection
 
  - job cancellation for load
  - check if grupload still works with binary protocol

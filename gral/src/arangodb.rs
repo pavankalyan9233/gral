@@ -4,6 +4,7 @@ use crate::api::graphanalyticsengine::{
 use crate::args::GralArgs;
 use crate::computations::{AggregationComputation, Computation, LoadComputation, StoreComputation};
 use crate::graphs::{Graph, VertexHash, VertexIndex};
+use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -772,7 +773,7 @@ async fn batch_sender(
             batch.body.len()
         );
         let url = format!(
-            "{}/_db/{}/_api/document/{}?overwriteMode=update&silent=true",
+            "{}/_db/{}/_api/document/{}?overwriteMode=update&silent=false",
             endpoint, database, batch.collection
         );
         let resp = client
@@ -781,9 +782,10 @@ async fn batch_sender(
             .body(batch_clone.body)
             .send()
             .await;
-        let _resp =
-            handle_arangodb_response(resp, |c| c == StatusCode::OK || c == StatusCode::CREATED)
-                .await?;
+        let _resp = handle_arangodb_response(resp, |c| {
+            c == StatusCode::OK || c == StatusCode::CREATED || c == StatusCode::ACCEPTED
+        })
+        .await?;
     }
     Ok(())
 }
@@ -792,8 +794,9 @@ pub async fn write_result_to_arangodb(
     req: GraphAnalyticsEngineStoreResultsRequest,
     args: Arc<Mutex<GralArgs>>,
     result_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>,
-    _comp_arc: Arc<RwLock<StoreComputation>>,
+    comp_arc: Arc<RwLock<StoreComputation>>,
 ) -> Result<(), String> {
+    info!("Hello write_result_to_arangodb");
     let endpoints: Vec<String>;
     let username: String;
     let password: String;
@@ -854,42 +857,109 @@ pub async fn write_result_to_arangodb(
             database_clone,
         ));
     }
+    info!("Have launched {} async workers.", senders.len());
+
     // Spawn producer thread which partitions the data:
     let producer = std::thread::spawn(move || -> Result<(), String> {
+        info!("Producer thread here.");
         let result = result_comp_arc.read().unwrap();
         let ac = result
             .as_any()
             .downcast_ref::<AggregationComputation>()
             .unwrap();
-        // TODO
+        let new_batch = |l: usize| -> Vec<u8> {
+            let mut res = vec![];
+            res.reserve(200 * l); // heuristics
+            res.write_u8('[' as u8)
+                .expect("Assumed to be able to write");
+            res
+        };
+        let mut cur_batch: Vec<u8> = new_batch(req.batch_size as usize);
+
+        let mut first = true;
+        let mut count: u64 = 0;
+        let mut sender_round_robin = 0;
         for c in ac.result.iter() {
-            println!("Doing component with {} vertices.", c.size);
+            info!("Working on component {:?}...", c);
+            if !first {
+                cur_batch
+                    .write_u8(',' as u8)
+                    .expect("Assumed to be able to write");
+            } else {
+                first = false;
+            }
+            let s = serde_json::to_string(c).expect("Should be serializable!");
+            cur_batch.extend_from_slice(s.as_bytes());
+            count += 1;
+            if count >= req.batch_size {
+                info!("Batch complete!");
+                cur_batch
+                    .write_u8(']' as u8)
+                    .expect("Assumed to be able to write");
+                info!("Body: {}", std::str::from_utf8(&cur_batch).unwrap());
+                if let Err(e) = senders[sender_round_robin].blocking_send(Batch {
+                    body: cur_batch.into(),
+                    collection: req.target_collection.clone(),
+                }) {
+                    info!("Could not send batch through channel: {:?}", e);
+                    return Err(format!("Could not send batch through channel: {:?}", e));
+                }
+                info!("Have sent batch successfully.");
+
+                sender_round_robin += 1;
+                if sender_round_robin >= senders.len() {
+                    sender_round_robin = 0;
+                }
+                cur_batch = new_batch(req.batch_size as usize);
+                first = true;
+                count = 0;
+            }
+        }
+        if count > 0 {
+            cur_batch
+                .write_u8(']' as u8)
+                .expect("Assumed to be able to write");
+            if let Err(e) = senders[sender_round_robin].blocking_send(Batch {
+                body: cur_batch.into(),
+                collection: req.target_collection.clone(),
+            }) {
+                return Err(format!("Could not send batch through channel: {:?}", e));
+            }
         }
         Ok(())
     });
 
+    info!("Joining producer thread...");
     let mut error_msg: String = "".to_string();
     let res = producer.join().unwrap();
+    info!("Producer has joined.");
     if let Err(e) = res {
+        info!("Error by producer: {}", e);
         error_msg.push_str(&e[..]);
         error_msg.push_str(" ");
     }
 
+    info!("Joining async workers...");
     // Join async workers:
     while let Some(res) = task_set.join_next().await {
         let r = res.unwrap();
         match r {
             Ok(_) => {
-                debug!("Got OK result!");
+                info!("Got OK result!");
             }
             Err(msg) => {
-                debug!("Got error result: {}", msg);
+                info!("Got error result: {}", msg);
                 error_msg.push_str(&msg[..]);
                 error_msg.push_str(" ");
             }
         }
     }
 
+    // Report completion:
+    let mut comp = comp_arc.write().unwrap();
+    comp.progress = 1;
+
+    info!("Joined async workers.");
     if error_msg.is_empty() {
         Ok(())
     } else {

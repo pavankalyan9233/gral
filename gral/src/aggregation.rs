@@ -32,7 +32,11 @@ pub fn aggregate_over_components(
             // This is a representative
             let mut j = i as i64;
             let mut c = Component {
-                representative: i as u64,
+                key: i.to_string(),
+                representative: match std::str::from_utf8(&graph.index_to_key[i]) {
+                    Ok(s) => s.to_string(),
+                    Err(_) => i.to_string(),
+                },
                 size: 1,
                 aggregation: HashMap::new(),
             };
@@ -84,10 +88,5 @@ pub fn aggregate_over_components(
         }
     }
     info!("Aggregation took time {:?}.", start.elapsed());
-    /*
-    for c in result.iter() {
-        info!("Component: {:?}", c);
-    }
-    */
     result
 }

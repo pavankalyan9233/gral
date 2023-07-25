@@ -1,5 +1,6 @@
 use byteorder::{BigEndian, WriteBytesExt};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -191,9 +192,12 @@ impl Computation for LoadComputation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Component {
-    pub representative: u64,
+    #[serde(rename = "_key")]
+    pub key: String,
+    pub representative: String,
     pub size: u64,
     pub aggregation: HashMap<String, u64>,
 }
