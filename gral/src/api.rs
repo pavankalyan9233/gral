@@ -79,7 +79,7 @@ pub fn api_filter(
         .and(warp::delete())
         .and(with_graphs(graphs.clone()))
         .and_then(api_drop_graph);
-    let list_graphs = warp::path!("api" / "graphanalytics" / "v1" / "engines" / String / "graphs")
+    let list_graphs = warp::path!("v2" / "graphs")
         .and(warp::get())
         .and(with_graphs(graphs.clone()))
         .and_then(api_list_graphs);
@@ -731,10 +731,7 @@ async fn api_get_graph(
 }
 
 /// This function lists graphs:
-async fn api_list_graphs(
-    _engine_id: String,
-    graphs: Arc<Mutex<Graphs>>,
-) -> Result<Vec<u8>, Rejection> {
+async fn api_list_graphs(graphs: Arc<Mutex<Graphs>>) -> Result<Vec<u8>, Rejection> {
     let graphs = graphs.lock().unwrap();
     let mut response = vec![];
     for (_id, graph_arc) in graphs.list.iter() {
