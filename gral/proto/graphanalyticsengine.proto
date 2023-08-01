@@ -26,11 +26,12 @@ import "google/api/annotations.proto";
 // provide and which must be unique for the call. In this way, every
 // such call can be retried and will always return the same result. All
 // GET calls are naturally idempotent.
-// Here is an overview over the API, note that a GraphAnalyticsEngine has an associated deployment on AG:
+// Here is an overview over the API, note that a GraphAnalyticsEngine
+// has an associated deployment on AG:
 //
 // The following trigger asynchronous operations, which might take longer to complete:
 //  - Load a graph from the deployment via two AQL queries (one for vertices, one for edges) [POST]
-//  - Load a graph via the arangodump protocoll [POST]
+//  - Load a graph via the arangodump protocol [POST]
 //  - Start computation job [POST]
 //  - Write back result of computation job to deployment [POST]
 //
@@ -49,9 +50,8 @@ import "google/api/annotations.proto";
 //  - Shut down [DELETE]
 
 service GraphAnalyticsEngineService {
-    // Load data fetches data from the deployment and loads it into memory of the engine for later processing.
-    // Required permissions:
-    // - graphanalytics.engine.load-data on the graph analytics engine identified by the given ID.
+    // Load data fetches data from the deployment and loads it into memory
+    // of the engine for later processing.
     rpc GraphAnalyticsEngineLoadData(GraphAnalyticsEngineLoadDataRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
             post: "/v2/loaddata"
@@ -162,7 +162,13 @@ message GraphAnalyticsEngineLoadDataRequest {
     // List of edge collections, must be given, if graph_name
     // is not given
     repeated CollectionDescription edge_collections = 6;
-    // Optional numeric value for thread parallelism
+    // Optional numeric value for thread parallelism. This is currently used
+    // in 4 places. One is the number of async jobs launched to get data,
+    // another is the number of threads to be launched to synchronously
+    // work on incoming data. The third is the number of threads used
+    // on each dbserver to produce data. And the fourth is the length of
+    // the prefetch queue on dbservers. Potentially, we want to allow
+    // more arguments to be able to fine tune this better.
     uint32 parallelism = 7;
     // Optional batch size
     uint64 batch_size = 8;
@@ -224,15 +230,17 @@ message GraphAnalyticsEngineLoadDataAqlRequest {
 // Request arguments for GraphAnalyticsEngineProcess.
 message GraphAnalyticsEngineProcessRequest {    
     // Client ID to make request idempotent
-    string client_id = 2;
+    string client_id = 1;
     // Graph ID
-    string graph_id = 3;
-    // ID of a previous job to take the input from
-    string job_id = 4;
-    // Name of algorithm:
-    string algorithm = 5;
+    string graph_id = 2;
+    // ID of a previous job to take the input from, this is to build pipelines.
+    string job_id = 3;
+    // Name of algorithm, currently, we have "wcc", "scc" and
+    // "aggregate_components":
+    string algorithm = 4;
    
-    // Map of engine-type and algorithm-type specific custom fields (dynamic for this process operation)
+    // Map of engine-type and algorithm-type specific custom fields (dynamic
+    // for this process operation)
     map<string, string> custom_fields = 10;
 }
 
@@ -253,27 +261,28 @@ message GraphAnalyticsEngineProcessResponse {
 // Request arguments for GraphAnalyticsEngineStoreResults.
 message GraphAnalyticsEngineStoreResultsRequest {
     // Client ID to make request idempotent
-    string client_id = 2;
+    string client_id = 1;
     // ID of the job
-    string job_id = 3;
+    string job_id = 2;
     // Database in ArangoDB to use:
-    string database = 4;
+    string database = 3;
     // The following map maps collection names as found in the
     // _id entries of vertices to the collections into which
     // the result data should be written. The list of fields
     // is the attributes into which the result is written.
     // An insert operation with overwritemode "update" is used.
-    map<string, CollectionDescription> vertex_collections = 5;
+    map<string, CollectionDescription> vertex_collections = 4;
     // List of edge collections, in case there are results for
     // edges.
-    map<string, CollectionDescription> edge_collections = 6;
+    map<string, CollectionDescription> edge_collections = 5;
     // Optional numeric value for thread parallelism
-    uint32 parallelism = 7;
+    uint32 parallelism = 6;
     // Optional batch size
-    uint64 batch_size = 8;
+    uint64 batch_size = 7;
     // Target collection for non-graph results:
-    string target_collection = 9;
-    // Map of engine-type specific custom fields (dynamic for this store-results operation)
+    string target_collection = 8;
+    // Map of engine-type specific custom fields (dynamic for this
+    // store-results operation)
     map<string, string> custom_fields = 10;
 }
 
