@@ -246,3 +246,87 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
         vec![], /* FIXME: Provide component list later */
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graphs::VertexHash;
+    use xxhash_rust::xxh3::xxh3_64_with_seed;
+
+    fn vertex_nodata(g: &mut Graph, key: &[u8]) {
+        let key = key.to_vec();
+        let hash = VertexHash::new(xxh3_64_with_seed(&key, 0xdeadbeefdeadbeef));
+        g.insert_vertex(0, hash, key, vec![], None, &mut vec![], &mut vec![]);
+    }
+
+    fn edge_nodata(g: &mut Graph, from: &[u8], to: &[u8]) {
+        let f = g.index_from_vertex_key(from);
+        assert!(f.is_some());
+        let t = g.index_from_vertex_key(to);
+        assert!(t.is_some());
+        g.insert_edge(f.unwrap(), t.unwrap(), vec![]);
+    }
+
+    #[test]
+    fn test_wcc_simple() {
+        let g_arc = Graph::new(true, 64, 1);
+        let mut g = g_arc.write().unwrap();
+        vertex_nodata(&mut g, b"V/A");
+        vertex_nodata(&mut g, b"V/B");
+        vertex_nodata(&mut g, b"V/C");
+        g.seal_vertices();
+        edge_nodata(&mut g, b"V/A", b"V/B");
+        g.seal_edges();
+        let (numb, comp, next) = weakly_connected_components(&g);
+        assert_eq!(numb, 2);
+        assert_eq!(comp.len(), 3);
+        assert_eq!(next.len(), 3);
+        assert_eq!(comp[0], 0);
+        assert_eq!(comp[1], 0);
+        assert_eq!(comp[2], 2);
+        assert_eq!(next[0], 1);
+        assert_eq!(next[1], -1);
+        assert_eq!(next[2], -1);
+    }
+
+    #[test]
+    fn test_scc_simple() {
+        let g_arc = Graph::new(true, 64, 1);
+        let mut g = g_arc.write().unwrap();
+        vertex_nodata(&mut g, b"V/A");
+        vertex_nodata(&mut g, b"V/B");
+        vertex_nodata(&mut g, b"V/C");
+        g.seal_vertices();
+        edge_nodata(&mut g, b"V/A", b"V/B");
+        g.seal_edges();
+        g.index_edges(true, false);
+        let (numb, comp, next) = strongly_connected_components(&g);
+        assert_eq!(numb, 3);
+        assert_eq!(comp.len(), 3);
+        assert_eq!(next.len(), 0); // Not yet implemented!
+        assert_eq!(comp[0], 0);
+        assert_eq!(comp[1], 1);
+        assert_eq!(comp[2], 2);
+    }
+
+    #[test]
+    fn test_scc_simple2() {
+        let g_arc = Graph::new(true, 64, 1);
+        let mut g = g_arc.write().unwrap();
+        vertex_nodata(&mut g, b"V/A");
+        vertex_nodata(&mut g, b"V/B");
+        vertex_nodata(&mut g, b"V/C");
+        g.seal_vertices();
+        edge_nodata(&mut g, b"V/A", b"V/B");
+        edge_nodata(&mut g, b"V/B", b"V/A");
+        g.seal_edges();
+        g.index_edges(true, false);
+        let (numb, comp, next) = strongly_connected_components(&g);
+        assert_eq!(numb, 2);
+        assert_eq!(comp.len(), 3);
+        assert_eq!(next.len(), 0); // Not yet implemented!
+        assert_eq!(comp[0], 1);
+        assert_eq!(comp[1], 1);
+        assert_eq!(comp[2], 2);
+    }
+}
