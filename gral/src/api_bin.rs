@@ -1,3 +1,4 @@
+use crate::auth::Unauthorized;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
 use http::Error;
@@ -1020,6 +1021,9 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
         // and render it however we want
         code = StatusCode::METHOD_NOT_ALLOWED;
         message = "METHOD_NOT_ALLOWED".to_string();
+    } else if let Some(wrong) = err.find::<Unauthorized>() {
+        code = StatusCode::UNAUTHORIZED;
+        message = wrong.msg.clone();
     } else if let Some(wrong) = err.find::<WrongBodyLength>() {
         code = StatusCode::BAD_REQUEST;
         message = format!(

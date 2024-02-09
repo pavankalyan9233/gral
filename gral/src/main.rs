@@ -58,7 +58,7 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    debug!("{:#?}", args);
+    info!("{:#?}", args);
     let the_args = Arc::new(Mutex::new(args.clone()));
 
     let log_incoming = warp::log::custom(|info| {
