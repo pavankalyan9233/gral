@@ -1,6 +1,7 @@
 use crate::aggregation::aggregate_over_components;
 use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
 use crate::args::{with_args, GralArgs};
+use crate::auth::with_auth;
 use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LoadComputation, StoreComputation,
@@ -37,23 +38,28 @@ pub fn api_filter(
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let version = warp::path!("v2" / "version")
         .and(warp::get())
+        .and(with_auth(args.clone()))
         .map(version_json);
-    let get_job = warp::get()
-        .and(warp::path!("v2" / "jobs" / String))
+    let get_job = warp::path!("v2" / "jobs" / String)
+        .and(warp::get())
+        .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and_then(api_get_job);
-    let drop_job = warp::delete()
-        .and(warp::path!("v2" / "jobs" / String))
+    let drop_job = warp::path!("v2" / "jobs" / String)
+        .and(warp::delete())
+        .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and_then(api_drop_job);
     let compute = warp::path!("v2" / "process")
         .and(warp::post())
+        .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_compute);
     let get_arangodb_graph = warp::path!("v2" / "loaddata")
         .and(warp::post())
+        .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(with_args(args.clone()))
@@ -61,47 +67,53 @@ pub fn api_filter(
         .and_then(api_get_arangodb_graph);
     let write_result_back_arangodb = warp::path!("v2" / "storeresults")
         .and(warp::post())
+        .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and(with_args(args.clone()))
         .and(warp::body::bytes())
         .and_then(api_write_result_back_arangodb);
     let get_arangodb_graph_aql = warp::path!("v2" / "loaddataaql")
         .and(warp::post())
+        .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_arangodb_graph_aql);
     let get_graph = warp::path!("v2" / "graphs" / String)
         .and(warp::get())
+        .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_get_graph);
     let drop_graph = warp::path!("v2" / "graphs" / String)
         .and(warp::delete())
+        .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_drop_graph);
     let list_graphs = warp::path!("v2" / "graphs")
         .and(warp::get())
+        .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_list_graphs);
     let list_jobs = warp::path!("v2" / "jobs")
         .and(warp::get())
+        .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and_then(api_list_jobs);
 
     version
-        .or(drop_job)
         .or(get_job)
+        .or(drop_job)
         .or(compute)
         .or(get_arangodb_graph)
         .or(write_result_back_arangodb)
         .or(get_arangodb_graph_aql)
-        .or(drop_graph)
         .or(get_graph)
+        .or(drop_graph)
         .or(list_graphs)
         .or(list_jobs)
 }
 
-fn version_json() -> Result<Response<Vec<u8>>, Error> {
+fn version_json(_user: String) -> Result<Response<Vec<u8>>, Error> {
     let version_str = format!(
         "{}.{}.{}",
         VERSION >> 16,
@@ -143,6 +155,7 @@ fn check_graph(graph: &Graph, graph_id: u64, edges_must_be_sealed: bool) -> Resu
 
 /// This function triggers a computation:
 async fn api_compute(
+    _user: String,
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
@@ -358,6 +371,7 @@ async fn api_compute(
 
 /// This function writes a computation result back to ArangoDB:
 async fn api_write_result_back_arangodb(
+    _user: String,
     computations: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
     bytes: Bytes,
@@ -489,6 +503,7 @@ async fn api_write_result_back_arangodb(
 
 /// This function writes a computation result back to ArangoDB:
 async fn api_get_arangodb_graph_aql(
+    _user: String,
     _graphs: Arc<Mutex<Graphs>>,
     _computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
@@ -567,6 +582,7 @@ fn id_to_type(id: u32) -> String {
 
 /// This function gets progress of a computation.
 async fn api_get_job(
+    _user: String,
     job_id: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -630,6 +646,7 @@ async fn api_get_job(
 
 /// This function deletes a job.
 async fn api_drop_job(
+    _user: String,
     job_id: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -684,6 +701,7 @@ async fn api_drop_job(
 
 /// This function gets information about a graph:
 async fn api_get_graph(
+    _user: String,
     graph_id: String,
     graphs: Arc<Mutex<Graphs>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -731,7 +749,7 @@ async fn api_get_graph(
 }
 
 /// This function lists graphs:
-async fn api_list_graphs(graphs: Arc<Mutex<Graphs>>) -> Result<Vec<u8>, Rejection> {
+async fn api_list_graphs(_user: String, graphs: Arc<Mutex<Graphs>>) -> Result<Vec<u8>, Rejection> {
     let graphs = graphs.lock().unwrap();
     let mut response = vec![];
     for (_id, graph_arc) in graphs.list.iter() {
@@ -748,7 +766,10 @@ async fn api_list_graphs(graphs: Arc<Mutex<Graphs>>) -> Result<Vec<u8>, Rejectio
     Ok(serde_json::to_vec(&response).expect("Should be serializable"))
 }
 
-async fn api_list_jobs(computations: Arc<Mutex<Computations>>) -> Result<Vec<u8>, Rejection> {
+async fn api_list_jobs(
+    _user: String,
+    computations: Arc<Mutex<Computations>>,
+) -> Result<Vec<u8>, Rejection> {
     let comps = computations.lock().unwrap();
     let mut response: Vec<GraphAnalyticsEngineJob> = vec![];
     for (job_id, comp_arc) in comps.list.iter() {
@@ -776,6 +797,7 @@ async fn api_list_jobs(computations: Arc<Mutex<Computations>>) -> Result<Vec<u8>
 
 /// This function drops a graph:
 async fn api_drop_graph(
+    _user: String,
     graph_id: String,
     graphs: Arc<Mutex<Graphs>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -822,6 +844,7 @@ async fn api_drop_graph(
 }
 
 async fn api_get_arangodb_graph(
+    _user: String,
     graphs: Arc<Mutex<Graphs>>,
     comps: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,

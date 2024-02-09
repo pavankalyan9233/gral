@@ -426,8 +426,8 @@ pub async fn fetch_graph_from_arangodb(
             .split(",")
             .map(|s| s.to_owned())
             .collect();
-        username = guard.arangodb_username.clone();
-        password = guard.arangodb_password.clone();
+        username = "neunhoef".to_string(); // FIXME
+        password = "".to_string(); // FIXME
     }
     if endpoints.is_empty() {
         return Err("no endpoints given".to_string());
@@ -806,8 +806,8 @@ pub async fn write_result_to_arangodb(
             .split(",")
             .map(|s| s.to_owned())
             .collect();
-        username = guard.arangodb_username.clone();
-        password = guard.arangodb_password.clone();
+        username = "neunhoef".to_string(); // FIXME
+        password = "".to_string(); // FIXME
     }
     if endpoints.is_empty() {
         return Err("no endpoints given".to_string());

@@ -1,10 +1,13 @@
+use auth::with_auth;
 use byteorder::{BigEndian, WriteBytesExt};
-use log::{info, LevelFilter};
+use log::{debug, info, warn, LevelFilter};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
+use tracing;
+use tracing_subscriber;
 use warp::{http::Response, http::StatusCode, Filter};
 
 mod aggregation;
@@ -12,6 +15,7 @@ mod api;
 mod api_bin;
 mod arangodb;
 mod args;
+mod auth;
 mod computations;
 mod conncomp;
 mod graphs;
@@ -32,6 +36,14 @@ async fn main() {
         .filter_level(LevelFilter::Info)
         .parse_env("RUST_LOG")
         .init();
+    let ts = tracing_subscriber::fmt()
+        .with_max_level(tracing::level_filters::LevelFilter::TRACE)
+        .finish();
+    let tse = tracing::subscriber::set_global_default(ts)
+        .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+    if let Err(e) = tse {
+        warn!("Could not set up tracing: {e:?}");
+    }
     info!("Hello, this is gral!");
     let prom_builder = PrometheusBuilder::new();
     let metrics_handle = prom_builder
@@ -46,8 +58,8 @@ async fn main() {
             std::process::exit(1);
         }
     };
-
-    info!("{:#?}", args);
+    debug!("{:#?}", args);
+    let the_args = Arc::new(Mutex::new(args.clone()));
 
     let log_incoming = warp::log::custom(|info| {
         info!("{} {} {:?}", info.method(), info.path(), info.elapsed(),);
@@ -58,7 +70,8 @@ async fn main() {
     let tx_clone = tx_arc.clone();
     let shutdown = warp::path!("v1" / "shutdown")
         .and(warp::delete())
-        .map(move || {
+        .and(with_auth(the_args.clone()))
+        .map(move |_user| {
             let mut tx = tx_clone.lock().unwrap();
             if tx.is_some() {
                 let tx = tx.take();
@@ -77,7 +90,6 @@ async fn main() {
         list: HashMap::new(),
     }));
     let the_computations = Arc::new(Mutex::new(Computations::new()));
-    let the_args = Arc::new(Mutex::new(args.clone()));
 
     let api_metrics = warp::path!("v2" / "metrics").and(warp::get()).map(move || {
         let out = metrics_handle.render();

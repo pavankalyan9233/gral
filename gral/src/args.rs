@@ -3,8 +3,10 @@
 use log::{info, warn};
 use std::convert::Infallible;
 use std::env::VarError;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use warp::Filter;
 
@@ -15,31 +17,26 @@ USAGE:
   gral [OPTIONS]
 
 OPTIONS:
-  -h, --help            Prints help information
-  --use-tls BOOL        Use TLS or not [default: true]
-  --use-auth BOOL       Use TLS client cert authentification [default: false]
-  --cert PATH           Path to server certificate [default: 'tls/cert.pem']
-  --key PATH            Path to server secret key [default: 'tls/key.pem']
-  --authca PATH         Path to CA certificate for client authentication
-                        [default: 'tls/authca.pem']
-  --bind-address ADDR   Network address for bind [default: '0.0.0.0']
-  --bind-port PORT      Network port for bind [default: 9999]
-  --arangodb-endpoints  Network endpoints for ArangoDB deployment (multiple,
-                        separated by commas are possible)
-                        [default: 'https://localhost:8529']
-  --arangodb-username   Username for access to ArangoDB [default: 'root']
-  --arangodb-pw-path    Path for file with password for access to ArangoDB
-                        [default: 'secret.password']
-  --arangodb-jwt-secret Path name with jwt secret [default: 'secret.jwt']
+  -h, --help             Prints help information
+  --use-tls BOOL         Use TLS or not [default: true]
+  --use-tls-auth BOOL    Use TLS client cert authentification [default: false]
+  --cert PATH            Path to server certificate [default: 'tls/cert.pem']
+  --key PATH             Path to server secret key [default: 'tls/key.pem']
+  --authca PATH          Path to CA certificate for client authentication
+                         [default: 'tls/authca.pem']
+  --bind-address ADDR    Network address for bind [default: '0.0.0.0']
+  --bind-port PORT       Network port for bind [default: 9999]
+  --arangodb-endpoints   Network endpoints for ArangoDB deployment (multiple,
+                         separated by commas are possible)
+                         [default: 'https://localhost:8529']
+  --arangodb-jwt-secrets Path name with jwt secrets [default: 'secrets.jwt']
 
 The following environment variables can set defaults for the above
 options (command line options have higher precedence!):
 
   HTTP_PORT               Sets the default for --bind-port
   ARANGODB_ENDPOINT       Sets the default for --arangodb-endpoints
-  ARANGODB_USER           Sets the default for --arangodb-username
-  ARANGODB_PASSWORD_FILE  Sets the default for --arangodb-pwr-path
-  ARANGODB_JWT
+  ARANGODB_JWT            Sets the default path for --arangodb-jwt-secrets
   ARANGODB_CA_CERTS       Sets the path with 'ca.crt' for --cert and
                           sets the path with 'ca.key' for --key
 ";
@@ -48,15 +45,57 @@ options (command line options have higher precedence!):
 pub struct GralArgs {
     pub use_tls: bool,
     pub use_auth: bool,
-    pub cert: std::path::PathBuf,
+    pub cert: PathBuf,
     pub key: std::path::PathBuf,
     pub authca: std::path::PathBuf,
     pub bind_addr: String,
     pub port: u16,
     pub arangodb_endpoints: String,
-    pub arangodb_username: String,
-    pub arangodb_password: String,
-    pub arangodb_jwt_secret: String,
+    pub arangodb_jwt_secrets: Vec<Vec<u8>>, // the first used for signing
+                                            // all for signature verification
+}
+
+fn read_jwt_secrets(jwt_path: &String) -> Vec<Vec<u8>> {
+    let mut path: PathBuf = jwt_path.into();
+    let e = std::fs::read_dir(&path);
+    if let Err(e) = e {
+        warn!("Path to JWT secrets is not readable: {jwt_path}, error: {e:?}!");
+        return vec![];
+    }
+    let rd = e.unwrap(); // Unwrap ReadDir struct
+    let mut secrets: Vec<Vec<u8>> = Vec::new();
+    let mut use_to_sign: usize = 0;
+    for de in rd {
+        if let Ok(de) = de {
+            path.push(de.file_name());
+            match File::open(&path) {
+                Err(e) => {
+                    warn!("Could not read JWT secret from file '{path:?}, error: {e:?}");
+                }
+                Ok(mut file) => {
+                    let mut buf: Vec<u8> = Vec::with_capacity(256);
+                    match file.read_to_end(&mut buf) {
+                        Err(e) => {
+                            warn!("Could not read JWT secret from file '{path:?}, error: {e:?}");
+                        }
+                        Ok(len) => {
+                            if len != 0 {
+                                if de.file_name() == OsString::from("token") {
+                                    use_to_sign = secrets.len();
+                                }
+                                secrets.push(buf);
+                            }
+                        }
+                    }
+                }
+            }
+            path.pop();
+        }
+    }
+    if use_to_sign != 0 && !secrets.is_empty() {
+        secrets.swap(0, use_to_sign);
+    }
+    secrets
 }
 
 pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
@@ -100,13 +139,17 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
             def_port
         }
     };
-    let default_user = my_get_env("ARANGODB_USER", "root");
     let default_endpoint = my_get_env("ARANGODB_ENDPOINT", "https://localhost:8529");
-    let default_jwt_path = my_get_env("ARANGODB_JWT", "");
-    let default_passwd_path = my_get_env("ARANGODB_PASSWORD_FILE", "secret.password");
+    let default_jwt_path = my_get_env("ARANGODB_JWT", "./secrets.jwt");
     let default_keypath = my_get_env("ARANGODB_CA_CERTS", "./tls");
+    let jwt_path = pargs
+        .opt_value_from_str("--arangodb-jwt-secrets")?
+        .unwrap_or(default_jwt_path);
 
-    let mut args = GralArgs {
+    // Read the JWT secrets from files, empty results if this fails:
+    let jwt_secrets: Vec<Vec<u8>> = read_jwt_secrets(&jwt_path);
+
+    let args = GralArgs {
         use_tls: pargs.opt_value_from_str("--use-tls")?.unwrap_or(false),
         use_auth: pargs.opt_value_from_str("--use-auth")?.unwrap_or(false),
         cert: pargs
@@ -127,39 +170,8 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
         arangodb_endpoints: pargs
             .opt_value_from_str("--arangodb-endpoints")?
             .unwrap_or(default_endpoint),
-        arangodb_username: pargs
-            .opt_value_from_str("--arangodb-username")?
-            .unwrap_or(default_user),
-        arangodb_password: pargs
-            .opt_value_from_str("--arangodb-password")?
-            .unwrap_or(default_passwd_path),
-        arangodb_jwt_secret: pargs
-            .opt_value_from_str("--arangodb-jwt-secret")?
-            .unwrap_or(default_jwt_path),
+        arangodb_jwt_secrets: jwt_secrets,
     };
-
-    // Now read the password from file, if it exists:
-    let file = File::open(args.arangodb_password.clone());
-    if let Err(e) = file {
-        warn!(
-            "Could not read password file {}: {:?}",
-            args.arangodb_password, e
-        );
-        args.arangodb_password = "".to_string();
-    } else {
-        let mut file = file.unwrap();
-        let mut content: String = "".to_string();
-        let err = file.read_to_string(&mut content);
-        if let Err(e) = err {
-            warn!(
-                "Could not read password file {}: {:?}",
-                &args.arangodb_password, e
-            );
-            args.arangodb_password = "".to_string();
-        } else {
-            args.arangodb_password = content;
-        }
-    }
 
     // It's up to the caller what to do with the remaining arguments.
     let remaining = pargs.finish();
