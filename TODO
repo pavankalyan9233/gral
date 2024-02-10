@@ -1,3 +1,8 @@
+ - remove stuff from grupload or implement HTTP upload
+ - use only HTTP/JSON API in grupload
+ - add first metrics
+ - 
+
 Opsec:
  - better progress tracking in jobs
  - interrupt jobs
