@@ -250,3 +250,103 @@ async fn api_weakly_connected_components(
         drop(out);
     }
 
+
+pub trait ComputationWithResultPerVertex {
+    fn get_number_of_components(&self) -> u64;
+    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String>;
+    fn dump_vertex_results(
+        &self,
+        comp_id: u64,
+        hashes: &Vec<KeyOrHash>,
+        out: &mut Vec<u8>,
+    ) -> Result<(), warp::Rejection>;
+}
+
+impl ComputationWithResultPerVertex for ComponentsComputation {
+    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String> {
+        out.write_u8(8).unwrap();
+        out.write_u64::<BigEndian>(match self.number {
+            None => 0,
+            Some(nr) => nr,
+        })
+        .unwrap();
+        Ok(())
+    }
+    fn dump_vertex_results(
+        &self,
+        comp_id: u64,
+        kohs: &Vec<KeyOrHash>,
+        out: &mut Vec<u8>,
+    ) -> Result<(), Rejection> {
+        let comps = self.components.as_ref();
+        match comps {
+            None => {
+                return Err(warp::reject::custom(ComputationNotYetFinished { comp_id }));
+            }
+            Some(result) => {
+                let g = self.graph.read().unwrap();
+                for koh in kohs.iter() {
+                    let index = g.index_from_key_or_hash(koh);
+                    match index {
+                        None => {
+                            put_key_or_hash(out, koh);
+                            out.write_u8(0).unwrap();
+                        }
+                        Some(i) => {
+                            put_key_or_hash(out, koh);
+                            out.write_u8(8).unwrap();
+                            out.write_u64::<BigEndian>(result[i.to_u64() as usize])
+                                .unwrap();
+                        }
+                    }
+                }
+                return Ok(());
+            }
+        }
+    }
+    fn get_number_of_components(&self) -> u64 {
+        match self.number {
+            None => 0,
+            Some(nr) => nr,
+        }
+    }
+}
+
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
+pub struct VertexHash(u64);
+impl VertexHash {
+    pub fn new(x: u64) -> VertexHash {
+        VertexHash(x)
+    }
+    pub fn to_u64(&self) -> u64 {
+        self.0
+    }
+}
+
+pub enum KeyOrHash {
+    Key(Vec<u8>),
+    Hash(VertexHash),
+}
+
+
+    pub fn index_from_key_or_hash(&self, key_or_hash: &KeyOrHash) -> Option<VertexIndex> {
+        match key_or_hash {
+            KeyOrHash::Hash(h) => {
+                // Lookup if hash exists, if so, this is the index
+                self.index_from_hash(h)
+            }
+            KeyOrHash::Key(k) => {
+                // Hash key, look up hash, check for exception:
+                self.index_from_vertex_key(k)
+            }
+        }
+    }
+
+    pub fn index_from_hash(&self, h: &VertexHash) -> Option<VertexIndex> {
+        let index = self.hash_to_index.get(h);
+        match index {
+            None => None,
+            Some(i) => Some(*i),
+        }
+    }
+

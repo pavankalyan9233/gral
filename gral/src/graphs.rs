@@ -18,9 +18,6 @@ impl VertexHash {
     pub fn new(x: u64) -> VertexHash {
         VertexHash(x)
     }
-    pub fn to_u64(&self) -> u64 {
-        self.0
-    }
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
@@ -133,11 +130,6 @@ pub fn with_graphs(
 struct EdgeTemp {
     pub from: VertexIndex,
     pub to: VertexIndex,
-}
-
-pub enum KeyOrHash {
-    Key(Vec<u8>),
-    Hash(VertexHash),
 }
 
 impl Graph {
@@ -389,27 +381,6 @@ impl Graph {
                     None => None,
                     Some(index) => Some(*index),
                 }
-            }
-        }
-    }
-
-    pub fn index_from_hash(&self, h: &VertexHash) -> Option<VertexIndex> {
-        let index = self.hash_to_index.get(h);
-        match index {
-            None => None,
-            Some(i) => Some(*i),
-        }
-    }
-
-    pub fn index_from_key_or_hash(&self, key_or_hash: &KeyOrHash) -> Option<VertexIndex> {
-        match key_or_hash {
-            KeyOrHash::Hash(h) => {
-                // Lookup if hash exists, if so, this is the index
-                self.index_from_hash(h)
-            }
-            KeyOrHash::Key(k) => {
-                // Hash key, look up hash, check for exception:
-                self.index_from_vertex_key(k)
             }
         }
     }

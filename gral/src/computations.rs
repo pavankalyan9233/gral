@@ -1,20 +1,12 @@
-use byteorder::{BigEndian, WriteBytesExt};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
-use warp::{Filter, Rejection};
+use warp::Filter;
 
-use crate::graphs::{Graph, KeyOrHash};
-
-/// An error object, which is used if a computation is not yet finished.
-#[derive(Debug)]
-pub struct ComputationNotYetFinished {
-    pub comp_id: u64,
-}
-impl warp::reject::Reject for ComputationNotYetFinished {}
+use crate::graphs::Graph;
 
 pub trait Computation {
     fn is_ready(&self) -> bool;
@@ -27,40 +19,8 @@ pub trait Computation {
     fn as_any(&self) -> &dyn Any;
 }
 
-pub trait ComputationWithResultPerVertex {
-    fn get_number_of_components(&self) -> u64;
-    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String>;
-    fn dump_vertex_results(
-        &self,
-        comp_id: u64,
-        hashes: &Vec<KeyOrHash>,
-        out: &mut Vec<u8>,
-    ) -> Result<(), warp::Rejection>;
-}
-
 pub trait ComputationWithListResult {
     fn get_batch(&self, out: &mut Vec<u8>) -> Result<(), String>;
-}
-
-fn put_varlen(v: &mut Vec<u8>, l: u32) {
-    if l <= 0x7f {
-        v.write_u8(l as u8).unwrap();
-    } else {
-        v.write_u32::<BigEndian>(l | 0x80000000).unwrap();
-    };
-}
-
-pub fn put_key_or_hash(out: &mut Vec<u8>, koh: &KeyOrHash) {
-    match koh {
-        KeyOrHash::Hash(h) => {
-            put_varlen(out, 0);
-            out.write_u64::<BigEndian>(h.to_u64()).unwrap();
-        }
-        KeyOrHash::Key(k) => {
-            put_varlen(out, k.len() as u32);
-            out.extend_from_slice(&k);
-        }
-    }
 }
 
 pub struct Computations {
@@ -130,56 +90,6 @@ impl Computation for ComponentsComputation {
     }
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
-
-impl ComputationWithResultPerVertex for ComponentsComputation {
-    fn dump_result(&self, out: &mut Vec<u8>) -> Result<(), String> {
-        out.write_u8(8).unwrap();
-        out.write_u64::<BigEndian>(match self.number {
-            None => 0,
-            Some(nr) => nr,
-        })
-        .unwrap();
-        Ok(())
-    }
-    fn dump_vertex_results(
-        &self,
-        comp_id: u64,
-        kohs: &Vec<KeyOrHash>,
-        out: &mut Vec<u8>,
-    ) -> Result<(), Rejection> {
-        let comps = self.components.as_ref();
-        match comps {
-            None => {
-                return Err(warp::reject::custom(ComputationNotYetFinished { comp_id }));
-            }
-            Some(result) => {
-                let g = self.graph.read().unwrap();
-                for koh in kohs.iter() {
-                    let index = g.index_from_key_or_hash(koh);
-                    match index {
-                        None => {
-                            put_key_or_hash(out, koh);
-                            out.write_u8(0).unwrap();
-                        }
-                        Some(i) => {
-                            put_key_or_hash(out, koh);
-                            out.write_u8(8).unwrap();
-                            out.write_u64::<BigEndian>(result[i.to_u64() as usize])
-                                .unwrap();
-                        }
-                    }
-                }
-                return Ok(());
-            }
-        }
-    }
-    fn get_number_of_components(&self) -> u64 {
-        match self.number {
-            None => 0,
-            Some(nr) => nr,
-        }
     }
 }
 
