@@ -372,7 +372,7 @@ async fn api_compute(
 
 /// This function writes a computation result back to ArangoDB:
 async fn api_write_result_back_arangodb(
-    _user: String,
+    user: String,
     computations: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
     bytes: Bytes,
@@ -466,15 +466,21 @@ async fn api_write_result_back_arangodb(
     }
 
     // Write to ArangoDB in a background thread:
+    let user_clone = user.clone();
     std::thread::spawn(move || {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .unwrap()
             .block_on(async {
-                let res =
-                    write_result_to_arangodb(body, args, result_comp.clone(), comp_arc.clone())
-                        .await;
+                let res = write_result_to_arangodb(
+                    user_clone,
+                    body,
+                    args,
+                    result_comp.clone(),
+                    comp_arc.clone(),
+                )
+                .await;
                 let mut comp = comp_arc.write().unwrap();
                 match res {
                     Ok(()) => {
@@ -845,7 +851,7 @@ async fn api_drop_graph(
 }
 
 async fn api_get_arangodb_graph(
-    _user: String,
+    user: String,
     graphs: Arc<Mutex<Graphs>>,
     comps: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
@@ -910,7 +916,8 @@ async fn api_get_arangodb_graph(
             .unwrap()
             .block_on(async {
                 let res =
-                    fetch_graph_from_arangodb(body, args, graph_clone, comp_arc.clone()).await;
+                    fetch_graph_from_arangodb(user, body, args, graph_clone, comp_arc.clone())
+                        .await;
                 let mut comp = comp_arc.write().unwrap();
                 match res {
                     Ok(()) => {

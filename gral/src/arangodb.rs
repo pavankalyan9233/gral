@@ -2,6 +2,7 @@ use crate::api::graphanalyticsengine::{
     GraphAnalyticsEngineLoadDataRequest, GraphAnalyticsEngineStoreResultsRequest,
 };
 use crate::args::GralArgs;
+use crate::auth::create_jwt_token;
 use crate::computations::{AggregationComputation, Computation, LoadComputation, StoreComputation};
 use crate::graphs::{Graph, VertexHash, VertexIndex};
 use byteorder::WriteBytesExt;
@@ -198,8 +199,7 @@ struct DBServerInfo {
 async fn get_all_shard_data(
     req: &GraphAnalyticsEngineLoadDataRequest,
     endpoints: &Vec<String>,
-    username: &String,
-    password: &String,
+    jwt_token: &String,
     shard_map: &ShardMap,
     result_channels: Vec<std::sync::mpsc::Sender<Bytes>>,
 ) -> Result<(), String> {
@@ -228,7 +228,7 @@ async fn get_all_shard_data(
             serde_json::to_vec::<DumpStartBody>(&body).expect("could not serialize DumpStartBody");
         let resp = client
             .post(url)
-            .basic_auth(&username, Some(&password))
+            .bearer_auth(jwt_token)
             .body(body_v)
             .send()
             .await;
@@ -255,6 +255,7 @@ async fn get_all_shard_data(
     }
 
     let client_clone_for_cleanup = client.clone();
+    let jwt_token_clone = jwt_token.clone();
     let cleanup = |dbservers: Vec<DBServerInfo>| async move {
         debug!("Doing cleanup...");
         for dbserver in dbservers.iter() {
@@ -264,7 +265,7 @@ async fn get_all_shard_data(
             ));
             let resp = client_clone_for_cleanup
                 .delete(url)
-                .basic_auth(&username, Some(&password))
+                .bearer_auth(&jwt_token_clone)
                 .send()
                 .await;
             let r =
@@ -313,8 +314,7 @@ async fn get_all_shard_data(
             //                                   // the connection pool
             let client_clone = build_client(use_tls)?;
             let endpoint_clone = endpoints[endpoints_round_robin].clone();
-            let username_clone = username.clone();
-            let password_clone = password.clone();
+            let jwt_token_clone = jwt_token.clone();
             endpoints_round_robin += 1;
             if endpoints_round_robin >= endpoints.len() {
                 endpoints_round_robin = 0;
@@ -348,7 +348,7 @@ async fn get_all_shard_data(
                     );
                     let resp = client_clone
                         .post(url)
-                        .basic_auth(&username_clone, Some(&password_clone))
+                        .bearer_auth(&jwt_token_clone)
                         .send()
                         .await;
                     let resp = handle_arangodb_response(resp, |c| {
@@ -410,6 +410,7 @@ struct DumpStartBody {
 }
 
 pub async fn fetch_graph_from_arangodb(
+    user: String,
     req: GraphAnalyticsEngineLoadDataRequest,
     args: Arc<Mutex<GralArgs>>,
     graph_arc: Arc<RwLock<Graph>>,
@@ -417,8 +418,7 @@ pub async fn fetch_graph_from_arangodb(
 ) -> Result<(), String> {
     // Graph object must be new and empty!
     let endpoints: Vec<String>;
-    let username: String;
-    let password: String;
+    let jwt_token: String;
     {
         let guard = args.lock().unwrap();
         endpoints = guard
@@ -426,8 +426,7 @@ pub async fn fetch_graph_from_arangodb(
             .split(",")
             .map(|s| s.to_owned())
             .collect();
-        username = "neunhoef".to_string(); // FIXME
-        password = "".to_string(); // FIXME
+        jwt_token = create_jwt_token(&guard, &user, 60 * 60 * 2 /* seconds */);
     }
     if endpoints.is_empty() {
         return Err("no endpoints given".to_string());
@@ -446,11 +445,7 @@ pub async fn fetch_graph_from_arangodb(
 
     // First ask for the shard distribution:
     let url = make_url("/_admin/cluster/shardDistribution");
-    let resp = client
-        .get(url)
-        .basic_auth(&username, Some(&password))
-        .send()
-        .await;
+    let resp = client.get(url).bearer_auth(&jwt_token).send().await;
     let shard_dist =
         handle_arangodb_response_with_parsed_body::<ShardDistribution>(resp, StatusCode::OK)
             .await?;
@@ -612,7 +607,7 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(&req, &endpoints, &username, &password, &vertex_map, senders).await?;
+        get_all_shard_data(&req, &endpoints, &jwt_token, &vertex_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -728,7 +723,7 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(&req, &endpoints, &username, &password, &edge_map, senders).await?;
+        get_all_shard_data(&req, &endpoints, &jwt_token, &edge_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -759,8 +754,7 @@ async fn batch_sender(
     mut receiver: tokio::sync::mpsc::Receiver<Batch>,
     endpoint: String,
     use_tls: bool,
-    username: String,
-    password: String,
+    jwt_token: String,
     database: String,
 ) -> Result<(), String> {
     let begin = std::time::SystemTime::now();
@@ -778,7 +772,7 @@ async fn batch_sender(
         );
         let resp = client
             .post(url)
-            .basic_auth(&username, Some(&password))
+            .bearer_auth(&jwt_token)
             .body(batch_clone.body)
             .send()
             .await;
@@ -791,14 +785,14 @@ async fn batch_sender(
 }
 
 pub async fn write_result_to_arangodb(
+    user: String,
     req: GraphAnalyticsEngineStoreResultsRequest,
     args: Arc<Mutex<GralArgs>>,
     result_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>,
     comp_arc: Arc<RwLock<StoreComputation>>,
 ) -> Result<(), String> {
     let endpoints: Vec<String>;
-    let username: String;
-    let password: String;
+    let jwt_token: String;
     {
         let guard = args.lock().unwrap();
         endpoints = guard
@@ -806,8 +800,7 @@ pub async fn write_result_to_arangodb(
             .split(",")
             .map(|s| s.to_owned())
             .collect();
-        username = "neunhoef".to_string(); // FIXME
-        password = "".to_string(); // FIXME
+        jwt_token = create_jwt_token(&guard, &user, 60 * 60 * 2 /* seconds */);
     }
     if endpoints.is_empty() {
         return Err("no endpoints given".to_string());
@@ -840,8 +833,7 @@ pub async fn write_result_to_arangodb(
         let (sender, receiver) = tokio::sync::mpsc::channel::<Batch>(10);
         senders.push(sender);
         let endpoint_clone = endpoints[endpoints_round_robin].clone();
-        let username_clone = username.clone();
-        let password_clone = password.clone();
+        let jwt_token_clone = jwt_token.clone();
         endpoints_round_robin += 1;
         if endpoints_round_robin >= endpoints.len() {
             endpoints_round_robin = 0;
@@ -851,8 +843,7 @@ pub async fn write_result_to_arangodb(
             receiver,
             endpoint_clone,
             use_tls,
-            username_clone,
-            password_clone,
+            jwt_token_clone,
             database_clone,
         ));
     }
