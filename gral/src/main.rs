@@ -34,14 +34,6 @@ async fn main() {
         .filter_level(LevelFilter::Info)
         .parse_env("RUST_LOG")
         .init();
-    let ts = tracing_subscriber::fmt()
-        .with_max_level(tracing::level_filters::LevelFilter::TRACE)
-        .finish();
-    let tse = tracing::subscriber::set_global_default(ts)
-        .map_err(|_err| eprintln!("Unable to set global default subscriber"));
-    if let Err(e) = tse {
-        warn!("Could not set up tracing: {e:?}");
-    }
     info!("Hello, this is gral!");
     let prom_builder = PrometheusBuilder::new();
     let metrics_handle = prom_builder
@@ -58,6 +50,17 @@ async fn main() {
     };
     debug!("{:#?}", args);
     let the_args = Arc::new(Mutex::new(args.clone()));
+
+    if args.warp_trace {
+        let ts = tracing_subscriber::fmt()
+            .with_max_level(tracing::level_filters::LevelFilter::TRACE)
+            .finish();
+        let tse = tracing::subscriber::set_global_default(ts)
+            .map_err(|_err| eprintln!("Unable to set global default subscriber"));
+        if let Err(e) = tse {
+            warn!("Could not set up tracing: {e:?}");
+        }
+    }
 
     let log_incoming = warp::log::custom(|info| {
         info!("{} {} {:?}", info.method(), info.path(), info.elapsed(),);

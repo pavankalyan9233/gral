@@ -30,6 +30,7 @@ OPTIONS:
                          separated by commas are possible)
                          [default: 'https://localhost:8529']
   --arangodb-jwt-secrets Path name with jwt secrets [default: 'secrets.jwt']
+  --warp-trace BOOL      Switch on warp tracing [default: false]
 
 The following environment variables can set defaults for the above
 options (command line options have higher precedence!):
@@ -52,7 +53,8 @@ pub struct GralArgs {
     pub port: u16,
     pub arangodb_endpoints: String,
     pub arangodb_jwt_secrets: Vec<Vec<u8>>, // the first used for signing
-                                            // all for signature verification
+    // all for signature verification
+    pub warp_trace: bool,
 }
 
 fn read_jwt_secrets(jwt_path: &String) -> Vec<Vec<u8>> {
@@ -171,6 +173,7 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
             .opt_value_from_str("--arangodb-endpoints")?
             .unwrap_or(default_endpoint),
         arangodb_jwt_secrets: jwt_secrets,
+        warp_trace: pargs.opt_value_from_str("--warp-trace")?.unwrap_or(false),
     };
 
     // It's up to the caller what to do with the remaining arguments.
