@@ -1,31 +1,19 @@
+ - more generic error handling via handle_errors
  - remove stuff from grupload or implement HTTP upload
  - use only HTTP/JSON API in grupload
- - add first metrics
- - 
-
-Opsec:
+ - add first metrics: number of graphs, number of computations, memory usage
  - better progress tracking in jobs
  - interrupt jobs
  - Generalize write back of computation result to components computation
  - create target collection
-
  - job cancellation for load
- - check if grupload still works with binary protocol
- - change grupload to use JSON API where performance does not matter,,
- - remove binary API where not necessary?
- - Write result back into collection in ArangoDB
  - Metrics for ArangoDB import and export
- - metric about memory usage
- - AQL query upload (for subgraph import)
+ - AQL query load (for subgraph import)
  - use projections
- - subgraph import?
- - Progress report on upload of vertices and edges
- - Progress report on download of results
+ - subgraph import via dump endpoint
+ - Progress report on load of vertices and edges
+ - Progress report on writeback of results
  - direct randomize/upload
- - Implement graph dump
  - Extend end to end test
  - coverage?
  - Tune randomize (parallelization)
- - Tune receive in gral
- - error handling for server responses in client
- - proper logging
