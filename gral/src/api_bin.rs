@@ -1,3 +1,11 @@
+// This API is currently not used. It is highly efficient w.r.t. speed
+// and memory efficiency and allows to push a graph directly into the
+// engine. In addition, it allows to directly hash variable length vertex
+// keys to fixed length integers and detect collisions. This achieves further
+// memory reductions.
+// However, this is not how we currently do things on the platform.
+// We leave the code here just in case we later need it.
+
 use crate::auth::Unauthorized;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;

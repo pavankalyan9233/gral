@@ -12,7 +12,6 @@ use warp::{http::Response, http::StatusCode, Filter};
 
 mod aggregation;
 mod api;
-mod api_bin;
 mod arangodb;
 mod args;
 mod auth;
@@ -21,8 +20,7 @@ mod conncomp;
 mod graphs;
 mod metrics;
 
-use crate::api::api_filter;
-use crate::api_bin::{api_bin_filter, handle_errors};
+use crate::api::{api_filter, handle_errors};
 use crate::args::parse_args;
 use crate::computations::Computations;
 use crate::graphs::Graphs;
@@ -58,7 +56,7 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    info!("{:#?}", args);
+    debug!("{:#?}", args);
     let the_args = Arc::new(Mutex::new(args.clone()));
 
     let log_incoming = warp::log::custom(|info| {
@@ -68,7 +66,7 @@ async fn main() {
     let (tx_shutdown, rx_shutdown) = oneshot::channel::<()>();
     let tx_arc = Arc::new(Mutex::new(Some(tx_shutdown)));
     let tx_clone = tx_arc.clone();
-    let shutdown = warp::path!("v1" / "shutdown")
+    let shutdown = warp::path!("v2" / "shutdown")
         .and(warp::delete())
         .and(with_auth(the_args.clone()))
         .map(move |_user| {
@@ -99,11 +97,6 @@ async fn main() {
     let apifilters = shutdown
         .with(log_incoming)
         .or(api_filter(
-            the_graphs.clone(),
-            the_computations.clone(),
-            the_args.clone(),
-        ))
-        .or(api_bin_filter(
             the_graphs.clone(),
             the_computations.clone(),
             the_args.clone(),

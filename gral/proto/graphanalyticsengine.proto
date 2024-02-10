@@ -184,7 +184,7 @@ message CollectionDescription {
 }
 
 // Generic error
-message GraphAnalyticsErrorResponse {
+message GraphAnalyticsEngineErrorResponse {
     // Error?
     bool error = 1;
     // Error code, 0 if no error

@@ -7,8 +7,14 @@ use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::{Filter, Rejection};
 
-use crate::api_bin::{put_key_or_hash, ComputationNotYetFinished};
 use crate::graphs::{Graph, KeyOrHash};
+
+/// An error object, which is used if a computation is not yet finished.
+#[derive(Debug)]
+pub struct ComputationNotYetFinished {
+    pub comp_id: u64,
+}
+impl warp::reject::Reject for ComputationNotYetFinished {}
 
 pub trait Computation {
     fn is_ready(&self) -> bool;
@@ -34,6 +40,27 @@ pub trait ComputationWithResultPerVertex {
 
 pub trait ComputationWithListResult {
     fn get_batch(&self, out: &mut Vec<u8>) -> Result<(), String>;
+}
+
+fn put_varlen(v: &mut Vec<u8>, l: u32) {
+    if l <= 0x7f {
+        v.write_u8(l as u8).unwrap();
+    } else {
+        v.write_u32::<BigEndian>(l | 0x80000000).unwrap();
+    };
+}
+
+pub fn put_key_or_hash(out: &mut Vec<u8>, koh: &KeyOrHash) {
+    match koh {
+        KeyOrHash::Hash(h) => {
+            put_varlen(out, 0);
+            out.write_u64::<BigEndian>(h.to_u64()).unwrap();
+        }
+        KeyOrHash::Key(k) => {
+            put_varlen(out, k.len() as u32);
+            out.extend_from_slice(&k);
+        }
+    }
 }
 
 pub struct Computations {

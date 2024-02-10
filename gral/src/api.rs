@@ -1,7 +1,7 @@
 use crate::aggregation::aggregate_over_components;
 use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
 use crate::args::{with_args, GralArgs};
-use crate::auth::with_auth;
+use crate::auth::{with_auth, Unauthorized};
 use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LoadComputation, StoreComputation,
@@ -14,6 +14,7 @@ use bytes::Bytes;
 use graphanalyticsengine::*;
 use http::Error;
 use log::info;
+use std::convert::Infallible;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::{http::Response, http::StatusCode, Filter, Rejection};
@@ -936,5 +937,38 @@ async fn api_get_arangodb_graph(
     Ok(warp::reply::with_status(
         serde_json::to_vec(&response).expect("Could not serialize"),
         StatusCode::OK,
+    ))
+}
+
+// This function receives a `Rejection` and is responsible to convert
+// this into a proper HTTP error with a body as designed.
+pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallible> {
+    let code;
+    let message: String;
+
+    if err.is_not_found() {
+        code = StatusCode::NOT_FOUND;
+        message = "NOT_FOUND".to_string();
+    } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+        // We can handle a specific error, here METHOD_NOT_ALLOWED,
+        // and render it however we want
+        code = StatusCode::METHOD_NOT_ALLOWED;
+        message = "METHOD_NOT_ALLOWED".to_string();
+    } else if let Some(wrong) = err.find::<Unauthorized>() {
+        code = StatusCode::UNAUTHORIZED;
+        message = wrong.msg.clone();
+    } else {
+        code = StatusCode::INTERNAL_SERVER_ERROR;
+        message = "Unknown error happened".to_string();
+    }
+
+    Ok(warp::reply::with_status(
+        serde_json::to_vec(&GraphAnalyticsEngineErrorResponse {
+            error: true,
+            error_code: code.as_u16() as i32,
+            error_message: message,
+        })
+        .unwrap(),
+        code,
     ))
 }
