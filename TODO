@@ -1,3 +1,5 @@
+ - Fix APIs without user, e.g. graphs
+ - Bearer and bearer 
  - more generic error handling via handle_errors
  - remove stuff from grupload or implement HTTP upload
  - use only HTTP/JSON API in grupload

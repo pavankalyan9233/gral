@@ -589,8 +589,8 @@ fn id_to_type(id: u32) -> String {
 
 /// This function gets progress of a computation.
 async fn api_get_job(
-    _user: String,
     job_id: String,
+    _user: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     let not_found_err = |j: String| {
@@ -653,8 +653,8 @@ async fn api_get_job(
 
 /// This function deletes a job.
 async fn api_drop_job(
-    _user: String,
     job_id: String,
+    _user: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     let not_found_err = |j: String| {
@@ -708,8 +708,8 @@ async fn api_drop_job(
 
 /// This function gets information about a graph:
 async fn api_get_graph(
-    _user: String,
     graph_id: String,
+    _user: String,
     graphs: Arc<Mutex<Graphs>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     let not_found_err = |j: String| {
@@ -804,8 +804,8 @@ async fn api_list_jobs(
 
 /// This function drops a graph:
 async fn api_drop_graph(
-    _user: String,
     graph_id: String,
+    _user: String,
     graphs: Arc<Mutex<Graphs>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     let not_found_err = |j: String| {

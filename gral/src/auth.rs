@@ -1,6 +1,7 @@
 //use chrono::prelude::*;
 use hmac::{Hmac, Mac};
-use jwt::{SignWithKey, VerifyWithKey};
+use jwt::header::HeaderType;
+use jwt::{AlgorithmType, Header, SignWithKey, Token, VerifyWithKey};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::{Arc, Mutex};
@@ -14,6 +15,7 @@ use warp::{
 use crate::args::{with_args, GralArgs};
 
 const BEARER: &str = "bearer ";
+const BEARERCAP: &str = "Bearer ";
 
 type WebResult<T> = std::result::Result<T, Rejection>;
 
@@ -64,12 +66,12 @@ async fn authorize(
             }))
         }
     };
-    if !auth_header.starts_with(BEARER) {
+    if !auth_header.starts_with(BEARER) && !auth_header.starts_with(BEARERCAP) {
         return Err(warp::reject::custom(Unauthorized {
             msg: format!("Bad authentication header: {}", auth_header),
         }));
     }
-    let token = auth_header.trim_start_matches(BEARER).to_string();
+    let token = &auth_header[7..].to_string();
 
     // Now try all secrets to verify signature:
     let args = gral_args.lock().unwrap();
@@ -104,11 +106,17 @@ pub fn create_jwt_token(gral_args: &GralArgs, user: &String, expiry_in_seconds: 
                 .as_secs(),
         )
     };
+    let header = Header {
+        algorithm: AlgorithmType::Hs256,
+        type_: Some(HeaderType::JsonWebToken),
+        ..Default::default()
+    };
     let claims = Claims {
         preferred_username: user.clone(),
         iss: "arangodb".to_string(),
         exp,
         server_id: None,
     };
-    claims.sign_with_key(&key).unwrap()
+    let token = Token::new(header, claims).sign_with_key(&key).unwrap();
+    token.as_str().to_string()
 }
