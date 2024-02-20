@@ -405,6 +405,20 @@ impl Graph {
             self.edge_data.extend_from_slice(&data);
         }
     }
+
+    pub fn add_vertex_nodata(&mut self, key: &[u8]) {
+        let key = key.to_vec();
+        let hash = VertexHash::new(xxh3_64_with_seed(&key, 0xdeadbeefdeadbeef));
+        self.insert_vertex(0, hash, key, vec![], None, &mut vec![], &mut vec![]);
+    }
+
+    pub fn add_edge_nodata(&mut self, from: &[u8], to: &[u8]) {
+        let f = self.index_from_vertex_key(from);
+        assert!(f.is_some());
+        let t = self.index_from_vertex_key(to);
+        assert!(t.is_some());
+        self.insert_edge(f.unwrap(), t.unwrap(), vec![]);
+    }
 }
 
 pub fn encode_id(id: u64) -> String {
