@@ -19,6 +19,7 @@ mod computations;
 mod conncomp;
 mod graphs;
 mod metrics;
+mod pagerank;
 
 use crate::api::{api_filter, handle_errors};
 use crate::args::parse_args;

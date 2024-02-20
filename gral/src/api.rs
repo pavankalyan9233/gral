@@ -4,10 +4,11 @@ use crate::args::{with_args, GralArgs};
 use crate::auth::{with_auth, Unauthorized};
 use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
-    LoadComputation, StoreComputation,
+    LoadComputation, PageRankComputation, StoreComputation,
 };
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
+use crate::pagerank::page_rank;
 use crate::VERSION;
 
 use bytes::Bytes;
@@ -249,6 +250,7 @@ async fn api_compute(
         "wcc" => 1,
         "scc" => 2,
         "aggregate_components" => 3,
+        "page_rank" => 4,
         _ => 0,
     };
 
@@ -342,6 +344,26 @@ async fn api_compute(
                 let mut comp = comp_arc.write().unwrap();
                 comp.result = res;
                 comp.progress = 1;
+            });
+        }
+        4 => {
+            let comp_arc = Arc::new(RwLock::new(PageRankComputation {
+                graph: graph_arc.clone(),
+                shall_stop: false,
+                total: 100,
+                progress: 0,
+                error_code: 0,
+                error_message: "".to_string(),
+                rank: vec![],
+            }));
+            generic_comp_arc = comp_arc.clone();
+            std::thread::spawn(move || {
+                let graph = graph_arc.read().unwrap();
+                let rank = page_rank(&graph, 10, 0.85);
+                info!("Finished page rank computation!");
+                let mut comp = comp_arc.write().unwrap();
+                comp.rank = rank;
+                comp.progress = 100;
             });
         }
         _ => {

@@ -214,3 +214,40 @@ impl Computation for StoreComputation {
         self
     }
 }
+
+pub struct PageRankComputation {
+    pub graph: Arc<RwLock<Graph>>,
+    pub shall_stop: bool,
+    pub total: u32,
+    pub progress: u32,
+    pub error_code: i32,
+    pub error_message: String,
+    pub rank: Vec<f64>,
+}
+
+impl Computation for PageRankComputation {
+    fn is_ready(&self) -> bool {
+        self.progress == self.total
+    }
+    fn get_error(&self) -> (i32, String) {
+        (self.error_code, self.error_message.clone())
+    }
+    fn cancel(&mut self) {
+        self.shall_stop = true;
+    }
+    fn algorithm_id(&self) -> u32 {
+        4
+    }
+    fn get_graph(&self) -> Arc<RwLock<Graph>> {
+        return self.graph.clone();
+    }
+    fn get_total(&self) -> u32 {
+        self.total
+    }
+    fn get_progress(&self) -> u32 {
+        self.progress
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
