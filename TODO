@@ -1,3 +1,12 @@
+ - Test pagerank
+ - Write results pagerank
+ - Implement irank
+ - Test irank
+ - write results irank
+ - implement label propagation
+ - test label propagation
+ - write results label propagation
+ - write results combined?
  - Fix APIs without user, e.g. graphs
  - Bearer and bearer 
  - more generic error handling via handle_errors

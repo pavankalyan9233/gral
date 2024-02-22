@@ -359,7 +359,7 @@ async fn api_compute(
             generic_comp_arc = comp_arc.clone();
             std::thread::spawn(move || {
                 let graph = graph_arc.read().unwrap();
-                let rank = page_rank(&graph, 10, 0.85);
+                let (rank, _steps) = page_rank(&graph, 10, 0.85);
                 info!("Finished page rank computation!");
                 let mut comp = comp_arc.write().unwrap();
                 comp.rank = rank;
