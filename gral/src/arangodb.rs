@@ -9,7 +9,7 @@ use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
@@ -509,6 +509,7 @@ pub async fn fetch_graph_from_arangodb(
                     let mut json_initialized = false;
                     let mut fields: Vec<String> = vec![];
                     for line in body.lines() {
+                        let mut collname: String = "".to_string();
                         let v: Value = match serde_json::from_str(line) {
                             Err(err) => {
                                 return Err(format!(
@@ -532,7 +533,7 @@ pub async fn fetch_graph_from_arangodb(
                                             fields = vec![];
                                         }
                                         Some(p) => {
-                                            let collname = (&i[0..p]).to_string();
+                                            collname = (&i[0..p]).to_string();
                                             let flds = vcf_map.get(&collname);
                                             match flds {
                                                 None => {
@@ -557,15 +558,23 @@ pub async fn fetch_graph_from_arangodb(
                         // If we get here, we have to extract the field
                         // values in `fields` from the json and store it
                         // to vertex_json:
+                        let get_value = |v: &Value, field: &str| -> Value {
+                            if field == "@collection_name" {
+                                Value::String(collname.clone())
+                            } else {
+                                v[field].clone()
+                            }
+                        };
+
                         if !fields.is_empty() {
                             if fields.len() == 1 {
-                                vertex_json.push(v[&fields[0]].clone());
+                                vertex_json.push(get_value(&v, &fields[0]));
                             } else {
-                                let mut j = json!({});
+                                let mut vv: Vec<Value> = Vec::with_capacity(fields.len());
                                 for f in fields.iter() {
-                                    j[&f] = v[&f].clone();
+                                    vv.push(get_value(&v, &f));
                                 }
-                                vertex_json.push(j);
+                                vertex_json.push(Value::Array(vv));
                             }
                         }
                     }
