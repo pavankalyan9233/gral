@@ -17,10 +17,7 @@ pub trait Computation {
     fn get_graph(&self) -> Arc<RwLock<Graph>>;
     fn algorithm_id(&self) -> u32;
     fn as_any(&self) -> &dyn Any;
-}
-
-pub trait ComputationWithListResult {
-    fn get_batch(&self, out: &mut Vec<u8>) -> Result<(), String>;
+    fn next_result(&mut self) -> Option<String>;
 }
 
 pub struct Computations {
@@ -91,6 +88,9 @@ impl Computation for ComponentsComputation {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn next_result(&mut self) -> Option<String> {
+        None
+    }
 }
 
 pub struct LoadComputation {
@@ -126,6 +126,9 @@ impl Computation for LoadComputation {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn next_result(&mut self) -> Option<String> {
+        None
     }
 }
 
@@ -176,6 +179,9 @@ impl Computation for AggregationComputation {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn next_result(&mut self) -> Option<String> {
+        None
+    }
 }
 
 pub struct StoreComputation {
@@ -213,6 +219,9 @@ impl Computation for StoreComputation {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    fn next_result(&mut self) -> Option<String> {
+        None
+    }
 }
 
 pub struct PageRankComputation {
@@ -223,6 +232,7 @@ pub struct PageRankComputation {
     pub error_code: i32,
     pub error_message: String,
     pub rank: Vec<f64>,
+    pub result_position: usize,
 }
 
 impl Computation for PageRankComputation {
@@ -249,5 +259,25 @@ impl Computation for PageRankComputation {
     }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    fn next_result(&mut self) -> Option<String> {
+        if self.progress < self.total {
+            None
+        } else if self.result_position >= self.rank.len() {
+            None
+        } else {
+            let cur = self.result_position;
+            self.result_position += 1;
+            let guard = self.graph.read().unwrap();
+            let key = std::str::from_utf8(&guard.index_to_key[cur][..]);
+            if let Ok(key) = key {
+                Some(format!(
+                    r#"{{"_key": "{}", "rank": {}}}"#,
+                    key, self.rank[cur]
+                ))
+            } else {
+                None
+            }
+        }
     }
 }

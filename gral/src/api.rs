@@ -355,6 +355,7 @@ async fn api_compute(
                 error_code: 0,
                 error_message: "".to_string(),
                 rank: vec![],
+                result_position: 0,
             }));
             generic_comp_arc = comp_arc.clone();
             std::thread::spawn(move || {
