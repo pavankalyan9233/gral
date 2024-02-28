@@ -7,8 +7,8 @@ debug: Makefile
 	cargo build
 
 docker: Makefile Dockerfile
-	docker build -t neunhoef/gral .
-	docker push neunhoef/gral
+	docker build -t neunhoef/gral:0.1.0 .
+	docker push neunhoef/gral:0.1.0
 
 clean:
 	rm -rf target
