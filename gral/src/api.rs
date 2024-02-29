@@ -86,6 +86,11 @@ pub fn api_filter(
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_get_graph);
+    let dump_graph = warp::path!("v2" / "dumpgraph" / String)
+        .and(warp::put())
+        .and(with_auth(args.clone()))
+        .and(with_graphs(graphs.clone()))
+        .and_then(api_dump_graph);
     let drop_graph = warp::path!("v2" / "graphs" / String)
         .and(warp::delete())
         .and(with_auth(args.clone()))
@@ -110,6 +115,7 @@ pub fn api_filter(
         .or(write_result_back_arangodb)
         .or(get_arangodb_graph_aql)
         .or(get_graph)
+        .or(dump_graph)
         .or(drop_graph)
         .or(list_graphs)
         .or(list_jobs)
@@ -760,6 +766,59 @@ async fn api_get_graph(
     }
     let graph_arc = graph_arc.unwrap().clone();
     let graph = graph_arc.read().unwrap();
+
+    // Write response:
+    let response = GraphAnalyticsEngineGetGraphResponse {
+        error: false,
+        error_code: 0,
+        error_message: "".to_string(),
+        graph: Some(GraphAnalyticsEngineGraph {
+            graph_id: encode_id(graph_id_decoded),
+            number_of_vertices: graph.number_of_vertices(),
+            number_of_edges: graph.number_of_edges(),
+        }),
+    };
+    Ok(warp::reply::with_status(
+        serde_json::to_vec(&response).expect("Should be serializable"),
+        StatusCode::OK,
+    ))
+}
+
+/// This function dumps a graph to stdout:
+async fn api_dump_graph(
+    graph_id: String,
+    _user: String,
+    graphs: Arc<Mutex<Graphs>>,
+) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
+    let not_found_err = |j: String| {
+        warp::reply::with_status(
+            serde_json::to_vec(&GraphAnalyticsEngineGetGraphResponse {
+                error: true,
+                error_code: 404,
+                error_message: j.clone(),
+                graph: None,
+            })
+            .expect("Could not serialize"),
+            StatusCode::NOT_FOUND,
+        )
+    };
+    let graph_id_decoded = decode_id(&graph_id);
+    if let Err(e) = graph_id_decoded {
+        return Ok(not_found_err(e));
+    }
+    let graph_id_decoded = graph_id_decoded.unwrap();
+
+    let graph_arc;
+    {
+        let graphs = graphs.lock().unwrap();
+        let graph_arc_opt = graphs.list.get(&graph_id_decoded);
+        if graph_arc_opt.is_none() {
+            return Ok(not_found_err(format!("Graph {} not found!", graph_id)));
+        }
+        graph_arc = graph_arc_opt.unwrap().clone();
+    }
+    let graph = graph_arc.read().unwrap();
+    graph.dump();
 
     // Write response:
     let response = GraphAnalyticsEngineGetGraphResponse {

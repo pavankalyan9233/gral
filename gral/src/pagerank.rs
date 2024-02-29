@@ -49,47 +49,8 @@ pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, RwLock};
-
-    fn make_cyclic_graph(n: u32) -> Arc<RwLock<Graph>> {
-        let g_arc = Graph::new(true, 64, 1);
-        {
-            let mut g = g_arc.write().unwrap();
-            for i in 0..n {
-                let id = format!("V/K{i}");
-                g.add_vertex_nodata(id.as_bytes());
-            }
-            g.seal_vertices();
-            for i in 0..n {
-                let from = format!("V/K{}", i);
-                let to = format!("V/K{}", (i + 1) % 10);
-                g.add_edge_nodata(from.as_bytes(), to.as_bytes());
-            }
-            g.seal_edges();
-            g.index_edges(true, false);
-        }
-        g_arc
-    }
-
-    fn make_star_graph(n: u32) -> Arc<RwLock<Graph>> {
-        let g_arc = Graph::new(true, 64, 1);
-        {
-            let mut g = g_arc.write().unwrap();
-            for i in 0..n {
-                let id = format!("V/K{i}");
-                g.add_vertex_nodata(id.as_bytes());
-            }
-            g.seal_vertices();
-            let to = format!("V/K{}", n - 1);
-            for i in 0..(n - 1) {
-                let from = format!("V/K{}", i);
-                g.add_edge_nodata(from.as_bytes(), to.as_bytes());
-            }
-            g.seal_edges();
-            g.index_edges(true, false);
-        }
-        g_arc
-    }
+    use crate::graphs::examples::make_cyclic_graph;
+    use crate::graphs::examples::make_star_graph;
 
     #[test]
     fn test_pagerank_cyclic() {

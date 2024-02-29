@@ -12,6 +12,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
+pub mod examples;
+
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
 pub struct VertexHash(u64);
 impl VertexHash {
@@ -418,6 +420,29 @@ impl Graph {
         let t = self.index_from_vertex_key(to);
         assert!(t.is_some());
         self.insert_edge(f.unwrap(), t.unwrap(), vec![]);
+    }
+
+    pub fn dump(&self) {
+        let nr = self.number_of_vertices();
+        println!("Vertices ({}):", nr);
+        for i in 0..nr {
+            let key = std::str::from_utf8(&self.index_to_key[i as usize][..]).unwrap();
+            let s = if (i as usize) < self.vertex_json.len() {
+                format!("{i:>10} {:<40} {}", key, self.vertex_json[i as usize])
+            } else {
+                format!("{i:>10} {:<40}", key)
+            };
+            println!("{}", s);
+        }
+        let nre = self.number_of_edges();
+        println!("Edges ({}):", nre);
+        for i in 0..nre {
+            println!(
+                "  {} -> {}",
+                self.edges[i as usize].from.to_u64(),
+                self.edges[i as usize].to.to_u64()
+            );
+        }
     }
 }
 

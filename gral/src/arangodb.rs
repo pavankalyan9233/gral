@@ -9,7 +9,7 @@ use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
@@ -570,11 +570,11 @@ pub async fn fetch_graph_from_arangodb(
                             if fields.len() == 1 {
                                 vertex_json.push(get_value(&v, &fields[0]));
                             } else {
-                                let mut vv: Vec<Value> = Vec::with_capacity(fields.len());
+                                let mut j = json!({});
                                 for f in fields.iter() {
-                                    vv.push(get_value(&v, &f));
+                                    j[&f] = v[&f].clone();
                                 }
-                                vertex_json.push(Value::Array(vv));
+                                vertex_json.push(j);
                             }
                         }
                     }
