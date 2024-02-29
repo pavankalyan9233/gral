@@ -1,4 +1,6 @@
- - Test pagerank
+ + Test pagerank
+ - Remember loaded fields in graph
+ - why does it take 3 seconds to load small graph?
  - Write results pagerank
  - Implement irank
  - Test irank
