@@ -2,7 +2,6 @@ use auth::with_auth;
 use byteorder::{BigEndian, WriteBytesExt};
 use log::{debug, info, warn, LevelFilter};
 use metrics_exporter_prometheus::PrometheusBuilder;
-use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
@@ -88,9 +87,7 @@ async fn main() {
                 .header("Content-Type", "x-application-gral")
                 .body(v)
         });
-    let the_graphs = Arc::new(Mutex::new(Graphs {
-        list: HashMap::new(),
-    }));
+    let the_graphs = Arc::new(Mutex::new(Graphs::new()));
     let the_computations = Arc::new(Mutex::new(Computations::new()));
 
     let api_metrics = warp::path!("v2" / "metrics").and(warp::get()).map(move || {

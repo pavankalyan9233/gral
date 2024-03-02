@@ -1,4 +1,3 @@
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
@@ -22,23 +21,19 @@ pub trait Computation {
 
 pub struct Computations {
     pub list: HashMap<u64, Arc<RwLock<dyn Computation + Send + Sync>>>,
+    next_id: u64,
 }
 
 impl Computations {
     pub fn new() -> Self {
         Computations {
             list: HashMap::new(),
+            next_id: 1,
         }
     }
     pub fn register(&mut self, comp: Arc<RwLock<dyn Computation + Send + Sync>>) -> u64 {
-        let mut rng = rand::thread_rng();
-        let mut comp_id: u64;
-        loop {
-            comp_id = rng.gen::<u64>();
-            if !self.list.contains_key(&comp_id) {
-                break;
-            }
-        }
+        let comp_id = self.next_id;
+        self.next_id += 1;
         self.list.insert(comp_id, comp);
         comp_id
     }

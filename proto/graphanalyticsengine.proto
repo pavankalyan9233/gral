@@ -197,11 +197,11 @@ message GraphAnalyticsEngineErrorResponse {
 // Response arguments from GraphAnalyticsEngineLoadData.
 message GraphAnalyticsEngineLoadDataResponse {
     // ID of the load data operation
-    string job_id = 1;
+    uint64 job_id = 1;
     // Client ID
     string client_id = 2;
     // Graph ID
-    string graph_id = 3;
+    uint64 graph_id = 3;
     // Error?
     bool error = 4;
     // Error code, 0 if no error
@@ -215,7 +215,7 @@ message GraphAnalyticsEngineLoadDataAqlRequest {
     // Client ID to make request idempotent
     string client_id = 2;
     // Job ID for results
-    string job_id = 3;
+    uint64 job_id = 3;
     // Database to get graph from
     string database = 4;
     // Vertex query
@@ -233,9 +233,9 @@ message GraphAnalyticsEngineProcessRequest {
     // Client ID to make request idempotent
     string client_id = 1;
     // Graph ID
-    string graph_id = 2;
+    uint64 graph_id = 2;
     // ID of a previous job to take the input from, this is to build pipelines.
-    string job_id = 3;
+    uint64 job_id = 3;
     // Name of algorithm, currently, we have "wcc", "scc" and
     // "aggregate_components":
     string algorithm = 4;
@@ -248,7 +248,7 @@ message GraphAnalyticsEngineProcessRequest {
 // Response arguments from GraphAnalyticsEngineProcess.
 message GraphAnalyticsEngineProcessResponse {
     // ID of the job
-    string job_id = 1;
+    uint64 job_id = 1;
     // Client ID
     string client_id = 2;
     // Error?
@@ -264,7 +264,7 @@ message GraphAnalyticsEngineStoreResultsRequest {
     // Client ID to make request idempotent
     string client_id = 1;
     // ID of the job
-    string job_id = 2;
+    uint64 job_id = 2;
     // Database in ArangoDB to use:
     string database = 3;
     // The following map maps collection names as found in the
@@ -290,7 +290,7 @@ message GraphAnalyticsEngineStoreResultsRequest {
 // Response arguments from GraphAnalyticsEngineStoreResults.
 message GraphAnalyticsEngineStoreResultsResponse {
     // ID of the store results operation
-    string job_id = 1;
+    uint64 job_id = 1;
     // Client ID
     string client_id = 2;
     // Error?
@@ -339,7 +339,7 @@ message GraphAnalyticsEngineJobId {
 // Description of a graph.
 message GraphAnalyticsEngineGraph {
     // ID of graph
-    string graph_id = 1;
+    uint64 graph_id = 1;
     // Number of vertices:
     uint64 number_of_vertices = 2;
     // Number of edges:
@@ -349,7 +349,7 @@ message GraphAnalyticsEngineGraph {
 // Response for a delete graph request.
 message GraphAnalyticsEngineDeleteGraphResponse {
     // ID of graph
-    string graph_id = 1;
+    uint64 graph_id = 1;
     // Error?
     bool error = 2;
     // Error code, 0 if no error
@@ -373,9 +373,9 @@ message GraphAnalyticsEngineListJobsResponse {
 // Description of a job.
 message GraphAnalyticsEngineJob {
     // ID of job
-    string job_id = 1;
+    uint64 job_id = 1;
     // Graph of job
-    string graph_id = 2;
+    uint64 graph_id = 2;
     // Total progress, guaranteed to be positive, but could be 1
     uint32 total = 3;
     // Progress (0: no progress, equal to total: ready)
@@ -395,7 +395,7 @@ message GraphAnalyticsEngineJob {
 // Response for a delete job request.
 message GraphAnalyticsEngineDeleteJobResponse {
     // ID of job
-    string job_id = 1;
+    uint64 job_id = 1;
     // Error?
     bool error = 2;
     // Error code, 0 if no error

@@ -42,12 +42,12 @@ pub fn api_filter(
         .and(warp::get())
         .and(with_auth(args.clone()))
         .map(version_json);
-    let get_job = warp::path!("v2" / "jobs" / String)
+    let get_job = warp::path!("v2" / "jobs" / u64)
         .and(warp::get())
         .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and_then(api_get_job);
-    let drop_job = warp::path!("v2" / "jobs" / String)
+    let drop_job = warp::path!("v2" / "jobs" / u64)
         .and(warp::delete())
         .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
@@ -81,17 +81,17 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_arangodb_graph_aql);
-    let get_graph = warp::path!("v2" / "graphs" / String)
+    let get_graph = warp::path!("v2" / "graphs" / u64)
         .and(warp::get())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_get_graph);
-    let dump_graph = warp::path!("v2" / "dumpgraph" / String)
+    let dump_graph = warp::path!("v2" / "dumpgraph" / u64)
         .and(warp::put())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_dump_graph);
-    let drop_graph = warp::path!("v2" / "graphs" / String)
+    let drop_graph = warp::path!("v2" / "graphs" / u64)
         .and(warp::delete())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
@@ -171,7 +171,7 @@ async fn api_compute(
     let err_bad_req = |e: String, c: StatusCode| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineProcessResponse {
-                job_id: "".to_string(),
+                job_id: 0,
                 client_id: "".to_string(),
                 error: true,
                 error_code: 400,
@@ -204,15 +204,10 @@ async fn api_compute(
         ));
     }
     let _client_id = client_id.unwrap();
-    let graph_id = decode_id(&body.graph_id);
-    if let Err(e) = graph_id {
-        return Ok(err_bad_req(e, StatusCode::BAD_REQUEST));
-    }
-    let graph_id = graph_id.unwrap();
     let graph_arc: Arc<RwLock<Graph>>;
     {
         let graphs = graphs.lock().unwrap();
-        let g = graphs.list.get(&graph_id);
+        let g = graphs.list.get(&body.graph_id);
         if g.is_none() {
             return Ok(err_bad_req(
                 format!("Graph with id {} not found.", &body.graph_id),
@@ -224,16 +219,9 @@ async fn api_compute(
 
     // Computation ID is optional:
     let mut prev_comp: Option<Arc<RwLock<dyn Computation + Send + Sync>>> = None;
-    if !body.job_id.is_empty() {
-        let comp_id = decode_id(&body.job_id);
-        if let Err(e) = comp_id {
-            return Ok(err_bad_req(
-                format!("Could not decode job id {}: {}.", &body.job_id, e),
-                StatusCode::BAD_REQUEST,
-            ));
-        }
+    if body.job_id != 0 {
         let comps = computations.lock().unwrap();
-        let comp = comps.list.get(&comp_id.unwrap());
+        let comp = comps.list.get(&body.job_id);
         if comp.is_none() {
             return Ok(err_bad_req(
                 format!("Could not find previous job id {}.", &body.job_id),
@@ -246,7 +234,7 @@ async fn api_compute(
     {
         // Check graph:
         let graph = graph_arc.read().unwrap();
-        let r = check_graph(graph.deref(), graph_id, true);
+        let r = check_graph(graph.deref(), body.graph_id, true);
         if let Err(e) = r {
             return Ok(err_bad_req(e, StatusCode::BAD_REQUEST));
         }
@@ -387,7 +375,7 @@ async fn api_compute(
         comp_id = comps.register(generic_comp_arc.clone());
     }
     let response = GraphAnalyticsEngineProcessResponse {
-        job_id: encode_id(comp_id),
+        job_id: comp_id,
         client_id: body.client_id,
         error: false,
         error_code: 0,
@@ -409,7 +397,7 @@ async fn api_write_result_back_arangodb(
     let err_bad_req = |e: String, sc: StatusCode| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineStoreResultsResponse {
-                job_id: "".to_string(),
+                job_id: 0,
                 client_id: "".to_string(),
                 error: true,
                 error_code: sc.as_u16() as i32,
@@ -443,22 +431,13 @@ async fn api_write_result_back_arangodb(
     }
     let client_id = client_id.unwrap();
 
-    let job_id = decode_id(&body.job_id);
-    if let Err(e) = job_id {
-        return Ok(err_bad_req(
-            format!("Could not decode jobId {}: {}", body.job_id, e.to_string()),
-            StatusCode::BAD_REQUEST,
-        ));
-    }
-    let job_id = job_id.unwrap();
-
     let result_comp: Arc<RwLock<dyn Computation + Send + Sync>>;
     {
         let comps = computations.lock().unwrap();
-        let compfound = comps.list.get(&job_id);
+        let compfound = comps.list.get(&body.job_id);
         if compfound.is_none() {
             return Ok(err_bad_req(
-                format!("Job {} not found.", job_id),
+                format!("Job {} not found.", body.job_id),
                 StatusCode::NOT_FOUND,
             ));
         }
@@ -476,7 +455,7 @@ async fn api_write_result_back_arangodb(
         body.database = "_system".to_string();
     }
     if body.target_collection.is_empty() {
-        body.target_collection = encode_id(job_id);
+        body.target_collection = "resultCollection".to_string();
     }
 
     // Now create a job object:
@@ -525,7 +504,7 @@ async fn api_write_result_back_arangodb(
     });
 
     let response = GraphAnalyticsEngineStoreResultsResponse {
-        job_id: encode_id(comp_id),
+        job_id: comp_id,
         client_id: encode_id(client_id),
         error: false,
         error_code: 0,
@@ -547,9 +526,9 @@ async fn api_get_arangodb_graph_aql(
     let err_bad_req = |e: String| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineLoadDataResponse {
-                job_id: "".to_string(),
+                job_id: 0,
                 client_id: "".to_string(),
-                graph_id: "".to_string(),
+                graph_id: 0,
                 error: true,
                 error_code: 400,
                 error_message: e,
@@ -578,22 +557,13 @@ async fn api_get_arangodb_graph_aql(
         )));
     }
     let _client_id = client_id.unwrap();
-    let job_id = decode_id(&body.job_id);
-    if let Err(e) = job_id {
-        return Ok(err_bad_req(format!(
-            "Could not decode jobId {}: {}",
-            body.job_id,
-            e.to_string()
-        )));
-    }
-    let job_id = job_id.unwrap();
 
     // TO BE IMPLEMENTED
 
     let response = GraphAnalyticsEngineLoadDataResponse {
-        job_id: format!("{:08x}", job_id),
+        job_id: 0,
         client_id: body.client_id,
-        graph_id: "bla".to_string(),
+        graph_id: 0,
         error: true,
         error_code: 1,
         error_message: "NOT_YET_IMPLEMENTED".to_string(),
@@ -618,15 +588,15 @@ fn id_to_type(id: u32) -> String {
 
 /// This function gets progress of a computation.
 async fn api_get_job(
-    job_id: String,
+    job_id: u64,
     _user: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     let not_found_err = |j: String| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineJob {
-                job_id: j.clone(),
-                graph_id: "".into(),
+                job_id: 0,
+                graph_id: 0,
                 total: 0,
                 progress: 0,
                 source_job: "".into(),
@@ -639,17 +609,9 @@ async fn api_get_job(
             StatusCode::NOT_FOUND,
         )
     };
-    let comp_id = decode_id(&job_id);
-    if let Err(e) = comp_id {
-        return Ok(not_found_err(format!(
-            "Could not decode jobId {}: {}",
-            job_id, e
-        )));
-    }
-    let comp_id = comp_id.unwrap();
 
     let comps = computations.lock().unwrap();
-    let comp_arc = comps.list.get(&comp_id);
+    let comp_arc = comps.list.get(&job_id);
     match comp_arc {
         None => {
             return Ok(not_found_err(format!("Could not find jobId {}", job_id)));
@@ -663,7 +625,7 @@ async fn api_get_job(
             let (error_code, error_message) = comp.get_error();
             let response = GraphAnalyticsEngineJob {
                 job_id,
-                graph_id: encode_id(graph.graph_id),
+                graph_id: graph.graph_id,
                 total: comp.get_total(),
                 progress: comp.get_progress(),
                 error: error_code != 0,
@@ -682,14 +644,14 @@ async fn api_get_job(
 
 /// This function deletes a job.
 async fn api_drop_job(
-    job_id: String,
+    job_id: u64,
     _user: String,
     computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     let not_found_err = |j: String| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineDeleteJobResponse {
-                job_id: j.clone(),
+                job_id: 0,
                 error: true,
                 error_code: 404,
                 error_message: j,
@@ -698,17 +660,9 @@ async fn api_drop_job(
             StatusCode::NOT_FOUND,
         )
     };
-    let comp_id = decode_id(&job_id);
-    if let Err(e) = comp_id {
-        return Ok(not_found_err(format!(
-            "Could not decode job id {}: {}",
-            job_id, e
-        )));
-    }
-    let comp_id = comp_id.unwrap();
 
     let mut comps = computations.lock().unwrap();
-    let comp_arc = comps.list.get(&comp_id);
+    let comp_arc = comps.list.get(&job_id);
     match comp_arc {
         None => {
             return Ok(not_found_err(format!("Could not find job {}", job_id)));
@@ -718,7 +672,7 @@ async fn api_drop_job(
                 let mut comp = comp_arc.write().unwrap();
                 comp.cancel();
             }
-            comps.list.remove(&comp_id);
+            comps.list.remove(&job_id);
 
             // Write response:
             let response = GraphAnalyticsEngineDeleteJobResponse {
@@ -737,7 +691,7 @@ async fn api_drop_job(
 
 /// This function gets information about a graph:
 async fn api_get_graph(
-    graph_id: String,
+    graph_id: u64,
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -753,14 +707,9 @@ async fn api_get_graph(
             StatusCode::NOT_FOUND,
         )
     };
-    let graph_id_decoded = decode_id(&graph_id);
-    if let Err(e) = graph_id_decoded {
-        return Ok(not_found_err(e));
-    }
-    let graph_id_decoded = graph_id_decoded.unwrap();
 
     let graphs = graphs.lock().unwrap();
-    let graph_arc = graphs.list.get(&graph_id_decoded);
+    let graph_arc = graphs.list.get(&graph_id);
     if graph_arc.is_none() {
         return Ok(not_found_err(format!("Graph {} not found!", graph_id)));
     }
@@ -773,7 +722,7 @@ async fn api_get_graph(
         error_code: 0,
         error_message: "".to_string(),
         graph: Some(GraphAnalyticsEngineGraph {
-            graph_id: encode_id(graph_id_decoded),
+            graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
         }),
@@ -786,7 +735,7 @@ async fn api_get_graph(
 
 /// This function dumps a graph to stdout:
 async fn api_dump_graph(
-    graph_id: String,
+    graph_id: u64,
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -802,16 +751,11 @@ async fn api_dump_graph(
             StatusCode::NOT_FOUND,
         )
     };
-    let graph_id_decoded = decode_id(&graph_id);
-    if let Err(e) = graph_id_decoded {
-        return Ok(not_found_err(e));
-    }
-    let graph_id_decoded = graph_id_decoded.unwrap();
 
     let graph_arc;
     {
         let graphs = graphs.lock().unwrap();
-        let graph_arc_opt = graphs.list.get(&graph_id_decoded);
+        let graph_arc_opt = graphs.list.get(&graph_id);
         if graph_arc_opt.is_none() {
             return Ok(not_found_err(format!("Graph {} not found!", graph_id)));
         }
@@ -826,7 +770,7 @@ async fn api_dump_graph(
         error_code: 0,
         error_message: "".to_string(),
         graph: Some(GraphAnalyticsEngineGraph {
-            graph_id: encode_id(graph_id_decoded),
+            graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
         }),
@@ -846,7 +790,7 @@ async fn api_list_graphs(_user: String, graphs: Arc<Mutex<Graphs>>) -> Result<Ve
 
         // Write response:
         let g = GraphAnalyticsEngineGraph {
-            graph_id: encode_id(graph.graph_id),
+            graph_id: graph.graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
         };
@@ -869,8 +813,8 @@ async fn api_list_jobs(
         // Write response:
         let (error_code, error_message) = comp.get_error();
         let j = GraphAnalyticsEngineJob {
-            job_id: encode_id(*job_id),
-            graph_id: encode_id(graph.graph_id),
+            job_id: *job_id,
+            graph_id: graph.graph_id,
             total: 1,
             progress: if comp.is_ready() { 1 } else { 0 },
             error: error_code != 0,
@@ -886,7 +830,7 @@ async fn api_list_jobs(
 
 /// This function drops a graph:
 async fn api_drop_graph(
-    graph_id: String,
+    graph_id: u64,
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -902,26 +846,21 @@ async fn api_drop_graph(
             StatusCode::NOT_FOUND,
         )
     };
-    let graph_id_decoded = decode_id(&graph_id);
-    if let Err(e) = graph_id_decoded {
-        return Ok(not_found_err(e));
-    }
-    let graph_id_decoded = graph_id_decoded.unwrap();
 
     let mut graphs = graphs.lock().unwrap();
-    let graph_arc = graphs.list.get(&graph_id_decoded);
+    let graph_arc = graphs.list.get(&graph_id);
     if graph_arc.is_none() {
         return Ok(not_found_err(format!("Graph {} not found!", graph_id)));
     }
 
     // The following will automatically free graph if no longer used by
     // a computation:
-    graphs.list.remove(&graph_id_decoded);
+    graphs.list.remove(&graph_id);
     info!("Have dropped graph {}!", graph_id);
 
     // Write response:
     let response = GraphAnalyticsEngineDeleteGraphResponse {
-        graph_id: encode_id(graph_id_decoded),
+        graph_id,
         error: false,
         error_code: 0,
         error_message: "".to_string(),
@@ -943,9 +882,9 @@ async fn api_get_arangodb_graph(
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         let response = GraphAnalyticsEngineLoadDataResponse {
-            job_id: "".to_string(),
+            job_id: 0,
             client_id: "".to_string(),
-            graph_id: "".to_string(),
+            graph_id: 0,
             error: true,
             error_code: 400,
             error_message: format!("Could not parse JSON body: {}", e.to_string()),
@@ -1016,9 +955,9 @@ async fn api_get_arangodb_graph(
 
     // Write response:
     let response = GraphAnalyticsEngineLoadDataResponse {
-        job_id: encode_id(comp_id),
+        job_id: comp_id,
         client_id,
-        graph_id: encode_id(graph_id),
+        graph_id,
         error: false,
         error_code: 0,
         error_message: "".to_string(),

@@ -97,18 +97,19 @@ pub struct Graph {
 
 pub struct Graphs {
     pub list: HashMap<u64, Arc<RwLock<Graph>>>,
+    next_id: u64,
 }
 
 impl Graphs {
-    pub fn register(&mut self, graph: Arc<RwLock<Graph>>) -> u64 {
-        let mut rng = rand::thread_rng();
-        let mut graph_id: u64;
-        loop {
-            graph_id = rng.gen::<u64>();
-            if !self.list.contains_key(&graph_id) {
-                break;
-            }
+    pub fn new() -> Graphs {
+        Graphs {
+            list: HashMap::new(),
+            next_id: 1,
         }
+    }
+    pub fn register(&mut self, graph: Arc<RwLock<Graph>>) -> u64 {
+        let graph_id = self.next_id;
+        self.next_id += 1;
         {
             let mut guard = graph.write().unwrap();
             guard.graph_id = graph_id;
