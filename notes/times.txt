@@ -1,0 +1,38 @@
+3.10 vertices import:    14.807
+3.10 edges import:       1m7.749s
+
+3.10 Pregel parall. 4:    
+  "gss": 40,
+  "totalRuntime": 190.020763677,
+  "startupTime": 50.125609146,
+  "computationTime": 87.009138883,
+  "storageTime": 52.886014711,
+
+3.10 Pregel parall: 1:
+  "gss": 41,
+  "totalRuntime": 598.395521716,
+  "startupTime": 157.73236296,
+  "computationTime": 242.821864729,
+  "storageTime": 197.841293358,
+
+3.11 vertices import:    13.928
+3.11 edges import:       1m3.743s
+
+3.11 Pregel parall. 4:    
+  "storageTime": 55.249096008,
+  "totalRuntime": 196.770497113,
+  "startupTime": 51.26015046,
+  "computationTime": 90.260299008
+  "gss": 40
+
+3.11 Pregel parall: 1:
+  "gss": 41,
+  "storageTime": 173.246785835,
+  "totalRuntime": 571.576605233,
+  "startupTime": 157.741947377,
+  "computationTime": 240.586641898
+
+
+
+
+

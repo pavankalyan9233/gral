@@ -1,0 +1,10 @@
+r = arango.POST_RAW("/_api/dump/start?dbserver=DBServer0003",{batchSize:10000, prefetchCount:10, parallelism:2, shards:["s10050", "s10048"]})
+id = r.headers["x-arango-dump-id"]
+r = arango.POST_RAW(`/_api/dump/next/${id}?dbserver=DBServer0003&batchId=0`,"")
+r = arango.POST_RAW(`/_api/dump/next/${id}?dbserver=DBServer0003&batchId=1&lastBatch=0`,"")
+...
+r = arango.DELETE_RAW(`/_api/dump/${id}?dbserver=DBServer0003`)
+
+/_api/replication/clusterInventory
+/_admin/cluster/shardDistribution
+
