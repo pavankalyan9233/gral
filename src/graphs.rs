@@ -368,6 +368,7 @@ impl Graph {
 
     pub fn dump(&self) {
         let nr = self.number_of_vertices();
+        println!("Vertex columns: {:?}", self.vertex_column_names);
         println!("Vertices ({}):", nr);
         for i in 0..nr {
             let key = std::str::from_utf8(&self.index_to_key[i as usize][..]).unwrap();
