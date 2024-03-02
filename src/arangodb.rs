@@ -9,7 +9,7 @@ use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
@@ -409,6 +409,14 @@ struct DumpStartBody {
     shards: Vec<String>,
 }
 
+fn collection_name_from_id(id: &str) -> String {
+    let pos = id.find("/");
+    match pos {
+        None => "".to_string(),
+        Some(p) => (&id[0..p]).to_string(),
+    }
+}
+
 pub async fn fetch_graph_from_arangodb(
     user: String,
     req: GraphAnalyticsEngineLoadDataRequest,
@@ -452,25 +460,9 @@ pub async fn fetch_graph_from_arangodb(
 
     // Compute which shard we must get from which dbserver, we do vertices
     // and edges right away to be able to error out early:
-    let vertex_coll_list = req
-        .vertex_collections
-        .iter()
-        .map(|ci| -> String { ci.clone() })
-        .collect();
+    let vertex_coll_list = req.vertex_collections.clone();
     let vertex_map = compute_shard_map(&shard_dist, &vertex_coll_list)?;
-    let vertex_coll_field_map: Arc<RwLock<HashMap<String, Vec<String>>>> =
-        Arc::new(RwLock::new(HashMap::new()));
-    {
-        let mut guard = vertex_coll_field_map.write().unwrap();
-        for vc in req.vertex_collections.iter() {
-            guard.insert(vc.clone(), vc.fields.clone());
-        }
-    }
-    let edge_coll_list = req
-        .edge_collections
-        .iter()
-        .map(|ci| -> String { ci.clone() })
-        .collect();
+    let edge_coll_list = req.edge_collections.clone();
     let edge_map = compute_shard_map(&shard_dist, &edge_coll_list)?;
 
     info!(
@@ -491,9 +483,8 @@ pub async fn fetch_graph_from_arangodb(
             senders.push(sender);
             let graph_clone = graph_arc.clone();
             let prog_reported_clone = prog_reported.clone();
-            let vertex_coll_field_map_clone = vertex_coll_field_map.clone();
+            let fields = req.vertex_attributes.clone();
             let consumer = std::thread::spawn(move || -> Result<(), String> {
-                let vcf_map = vertex_coll_field_map_clone.read().unwrap();
                 let begin = std::time::SystemTime::now();
                 while let Ok(resp) = receiver.recv() {
                     let body = std::str::from_utf8(resp.as_ref())
@@ -505,11 +496,8 @@ pub async fn fetch_graph_from_arangodb(
                     );
                     let mut vertex_keys: Vec<Vec<u8>> = vec![];
                     vertex_keys.reserve(400000);
-                    let mut vertex_json: Vec<Value> = vec![];
-                    let mut json_initialized = false;
-                    let mut fields: Vec<String> = vec![];
+                    let mut vertex_json: Vec<Vec<Value>> = vec![];
                     for line in body.lines() {
-                        let mut collname: String = "".to_string();
                         let v: Value = match serde_json::from_str(line) {
                             Err(err) => {
                                 return Err(format!(
@@ -520,33 +508,13 @@ pub async fn fetch_graph_from_arangodb(
                             Ok(val) => val,
                         };
                         let id = &v["_id"];
+                        let idstr: &String;
                         match id {
                             Value::String(i) => {
                                 let mut buf = vec![];
                                 buf.extend_from_slice((&i[..]).as_bytes());
                                 vertex_keys.push(buf);
-                                if !json_initialized {
-                                    json_initialized = true;
-                                    let pos = i.find("/");
-                                    match pos {
-                                        None => {
-                                            fields = vec![];
-                                        }
-                                        Some(p) => {
-                                            collname = (&i[0..p]).to_string();
-                                            let flds = vcf_map.get(&collname);
-                                            match flds {
-                                                None => {
-                                                    fields = vec![];
-                                                }
-                                                Some(v) => {
-                                                    fields = v.clone();
-                                                    vertex_json.reserve(400000);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                idstr = i;
                             }
                             _ => {
                                 return Err(format!(
@@ -560,23 +528,19 @@ pub async fn fetch_graph_from_arangodb(
                         // to vertex_json:
                         let get_value = |v: &Value, field: &str| -> Value {
                             if field == "@collection_name" {
-                                Value::String(collname.clone())
+                                Value::String(collection_name_from_id(idstr))
                             } else {
                                 v[field].clone()
                             }
                         };
 
-                        if !fields.is_empty() {
-                            if fields.len() == 1 {
-                                vertex_json.push(get_value(&v, &fields[0]));
-                            } else {
-                                let mut j = json!({});
-                                for f in fields.iter() {
-                                    j[&f] = v[&f].clone();
-                                }
-                                vertex_json.push(j);
-                            }
+                        let mut cols: Vec<Value> = Vec::with_capacity(fields.len());
+                        for i in 0..fields.len() {
+                            let f = &fields[i];
+                            let j = get_value(&v, f);
+                            cols.push(j);
                         }
+                        vertex_json.push(cols);
                     }
                     let nr_vertices: u64;
                     {
@@ -586,15 +550,13 @@ pub async fn fetch_graph_from_arangodb(
                         for i in 0..vertex_keys.len() {
                             let k = &vertex_keys[i];
                             let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
+                            let mut cols: Vec<Value> = vec![];
+                            std::mem::swap(&mut cols, &mut vertex_json[i]);
                             graph.insert_vertex(
                                 i as u32,
                                 hash,
                                 k.clone(),
-                                if vertex_json.is_empty() {
-                                    None
-                                } else {
-                                    Some(vertex_json[i].clone())
-                                },
+                                cols,
                                 &mut exceptional,
                                 &mut exceptional_keys,
                             );

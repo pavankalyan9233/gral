@@ -3,7 +3,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use log::info;
 use metrics::increment_counter;
 use rand::Rng;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -137,7 +137,7 @@ impl Graph {
         col_names: Vec<String>,
     ) -> Arc<RwLock<Graph>> {
         increment_counter!("gral_mycounter_total");
-        let mut g = Graph {
+        Arc::new(RwLock::new(Graph {
             graph_id: id,
             index_to_hash: vec![],
             hash_to_index: HashMap::new(),
@@ -157,8 +157,7 @@ impl Graph {
             edges_sealed: false,
             edges_indexed_from: false,
             edges_indexed_to: false,
-        };
-        Arc::new(RwLock::new(g))
+        }))
     }
 
     pub fn insert_vertex(
@@ -166,7 +165,7 @@ impl Graph {
         i: u32,
         hash: VertexHash,
         key: Vec<u8>, // cannot be empty
-        json: Option<Value>,
+        mut columns: Vec<Value>,
         exceptional: &mut Vec<(u32, VertexHash)>,
         exceptional_keys: &mut Vec<Vec<u8>>,
     ) {
@@ -197,34 +196,11 @@ impl Graph {
         if self.store_keys {
             self.index_to_key.push(key.clone());
         }
-        match json {
-            None => {
-                // We only add things here lazily as soon as some non-empty
-                // data has been detected to save memory:
-                if !self.vertex_json.is_empty() {
-                    for i in 0..self.vertex_nr_cols {
-                        self.vertex_json[i].push(json!(null));
-                    }
-                }
-            }
-            Some(j) => {
-                // Now we have to pay for our laziness:
-                if self.vertex_json[0].is_empty() {
-                    for j in 0..self.vertex_nr_cols {
-                        for _i in 0..index.to_u64() {
-                            self.vertex_json[j].push(json!(null));
-                        }
-                    }
-                }
-                // Insert data:
-                for i in 0..self.vertex_nr_cols {
-                    let jj = j.get(self.vertex_column_names[i]);
-                    match jj {
-                        None => self.vertex_json[i].push(json!(null)),
-                        Some(jjj) => self.vertex_json[i].push(jjj.clone()),
-                    }
-                }
-            }
+        assert_eq!(self.vertex_nr_cols, columns.len());
+        for j in 0..self.vertex_nr_cols {
+            let mut v: Value = Value::Null;
+            std::mem::swap(&mut v, &mut columns[j]);
+            self.vertex_json[j].push(v);
         }
     }
 
@@ -379,7 +355,7 @@ impl Graph {
     pub fn add_vertex_nodata(&mut self, key: &[u8]) {
         let key = key.to_vec();
         let hash = VertexHash::new(xxh3_64_with_seed(&key, 0xdeadbeefdeadbeef));
-        self.insert_vertex(0, hash, key, None, &mut vec![], &mut vec![]);
+        self.insert_vertex(0, hash, key, vec![], &mut vec![], &mut vec![]);
     }
 
     pub fn add_edge_nodata(&mut self, from: &[u8], to: &[u8]) {
