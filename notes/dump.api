@@ -1,0 +1,16 @@
+POST /_api/dump/start?dbserver=PRMR-4710780b-fb89-41d5-80bd-1a653796436c
+
+mit body 
+
+{batchSize:10000, prefetchCount:10, parallelism:2, shards:["s10050", "s10048"]}
+
+sagen mit der Liste der shards, die ich abfragen möchte. Und dann sage ich
+
+POST /_api/dump/next/<DUMPID>?dbserver=PRMR-4710780b-fb89-41d5-80bd-1a653796436c&batchId=0
+
+mit leerem body und erhöhe dann immer batchId, wobei ich ab dem 2. Mal
+dann lastBatch= auf den letzten, den ich abgeholt habe, setze.
+
+Am Ende kommt dann irgendwann HTTP 204 und dann muss ich
+
+DELETE /_api/dump/<DUMPID>?dbserver=PRMR-4710780b-fb89-41d5-80bd-1a653796436c
