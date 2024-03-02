@@ -1,0 +1,17 @@
+{
+  "engineId": "bla",
+  "graphName": "",
+  "clientId": "1231313123",
+  "database": "d",
+  "vertexCollections": [
+    {"name":"V", "fields":[]}
+  ],
+  "edgeCollections": [
+    {"name": "E", "fields":[]}
+  ],
+  "parallelism": 9,
+  "batchSize": 4000000,
+  "customFields": {
+      "abc": "12"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "clientId": "1231313123",
+  "database": "_system",
+  "vertexCollections": [
+    {"name":"V", "fields":[]}
+  ],
+  "edgeCollections": [
+    {"name": "E", "fields":[]}
+  ],
+  "parallelism": 9,
+  "batchSize": 4000000
+}
