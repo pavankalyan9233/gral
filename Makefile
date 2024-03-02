@@ -1,4 +1,4 @@
-all: release
+all: debug
 
 release: Makefile
 	cargo build --release

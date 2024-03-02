@@ -455,7 +455,7 @@ pub async fn fetch_graph_from_arangodb(
     let vertex_coll_list = req
         .vertex_collections
         .iter()
-        .map(|ci| -> String { ci.name.clone() })
+        .map(|ci| -> String { ci.clone() })
         .collect();
     let vertex_map = compute_shard_map(&shard_dist, &vertex_coll_list)?;
     let vertex_coll_field_map: Arc<RwLock<HashMap<String, Vec<String>>>> =
@@ -463,13 +463,13 @@ pub async fn fetch_graph_from_arangodb(
     {
         let mut guard = vertex_coll_field_map.write().unwrap();
         for vc in req.vertex_collections.iter() {
-            guard.insert(vc.name.clone(), vc.fields.clone());
+            guard.insert(vc.clone(), vc.fields.clone());
         }
     }
     let edge_coll_list = req
         .edge_collections
         .iter()
-        .map(|ci| -> String { ci.name.clone() })
+        .map(|ci| -> String { ci.clone() })
         .collect();
     let edge_map = compute_shard_map(&shard_dist, &edge_coll_list)?;
 
@@ -590,7 +590,6 @@ pub async fn fetch_graph_from_arangodb(
                                 i as u32,
                                 hash,
                                 k.clone(),
-                                vec![],
                                 if vertex_json.is_empty() {
                                     None
                                 } else {
@@ -714,7 +713,7 @@ pub async fn fetch_graph_from_arangodb(
                         // object:
                         let mut graph = graph_clone.write().unwrap();
                         for e in edges {
-                            graph.insert_edge(e.0, e.1, vec![]);
+                            graph.insert_edge(e.0, e.1);
                         }
                         nr_edges = graph.number_of_edges();
                     }

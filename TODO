@@ -1,5 +1,7 @@
  + Test pagerank
- - Remember loaded fields in graph
+ - Remember loaded fields in graph, change setup of column store
+ - Graph ids integers (API change)
+ - job ids integers (API change)
  - why does it take 3 seconds to load small graph?
  - Write results pagerank
  - Implement irank

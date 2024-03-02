@@ -158,10 +158,18 @@ message GraphAnalyticsEngineLoadDataRequest {
     // Optional list of vertex collections, must be given, if graph_name
     // is not given, or if data other than the graph topology is to be
     // loaded.
-    repeated CollectionDescription vertex_collections = 5;
+    repeated string vertex_collections = 5;
     // List of edge collections, must be given, if graph_name
     // is not given
-    repeated CollectionDescription edge_collections = 6;
+    repeated string vertex_attributes = 6;
+    // List of attributes to load into the column store for vertices
+    repeated string vertex_attribute_types = 7;
+    // Types for the vertex attributes, values allowed:
+    //  - "string"
+    //  - "float"
+    //  - "integer"
+    //  - "unsigned"
+    repeated string edge_collections = 8;
     // Optional numeric value for thread parallelism. This is currently used
     // in 4 places. One is the number of async jobs launched to get data,
     // another is the number of threads to be launched to synchronously
@@ -169,18 +177,11 @@ message GraphAnalyticsEngineLoadDataRequest {
     // on each dbserver to produce data. And the fourth is the length of
     // the prefetch queue on dbservers. Potentially, we want to allow
     // more arguments to be able to fine tune this better.
-    uint32 parallelism = 7;
+    uint32 parallelism = 9;
     // Optional batch size
-    uint64 batch_size = 8;
+    uint64 batch_size = 10;
     // Map of engine-type specific custom fields (dynamic for this data-load operation)
-    map<string, string> custom_fields = 10;
-}
-
-message CollectionDescription {
-    // Name of collection
-    string name = 1;
-    // List of fields to import apart from default
-    repeated string fields = 2;
+    map<string, string> custom_fields = 11;
 }
 
 // Generic error
@@ -271,10 +272,10 @@ message GraphAnalyticsEngineStoreResultsRequest {
     // the result data should be written. The list of fields
     // is the attributes into which the result is written.
     // An insert operation with overwritemode "update" is used.
-    map<string, CollectionDescription> vertex_collections = 4;
+    map<string, string> vertex_collections = 4;
     // List of edge collections, in case there are results for
     // edges.
-    map<string, CollectionDescription> edge_collections = 5;
+    map<string, string> edge_collections = 5;
     // Optional numeric value for thread parallelism
     uint32 parallelism = 6;
     // Optional batch size

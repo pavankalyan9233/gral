@@ -64,16 +64,16 @@ impl Computation for ComponentsComputation {
         self.components.is_some()
     }
     fn get_error(&self) -> (i32, String) {
-        return (0, "".to_string());
+        (0, "".to_string())
     }
     fn cancel(&mut self) {
         self.shall_stop = true;
     }
     fn algorithm_id(&self) -> u32 {
-        return self.algorithm;
+        self.algorithm
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
-        return self.graph.clone();
+        self.graph.clone()
     }
     fn get_total(&self) -> u32 {
         1
@@ -116,7 +116,7 @@ impl Computation for LoadComputation {
         0
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
-        return self.graph.clone();
+        self.graph.clone()
     }
     fn get_total(&self) -> u32 {
         self.total
@@ -168,7 +168,7 @@ impl Computation for AggregationComputation {
         3
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
-        return self.graph.clone();
+        self.graph.clone()
     }
     fn get_total(&self) -> u32 {
         self.total
@@ -208,7 +208,7 @@ impl Computation for StoreComputation {
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         let comp = self.comp.read().unwrap();
-        return comp.get_graph();
+        comp.get_graph()
     }
     fn get_total(&self) -> u32 {
         self.total
@@ -249,7 +249,7 @@ impl Computation for PageRankComputation {
         4
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
-        return self.graph.clone();
+        self.graph.clone()
     }
     fn get_total(&self) -> u32 {
         self.total

@@ -43,7 +43,7 @@ pub fn aggregate_over_components(
             let mut map = HashMap::<String, u64>::new();
 
             let extract_string = |pos: usize| -> Option<&str> {
-                let v = &graph.vertex_json[pos];
+                let v = &graph.vertex_json[0][pos];
                 if v.is_string() {
                     return v.as_str();
                 }

@@ -57,24 +57,19 @@ pub struct Graph {
     // Maps indices of vertices to their names, not necessarily used:
     pub index_to_key: Vec<Vec<u8>>,
 
-    // Additional data for vertices. If all data was empty, it is allowed
-    // that both of these are empty! After sealing, the offsets get one
-    // more entry to mark the end of the last one:
-    pub vertex_data: Vec<u8>,
-    pub vertex_data_offsets: Vec<u64>,
-
-    // JSON data for vertices. If all data was empty, it is allowed that
-    // the following vector is empty:
-    pub vertex_json: Vec<Value>,
+    // JSON data for vertices. This is essentially a column store, on
+    // loading a graph, we are given a list of attributes and we store,
+    // for each column, the value of the attribute, in an array. If no
+    // attributes are given, the following vector is empty:
+    pub vertex_nr_cols: usize,
+    pub vertex_json: Vec<Vec<Value>>,
+    // These are the column names:
+    pub vertex_column_names: Vec<String>,
+    // And - potentially - the types: (not yet used)
+    pub vertex_column_types: Vec<String>,
 
     // Edges as from/to tuples:
     pub edges: Vec<Edge>,
-
-    // Additional data for edges. If all data was empty, it is allowed that
-    // both of these are empty! After sealing, the offsets get one more
-    // entry to mark the end of the last one:
-    pub edge_data: Vec<u8>,
-    pub edge_data_offsets: Vec<u64>,
 
     // Maps indices of vertices to offsets in edges by from:
     pub edge_index_by_from: Vec<u64>,
@@ -135,20 +130,24 @@ struct EdgeTemp {
 }
 
 impl Graph {
-    pub fn new(store_keys: bool, _bits_for_hash: u8, id: u64) -> Arc<RwLock<Graph>> {
+    pub fn new(
+        store_keys: bool,
+        _bits_for_hash: u8,
+        id: u64,
+        col_names: Vec<String>,
+    ) -> Arc<RwLock<Graph>> {
         increment_counter!("gral_mycounter_total");
-        Arc::new(RwLock::new(Graph {
+        let mut g = Graph {
             graph_id: id,
             index_to_hash: vec![],
             hash_to_index: HashMap::new(),
             exceptions: HashMap::new(),
             index_to_key: vec![],
-            vertex_data: vec![],
-            vertex_data_offsets: vec![],
-            vertex_json: vec![],
+            vertex_nr_cols: col_names.len(),
+            vertex_json: vec![vec![]; col_names.len()],
+            vertex_column_names: col_names,
+            vertex_column_types: vec![],
             edges: vec![],
-            edge_data: vec![],
-            edge_data_offsets: vec![],
             edges_by_from: vec![],
             edge_index_by_from: vec![],
             edges_by_to: vec![],
@@ -158,15 +157,15 @@ impl Graph {
             edges_sealed: false,
             edges_indexed_from: false,
             edges_indexed_to: false,
-        }))
+        };
+        Arc::new(RwLock::new(g))
     }
 
     pub fn insert_vertex(
         &mut self,
         i: u32,
         hash: VertexHash,
-        key: Vec<u8>,  // cannot be empty
-        data: Vec<u8>, // can be empty
+        key: Vec<u8>, // cannot be empty
         json: Option<Value>,
         exceptional: &mut Vec<(u32, VertexHash)>,
         exceptional_keys: &mut Vec<Vec<u8>>,
@@ -198,41 +197,33 @@ impl Graph {
         if self.store_keys {
             self.index_to_key.push(key.clone());
         }
-        let pos = self.vertex_data.len() as u64;
-        if data.is_empty() {
-            // We only add things here lazily as soon as some non-empty
-            // data has been detected to save memory:
-            if !self.vertex_data_offsets.is_empty() {
-                self.vertex_data_offsets.push(pos);
-            }
-        } else {
-            // Now we have to pay for our laziness:
-            if self.vertex_data_offsets.is_empty() {
-                for _i in 0..index.to_u64() {
-                    self.vertex_data_offsets.push(0);
-                }
-            }
-            // Insert data:
-            self.vertex_data_offsets.push(pos);
-            self.vertex_data.extend_from_slice(&data);
-        }
         match json {
             None => {
                 // We only add things here lazily as soon as some non-empty
                 // data has been detected to save memory:
                 if !self.vertex_json.is_empty() {
-                    self.vertex_json.push(json!(null));
+                    for i in 0..self.vertex_nr_cols {
+                        self.vertex_json[i].push(json!(null));
+                    }
                 }
             }
             Some(j) => {
                 // Now we have to pay for our laziness:
-                if self.vertex_json.is_empty() {
-                    for _i in 0..index.to_u64() {
-                        self.vertex_json.push(json!(null));
+                if self.vertex_json[0].is_empty() {
+                    for j in 0..self.vertex_nr_cols {
+                        for _i in 0..index.to_u64() {
+                            self.vertex_json[j].push(json!(null));
+                        }
                     }
                 }
                 // Insert data:
-                self.vertex_json.push(j);
+                for i in 0..self.vertex_nr_cols {
+                    let jj = j.get(self.vertex_column_names[i]);
+                    match jj {
+                        None => self.vertex_json[i].push(json!(null)),
+                        Some(jjj) => self.vertex_json[i].push(jjj.clone()),
+                    }
+                }
             }
         }
     }
@@ -246,9 +237,6 @@ impl Graph {
     }
 
     pub fn seal_vertices(&mut self) {
-        if !self.vertex_data_offsets.is_empty() {
-            self.vertex_data_offsets.push(self.vertex_data.len() as u64);
-        }
         self.vertices_sealed = true;
         info!(
             "Vertices sealed in graph, number of vertices: {}",
@@ -342,9 +330,6 @@ impl Graph {
 
     pub fn seal_edges(&mut self) {
         self.edges_sealed = true;
-        if !self.edge_data_offsets.is_empty() {
-            self.edge_data_offsets.push(self.edge_data.len() as u64);
-        }
 
         info!(
             "Sealed graph with {} vertices and {} edges.",
@@ -387,31 +372,14 @@ impl Graph {
         }
     }
 
-    pub fn insert_edge(&mut self, from: VertexIndex, to: VertexIndex, data: Vec<u8>) {
+    pub fn insert_edge(&mut self, from: VertexIndex, to: VertexIndex) {
         self.edges.push(Edge { from, to });
-        let offset = self.edge_data.len() as u64;
-        if data.is_empty() {
-            // We use edge_data_offsets lazily, only if there is some
-            // non-empty data!
-            if !self.edge_data_offsets.is_empty() {
-                self.edge_data_offsets.push(offset);
-            }
-        } else {
-            if self.edge_data_offsets.is_empty() {
-                // We have to pay for our laziness now:
-                for _i in 0..(self.edges.len() - 1) {
-                    self.edge_data_offsets.push(0);
-                }
-            }
-            self.edge_data_offsets.push(offset);
-            self.edge_data.extend_from_slice(&data);
-        }
     }
 
     pub fn add_vertex_nodata(&mut self, key: &[u8]) {
         let key = key.to_vec();
         let hash = VertexHash::new(xxh3_64_with_seed(&key, 0xdeadbeefdeadbeef));
-        self.insert_vertex(0, hash, key, vec![], None, &mut vec![], &mut vec![]);
+        self.insert_vertex(0, hash, key, None, &mut vec![], &mut vec![]);
     }
 
     pub fn add_edge_nodata(&mut self, from: &[u8], to: &[u8]) {
@@ -419,7 +387,7 @@ impl Graph {
         assert!(f.is_some());
         let t = self.index_from_vertex_key(to);
         assert!(t.is_some());
-        self.insert_edge(f.unwrap(), t.unwrap(), vec![]);
+        self.insert_edge(f.unwrap(), t.unwrap());
     }
 
     pub fn dump(&self) {
@@ -427,11 +395,12 @@ impl Graph {
         println!("Vertices ({}):", nr);
         for i in 0..nr {
             let key = std::str::from_utf8(&self.index_to_key[i as usize][..]).unwrap();
-            let s = if (i as usize) < self.vertex_json.len() {
-                format!("{i:>10} {:<40} {}", key, self.vertex_json[i as usize])
-            } else {
-                format!("{i:>10} {:<40}", key)
-            };
+            let mut s = format!("{i:>10} {:<40}", key);
+            for j in 0..self.vertex_json.len() {
+                if (i as usize) < self.vertex_json[j].len() {
+                    s += &format!(" {}", self.vertex_json[j][i as usize]);
+                }
+            }
             println!("{}", s);
         }
         let nre = self.number_of_edges();

@@ -964,7 +964,7 @@ async fn api_get_arangodb_graph(
         body.parallelism = 5;
     }
 
-    let graph = Graph::new(true, 64, 0);
+    let graph = Graph::new(true, 64, 0, body.vertex_attributes.clone());
     let graph_clone = graph.clone(); // for background thread
 
     let client_id = body.client_id.clone();
