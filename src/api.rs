@@ -343,6 +343,14 @@ async fn api_compute(
             });
         }
         4 => {
+            {
+                // Make sure we have an edge index:
+                let mut graph = graph_arc.write().unwrap();
+                if !graph.edges_indexed_from {
+                    info!("Indexing edges by from...");
+                    graph.index_edges(true, false);
+                }
+            }
             let comp_arc = Arc::new(RwLock::new(PageRankComputation {
                 graph: graph_arc.clone(),
                 shall_stop: false,

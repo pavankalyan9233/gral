@@ -29,11 +29,11 @@ pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, 
             }
         }
         let sink_contribution = sink_sum / nr as f64;
-        let mut maxdiff: f64 = 1e64;
+        let mut maxdiff: f64 = 0.0;
         for v in 0..nr {
             new_rank[v] += sink_contribution;
             let diff = (rank[v] - new_rank[v]).abs();
-            maxdiff = if diff < maxdiff { diff } else { maxdiff };
+            maxdiff = if diff > maxdiff { diff } else { maxdiff };
             rank[v] = new_rank[v];
             new_rank[v] = 1.0 / nr as f64 * (1.0 - damping_factor);
         }
