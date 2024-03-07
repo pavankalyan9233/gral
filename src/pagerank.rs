@@ -37,6 +37,10 @@ pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, 
             rank[v] = new_rank[v];
             new_rank[v] = 1.0 / nr as f64 * (1.0 - damping_factor);
         }
+        info!(
+            "{:?} Page step {step}, rank maximal difference {maxdiff}",
+            start.elapsed()
+        );
         if maxdiff < 0.0000001 {
             break;
         }
