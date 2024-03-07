@@ -848,9 +848,7 @@ pub async fn write_result_to_arangodb(
         let mut sender_round_robin = 0;
         for i in 0..nr_items {
             if !first {
-                cur_batch
-                    .write_u8(',' as u8)
-                    .expect("Assumed to be able to write");
+                cur_batch.extend_from_slice(b",");
             } else {
                 first = false;
             }
@@ -858,17 +856,17 @@ pub async fn write_result_to_arangodb(
                 .write_u8('{' as u8)
                 .expect("Assumed to be able to write");
             for j in 0..results.len() {
-                if j != 0 {
-                    cur_batch.extend_from_slice(b",\"");
-                } else {
+                let (key, value) = results[j].get_result(i);
+                if j == 0 {
+                    cur_batch.extend_from_slice(b"\"id\":\"");
+                    cur_batch.extend_from_slice(key.as_bytes());
                     cur_batch.extend_from_slice(b"\"");
                 }
+                cur_batch.extend_from_slice(b",");
                 cur_batch.extend_from_slice(attribute_names[j].as_bytes());
-                cur_batch.extend_from_slice(b"\":");
-                cur_batch.extend_from_slice(
-                    &serde_json::to_vec(&results[j].get_result(i))
-                        .expect("Should be serializable!"),
-                );
+                cur_batch.extend_from_slice(b"\":\"");
+                cur_batch.extend_from_slice(value.as_bytes());
+                cur_batch.extend_from_slice(b"\"");
             }
             cur_batch.extend_from_slice(b"}");
             count += 1;
