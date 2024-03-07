@@ -246,7 +246,7 @@ async fn api_compute(
         "wcc" => 1,
         "scc" => 2,
         "aggregate_components" => 3,
-        "page_rank" => 4,
+        "pagerank" => 4,
         _ => 0,
     };
 
@@ -601,7 +601,8 @@ fn id_to_type(id: u32) -> String {
         1 => "wcc",
         2 => "scc",
         3 => "aggregation",
-        4 => "storedata",
+        4 => "pagerank",
+        5 => "storedata",
         _ => "",
     }
     .to_string()
