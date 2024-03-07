@@ -192,6 +192,7 @@ async fn api_compute(
     }
     let body = parsed.unwrap();
 
+    /*
     let client_id = decode_id(&body.client_id);
     if let Err(e) = client_id {
         return Ok(err_bad_req(
@@ -204,6 +205,7 @@ async fn api_compute(
         ));
     }
     let _client_id = client_id.unwrap();
+    */
     let graph_arc: Arc<RwLock<Graph>>;
     {
         let graphs = graphs.lock().unwrap();
