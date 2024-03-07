@@ -431,17 +431,26 @@ async fn api_write_result_back_arangodb(
     }
     let client_id = client_id.unwrap();
 
-    let result_comp: Arc<RwLock<dyn Computation + Send + Sync>>;
+    let mut result_comps: Vec<Arc<RwLock<dyn Computation + Send + Sync>>> = vec![];
     {
         let comps = computations.lock().unwrap();
-        let compfound = comps.list.get(&body.job_id);
-        if compfound.is_none() {
-            return Ok(err_bad_req(
-                format!("Job {} not found.", body.job_id),
-                StatusCode::NOT_FOUND,
-            ));
+        for id in &body.job_ids {
+            let compfound = comps.list.get(&id);
+            if compfound.is_none() {
+                return Ok(err_bad_req(
+                    format!("Job {} not found.", id),
+                    StatusCode::NOT_FOUND,
+                ));
+            }
+            result_comps.push(compfound.unwrap().clone());
         }
-        result_comp = compfound.unwrap().clone();
+    }
+
+    if result_comps.len() != body.attribute_names.len() {
+        return Ok(err_bad_req(
+                format!("Number of computations ({}) must be the same as the number of attribute names ({})", 
+                        result_comps.len(), body.attribute_names.len()),
+                StatusCode::BAD_REQUEST));
     }
 
     // Set a few sensible defaults:
@@ -455,12 +464,12 @@ async fn api_write_result_back_arangodb(
         body.database = "_system".to_string();
     }
     if body.target_collection.is_empty() {
-        body.target_collection = "resultCollection".to_string();
+        body.target_collection = "targetCollection".to_string();
     }
 
     // Now create a job object:
     let comp_arc = Arc::new(RwLock::new(StoreComputation {
-        comp: result_comp.clone(),
+        comp: result_comps.clone(),
         shall_stop: false,
         total: 1, // will eventually be overwritten in background thread
         progress: 0,
@@ -475,6 +484,7 @@ async fn api_write_result_back_arangodb(
 
     // Write to ArangoDB in a background thread:
     let user_clone = user.clone();
+    let attribute_names_clone = body.attribute_names.clone();
     std::thread::spawn(move || {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -485,7 +495,8 @@ async fn api_write_result_back_arangodb(
                     user_clone,
                     body,
                     args,
-                    result_comp.clone(),
+                    result_comps.clone(),
+                    attribute_names_clone,
                     comp_arc.clone(),
                 )
                 .await;

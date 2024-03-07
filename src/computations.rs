@@ -16,7 +16,8 @@ pub trait Computation {
     fn get_graph(&self) -> Arc<RwLock<Graph>>;
     fn algorithm_id(&self) -> u32;
     fn as_any(&self) -> &dyn Any;
-    fn next_result(&mut self) -> Option<String>;
+    fn nr_results(&self) -> u64;
+    fn get_result(&self, which: u64) -> (String, String);
 }
 
 pub struct Computations {
@@ -83,8 +84,14 @@ impl Computation for ComponentsComputation {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn next_result(&mut self) -> Option<String> {
-        None
+    fn nr_results(&self) -> u64 {
+        match self.number {
+            None => 0,
+            Some(n) => n,
+        }
+    }
+    fn get_result(&self, _which: u64) -> (String, String) {
+        ("".to_string(), "".to_string())
     }
 }
 
@@ -122,8 +129,11 @@ impl Computation for LoadComputation {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn next_result(&mut self) -> Option<String> {
-        None
+    fn nr_results(&self) -> u64 {
+        0
+    }
+    fn get_result(&self, _which: u64) -> (String, String) {
+        ("".to_string(), "".to_string())
     }
 }
 
@@ -174,13 +184,25 @@ impl Computation for AggregationComputation {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn next_result(&mut self) -> Option<String> {
-        None
+    fn nr_results(&self) -> u64 {
+        self.result.len() as u64
+    }
+    fn get_result(&self, which: u64) -> (String, String) {
+        let comp = &self.result[which as usize];
+        (
+            comp.key.clone(),
+            format!(
+                r#""representative":"{}","size":{},"aggregation":{}"#,
+                comp.representative,
+                comp.size,
+                serde_json::to_string(&comp.aggregation).unwrap(),
+            ),
+        )
     }
 }
 
 pub struct StoreComputation {
-    pub comp: Arc<RwLock<dyn Computation + Send + Sync>>,
+    pub comp: Vec<Arc<RwLock<dyn Computation + Send + Sync>>>,
     pub shall_stop: bool,
     pub total: u32,
     pub progress: u32,
@@ -202,7 +224,7 @@ impl Computation for StoreComputation {
         4
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
-        let comp = self.comp.read().unwrap();
+        let comp = self.comp[0].read().unwrap();
         comp.get_graph()
     }
     fn get_total(&self) -> u32 {
@@ -214,8 +236,11 @@ impl Computation for StoreComputation {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn next_result(&mut self) -> Option<String> {
-        None
+    fn nr_results(&self) -> u64 {
+        0
+    }
+    fn get_result(&self, _which: u64) -> (String, String) {
+        ("".to_string(), "".to_string())
     }
 }
 
@@ -255,24 +280,17 @@ impl Computation for PageRankComputation {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn next_result(&mut self) -> Option<String> {
-        if self.progress < self.total {
-            None
-        } else if self.result_position >= self.rank.len() {
-            None
-        } else {
-            let cur = self.result_position;
-            self.result_position += 1;
+    fn nr_results(&self) -> u64 {
+        self.rank.len() as u64
+    }
+    fn get_result(&self, which: u64) -> (String, String) {
+        let key;
+        {
             let guard = self.graph.read().unwrap();
-            let key = std::str::from_utf8(&guard.index_to_key[cur][..]);
-            if let Ok(key) = key {
-                Some(format!(
-                    r#"{{"_key": "{}", "rank": {}}}"#,
-                    key, self.rank[cur]
-                ))
-            } else {
-                None
-            }
+            key = std::str::from_utf8(&guard.index_to_key[which as usize])
+                .unwrap()
+                .to_string();
         }
+        (key, format!("{:.8}", self.rank[which as usize]))
     }
 }

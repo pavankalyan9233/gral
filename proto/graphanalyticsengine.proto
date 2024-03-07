@@ -263,19 +263,18 @@ message GraphAnalyticsEngineProcessResponse {
 message GraphAnalyticsEngineStoreResultsRequest {
     // Client ID to make request idempotent
     string client_id = 1;
-    // ID of the job
-    uint64 job_id = 2;
+    // ID of the jobs of which results are written
+    repeated uint64 job_ids = 2;
+    // attribute names to write results to
+    repeated string attribute_names = 3;
     // Database in ArangoDB to use:
-    string database = 3;
+    string database = 4;
     // The following map maps collection names as found in the
     // _id entries of vertices to the collections into which
     // the result data should be written. The list of fields
     // is the attributes into which the result is written.
     // An insert operation with overwritemode "update" is used.
-    map<string, string> vertex_collections = 4;
-    // List of edge collections, in case there are results for
-    // edges.
-    map<string, string> edge_collections = 5;
+    map<string, string> vertex_collections = 5;
     // Optional numeric value for thread parallelism
     uint32 parallelism = 6;
     // Optional batch size

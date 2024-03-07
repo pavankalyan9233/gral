@@ -3,7 +3,7 @@ use crate::api::graphanalyticsengine::{
 };
 use crate::args::GralArgs;
 use crate::auth::create_jwt_token;
-use crate::computations::{AggregationComputation, Computation, LoadComputation, StoreComputation};
+use crate::computations::{Computation, LoadComputation, StoreComputation};
 use crate::graphs::{Graph, VertexHash, VertexIndex};
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
@@ -11,7 +11,7 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard};
 use std::thread::JoinHandle;
 use std::time::SystemTime;
 use tokio::task::JoinSet;
@@ -665,7 +665,11 @@ pub async fn fetch_graph_from_arangodb(
                             if from_opt.is_some() && to_opt.is_some() {
                                 edges.push((from_opt.unwrap(), to_opt.unwrap()));
                             } else {
-                                eprintln!("Did not find _from or _to key in vertices!");
+                                eprintln!(
+                                    "Did not find _from value {} or _to value {} in vertex keys!",
+                                    std::str::from_utf8(from_key).unwrap(),
+                                    std::str::from_utf8(to_key).unwrap()
+                                );
                             }
                         }
                     }
@@ -758,9 +762,11 @@ pub async fn write_result_to_arangodb(
     user: String,
     req: GraphAnalyticsEngineStoreResultsRequest,
     args: Arc<Mutex<GralArgs>>,
-    result_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>,
+    result_comp_arcs: Vec<Arc<RwLock<dyn Computation + Send + Sync>>>,
+    attribute_names: Vec<String>,
     comp_arc: Arc<RwLock<StoreComputation>>,
 ) -> Result<(), String> {
+    assert_eq!(result_comp_arcs.len(), attribute_names.len());
     let endpoints: Vec<String>;
     let jwt_token: String;
     {
@@ -775,21 +781,12 @@ pub async fn write_result_to_arangodb(
     if endpoints.is_empty() {
         return Err("no endpoints given".to_string());
     }
+    if result_comp_arcs.is_empty() {
+        return Err("no result computations given".to_string());
+    }
     let begin = std::time::SystemTime::now();
 
     let use_tls = endpoints[0].starts_with("https://");
-
-    // For now, we only do the case of an aggregation result and do the
-    // one result per vertex case later. Furthermore, we only use one
-    // thread to produce the data and then multiple async workers to
-    // send them off:
-    {
-        let result = result_comp_arc.read().unwrap();
-        let downcast = result.as_any().downcast_ref::<AggregationComputation>();
-        if downcast.is_none() {
-            return Err("Can only write back AggregationComputation for now!".to_string());
-        }
-    }
 
     info!(
         "{:?} Writing result back to ArangoDB...",
@@ -820,14 +817,25 @@ pub async fn write_result_to_arangodb(
 
     // Spawn producer thread which partitions the data:
     let producer = std::thread::spawn(move || -> Result<(), String> {
-        let result = result_comp_arc.read().unwrap();
-        let ac = result
-            .as_any()
-            .downcast_ref::<AggregationComputation>()
-            .unwrap();
+        // Lock all computations for reading:
+        let nr_results = result_comp_arcs.len();
+        let mut results: Vec<RwLockReadGuard<'_, dyn Computation + Send + Sync>> =
+            Vec::with_capacity(nr_results);
+        for i in 0..nr_results {
+            results.push(result_comp_arcs[i].read().unwrap());
+        }
+        // Now ask all computations for their number of items and look for
+        // the minimum:
+        let mut nr_items = results[0].nr_results();
+        for i in 1..nr_results {
+            let items = results[i].nr_results();
+            if items < nr_items {
+                nr_items = items;
+            }
+        }
+
         let new_batch = |l: usize| -> Vec<u8> {
-            let mut res = vec![];
-            res.reserve(200 * l); // heuristics
+            let mut res = Vec::with_capacity(200 * l); // heuristics
             res.write_u8('[' as u8)
                 .expect("Assumed to be able to write");
             res
@@ -838,7 +846,7 @@ pub async fn write_result_to_arangodb(
         let mut count: u64 = 0;
         let mut batch_count: u64 = 0;
         let mut sender_round_robin = 0;
-        for c in ac.result.iter() {
+        for i in 0..nr_items {
             if !first {
                 cur_batch
                     .write_u8(',' as u8)
@@ -846,8 +854,23 @@ pub async fn write_result_to_arangodb(
             } else {
                 first = false;
             }
-            let s = serde_json::to_string(c).expect("Should be serializable!");
-            cur_batch.extend_from_slice(s.as_bytes());
+            cur_batch
+                .write_u8('{' as u8)
+                .expect("Assumed to be able to write");
+            for j in 0..results.len() {
+                if j != 0 {
+                    cur_batch.extend_from_slice(b",\"");
+                } else {
+                    cur_batch.extend_from_slice(b"\"");
+                }
+                cur_batch.extend_from_slice(attribute_names[j].as_bytes());
+                cur_batch.extend_from_slice(b"\":");
+                cur_batch.extend_from_slice(
+                    &serde_json::to_vec(&results[j].get_result(i))
+                        .expect("Should be serializable!"),
+                );
+            }
+            cur_batch.extend_from_slice(b"}");
             count += 1;
             if count >= req.batch_size {
                 cur_batch
@@ -873,7 +896,7 @@ pub async fn write_result_to_arangodb(
                         "{:?} Have written {} components out of {}.",
                         std::time::SystemTime::now().duration_since(begin).unwrap(),
                         batch_count * req.batch_size,
-                        ac.result.len()
+                        nr_items
                     );
                 }
             }
