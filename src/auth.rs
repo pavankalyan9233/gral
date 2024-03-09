@@ -70,7 +70,6 @@ async fn authorize_via_service(token: String, url: String) -> WebResult<String> 
                 token: token.to_string(),
             });
             let response = client.validate(request).await;
-            info!("Response from service: {:?}", response);
             match response {
                 Err(e) => Err(warp::reject::custom(Unauthorized {
                     msg: format!("Cannot talk to authentication service: {}", e),
@@ -79,7 +78,6 @@ async fn authorize_via_service(token: String, url: String) -> WebResult<String> 
                     let r = resp.get_ref();
                     if r.is_valid {
                         if let Some(det) = &r.details {
-                            info!("Lifetime: {:?}", det.lifetime);
                             Ok(det.user.clone())
                         } else {
                             // Authenticate with empty user:
@@ -144,7 +142,6 @@ async fn authorize(
         auth_service = args.auth_service.clone();
     }
     if !auth_service.is_empty() {
-        info!("Using service...");
         // Use service to authenticate JWT token:
         let url = "http://".to_string() + &auth_service;
         return authorize_via_service(token, url).await;
