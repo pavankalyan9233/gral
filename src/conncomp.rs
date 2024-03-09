@@ -240,11 +240,11 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
         start.elapsed(),
         count
     );
-    return (
+    (
         count,
         rep,
         vec![], /* FIXME: Provide component list later */
-    );
+    )
 }
 
 #[cfg(test)]
@@ -256,7 +256,7 @@ mod tests {
     fn vertex_nodata(g: &mut Graph, key: &[u8]) {
         let key = key.to_vec();
         let hash = VertexHash::new(xxh3_64_with_seed(&key, 0xdeadbeefdeadbeef));
-        g.insert_vertex(0, hash, key, vec![], None, &mut vec![], &mut vec![]);
+        g.insert_vertex(0, hash, key, vec![], &mut vec![], &mut vec![]);
     }
 
     fn edge_nodata(g: &mut Graph, from: &[u8], to: &[u8]) {
@@ -264,12 +264,12 @@ mod tests {
         assert!(f.is_some());
         let t = g.index_from_vertex_key(to);
         assert!(t.is_some());
-        g.insert_edge(f.unwrap(), t.unwrap(), vec![]);
+        g.insert_edge(f.unwrap(), t.unwrap());
     }
 
     #[test]
     fn test_wcc_simple() {
-        let g_arc = Graph::new(true, 64, 1);
+        let g_arc = Graph::new(true, 64, 1, vec![]);
         let mut g = g_arc.write().unwrap();
         vertex_nodata(&mut g, b"V/A");
         vertex_nodata(&mut g, b"V/B");
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_scc_simple() {
-        let g_arc = Graph::new(true, 64, 1);
+        let g_arc = Graph::new(true, 64, 1, vec![]);
         let mut g = g_arc.write().unwrap();
         vertex_nodata(&mut g, b"V/A");
         vertex_nodata(&mut g, b"V/B");
@@ -311,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_scc_simple2() {
-        let g_arc = Graph::new(true, 64, 1);
+        let g_arc = Graph::new(true, 64, 1, vec![]);
         let mut g = g_arc.write().unwrap();
         vertex_nodata(&mut g, b"V/A");
         vertex_nodata(&mut g, b"V/B");

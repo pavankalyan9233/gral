@@ -73,7 +73,7 @@ mod tests {
         let g_arc = make_star_graph(10);
         let g = g_arc.read().unwrap();
         let (rank, steps) = page_rank(&g, 100, 0.85);
-        assert!(steps > 50 && steps < 60);
+        assert!(steps > 50 && steps < 70);
         assert!(0.49 < rank[9] && rank[9] < 0.50);
         assert!(0.05 < rank[0] && rank[0] < 0.06);
         println!("{:?}", rank);

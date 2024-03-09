@@ -8,6 +8,7 @@ use crate::computations::{
 };
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
+use crate::irank::i_rank;
 use crate::pagerank::page_rank;
 use crate::VERSION;
 
@@ -247,6 +248,7 @@ async fn api_compute(
         "scc" => 2,
         "aggregate_components" => 3,
         "pagerank" => 4,
+        "irank" => 5,
         _ => 0,
     };
 
@@ -368,6 +370,44 @@ async fn api_compute(
                 info!("Finished page rank computation!");
                 let mut comp = comp_arc.write().unwrap();
                 comp.rank = rank;
+                comp.progress = 100;
+            });
+        }
+        5 => {
+            {
+                // Make sure we have an edge index:
+                let mut graph = graph_arc.write().unwrap();
+                if !graph.edges_indexed_from {
+                    info!("Indexing edges by from...");
+                    graph.index_edges(true, false);
+                }
+            }
+            let comp_arc = Arc::new(RwLock::new(PageRankComputation {
+                graph: graph_arc.clone(),
+                shall_stop: false,
+                total: 100,
+                progress: 0,
+                error_code: 0,
+                error_message: "".to_string(),
+                rank: vec![],
+                result_position: 0,
+            }));
+            generic_comp_arc = comp_arc.clone();
+            std::thread::spawn(move || {
+                let graph = graph_arc.read().unwrap();
+                let res = i_rank(&graph, 10, 0.85);
+                info!("Finished irank computation!");
+                let mut comp = comp_arc.write().unwrap();
+                match res {
+                    Ok((rank, _steps)) => {
+                        comp.rank = rank;
+                        comp.error_code = 0;
+                    }
+                    Err(e) => {
+                        comp.error_message = e;
+                        comp.error_code = 1;
+                    }
+                }
                 comp.progress = 100;
             });
         }

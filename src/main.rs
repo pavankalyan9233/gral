@@ -17,6 +17,7 @@ mod auth;
 mod computations;
 mod conncomp;
 mod graphs;
+mod irank;
 mod metrics;
 mod pagerank;
 
