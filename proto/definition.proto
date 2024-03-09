@@ -1,0 +1,100 @@
+//
+// DISCLAIMER
+//
+// Copyright 2016-2022 ArangoDB GmbH, Cologne, Germany
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Copyright holder is ArangoDB GmbH, Cologne, Germany
+//
+
+syntax = "proto3";
+
+package authentication;
+
+// import "google/protobuf/duration.proto";
+
+option go_package = "github.com/arangodb/kube-arangodb/integrations/authentication/v1/definition";
+
+// AuthenticationV1 define ServiceInterface for Authentication V1
+service AuthenticationV1 {
+  // Validate and ensure that Authentication details are valid returns information about the user
+  rpc Validate (ValidateRequest) returns (ValidateResponse) {}
+
+  // CreateToken creates a token for the specified user
+  rpc CreateToken (CreateTokenRequest) returns (CreateTokenResponse) {}
+}
+
+// ValidateRequest defines request for AuthenticationV1 Validate Request
+message ValidateRequest {
+  // token specifies a token extracted from the request or used currently
+  string token = 1;
+}
+
+// ValidateResponse defines response for AuthenticationV1 Validate Request
+message ValidateResponse {
+  // is_valid returns information about the validity of the token
+  bool is_valid = 1;
+
+  // message message for the validation phase
+  string message = 2;
+
+  // details returns token details if the token is valid
+  optional ValidateResponseDetails details = 3;
+}
+
+// ValidateResponseDetails defines optional response for AuthenticationV1 Validate Request.
+// Returned only if the Token provided in the request is valid.
+message ValidateResponseDetails {
+  // lifetime specify the lifetime of the token
+  Duration lifetime = 1;
+
+  // user returns the User used in the Token. If a user is not specified, `root` is returned
+  string user = 2;
+}
+
+// CreateTokenRequest defines request for AuthenticationV1 CreateToken Request
+message CreateTokenRequest {
+  // lifetime specifies the lifetime of the token as duration. Defaults to 1 hour
+  optional Duration lifetime = 1;
+
+  // user specify the User for which token should be created. By default, the default user is used (root in most cases)
+  optional string user = 2;
+}
+
+// CreateTokenResponse defines response for AuthenticationV1 CreateToken Request
+message CreateTokenResponse {
+  // lifetime specify the lifetime of the token as the duration
+  Duration lifetime = 1;
+
+  // user returns the User used in the Token
+  string user = 2;
+
+  // token returns the Token as a string
+  string token = 3;
+}
+
+message Duration {
+  // Signed seconds of the span of time. Must be from -315,576,000,000
+  // to +315,576,000,000 inclusive. Note: these bounds are computed from:
+  // 60 sec/min * 60 min/hr * 24 hr/day * 365.25 days/year * 10000 years
+  int64 seconds = 1;
+
+  // Signed fractions of a second at nanosecond resolution of the span
+  // of time. Durations less than one second are represented with a 0
+  // `seconds` field and a positive or negative `nanos` field. For durations
+  // of one second or more, a non-zero value for the `nanos` field must be
+  // of the same sign as the `seconds` field. Must be from -999,999,999
+  // to +999,999,999 inclusive.
+  int32 nanos = 2;
+}
