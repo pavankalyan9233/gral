@@ -29,17 +29,23 @@ OPTIONS:
   --arangodb-endpoints   Network endpoints for ArangoDB deployment (multiple,
                          separated by commas are possible)
                          [default: 'https://localhost:8529']
+  --authentication BOOL  Check authentication [default: false]
+  --arangodb-user USER   ArangoDB user to fall back to without authentication
   --arangodb-jwt-secrets Path name with jwt secrets [default: 'secrets.jwt']
+  --auth-service ADDR    Hostname and port of authentication service
+                         [default: '']
   --warp-trace BOOL      Switch on warp tracing [default: false]
 
 The following environment variables can set defaults for the above
 options (command line options have higher precedence!):
 
-  HTTP_PORT               Sets the default for --bind-port
-  ARANGODB_ENDPOINT       Sets the default for --arangodb-endpoints
-  ARANGODB_JWT            Sets the default path for --arangodb-jwt-secrets
-  ARANGODB_CA_CERTS       Sets the path with 'ca.crt' for --cert and
-                          sets the path with 'ca.key' for --key
+  HTTP_PORT                   Sets the default for --bind-port
+  ARANGODB_ENDPOINT           Sets the default for --arangodb-endpoints
+  ARANGODB_JWT                Sets the default path for --arangodb-jwt-secrets
+  ARANGODB_CA_CERTS           Sets the path with 'ca.crt' for --cert and
+                              sets the path with 'ca.key' for --key
+  ARANGODB_USER               Sets user in --arangodb-user
+  INTEGRATION_SERVICE_ADDRESS Sets the address for --auth-service
 ";
 
 #[derive(Debug, Clone)]
@@ -52,6 +58,9 @@ pub struct GralArgs {
     pub bind_addr: String,
     pub port: u16,
     pub arangodb_endpoints: String,
+    pub authentication: bool,
+    pub arangodb_user: String,
+    pub auth_service: String,
     pub arangodb_jwt_secrets: Vec<Vec<u8>>, // the first used for signing
     // all for signature verification
     pub warp_trace: bool,
@@ -147,6 +156,8 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
     let jwt_path = pargs
         .opt_value_from_str("--arangodb-jwt-secrets")?
         .unwrap_or(default_jwt_path);
+    let default_arangodb_user = my_get_env("ARANGODB_USER", "root");
+    let default_auth_service = my_get_env("INTEGRATION_SERVICE_ADDRESS", "");
 
     // Read the JWT secrets from files, empty results if this fails:
     let jwt_secrets: Vec<Vec<u8>> = read_jwt_secrets(&jwt_path);
@@ -172,7 +183,16 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
         arangodb_endpoints: pargs
             .opt_value_from_str("--arangodb-endpoints")?
             .unwrap_or(default_endpoint),
+        authentication: pargs
+            .opt_value_from_str("--authentication")?
+            .unwrap_or(false),
+        arangodb_user: pargs
+            .opt_value_from_str("--arangodb-user")?
+            .unwrap_or(default_arangodb_user),
         arangodb_jwt_secrets: jwt_secrets,
+        auth_service: pargs
+            .opt_value_from_str("--auth-service")?
+            .unwrap_or(default_auth_service),
         warp_trace: pargs.opt_value_from_str("--warp-trace")?.unwrap_or(false),
     };
 

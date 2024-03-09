@@ -2,6 +2,7 @@ use std::io::Result;
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
+    // Produce code for our own API:
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("proto");
     let proto_files = vec![root.join("graphanalyticsengine.proto")];
 
@@ -27,5 +28,14 @@ fn main() -> Result<()> {
     pbjson_build::Builder::new()
         .register_descriptors(&descriptor_set)?
         .build(&[".arangodb.cloud.internal.graphanalytics.v1"])?;
+
+    // Produce code for authentication service:
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    tonic_build::configure()
+        .file_descriptor_set_path(out_dir.join("definition_descriptor.bin"))
+        .protoc_arg("--experimental_allow_proto3_optional")
+        .compile(&["proto/definition.proto"], &["proto"])
+        .unwrap();
+
     Ok(())
 }
