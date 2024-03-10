@@ -70,11 +70,18 @@ service GraphAnalyticsEngineService {
     }
 
     // Process data which is previously loaded and stores the results in-memory.
-    // Required permissions:
-    // - graphanalytics.engine.process on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineProcess(GraphAnalyticsEngineProcessRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
             post: "/v2/process"
+            body: "*"
+        };
+    }
+
+    // Run label propagation on data which is previously loaded and stores
+    // the results in-memory.
+    rpc GraphAnalyticsEngineRunLabelPropagation(GraphAnalyticsEngineLabelPropagationRequest) returns (GraphAnalyticsEngineProcessResponse) {
+        option (google.api.http) = {
+            post: "/v2/labelpropagation"
             body: "*"
         };
     }
@@ -230,15 +237,13 @@ message GraphAnalyticsEngineLoadDataAqlRequest {
 
 // Request arguments for GraphAnalyticsEngineProcess.
 message GraphAnalyticsEngineProcessRequest {    
-    // Client ID to make request idempotent
-    string client_id = 1;
     // Graph ID
-    uint64 graph_id = 2;
+    uint64 graph_id = 1;
     // ID of a previous job to take the input from, this is to build pipelines.
-    uint64 job_id = 3;
+    uint64 job_id = 2;
     // Name of algorithm, currently, we have "wcc", "scc" and
     // "aggregate_components":
-    string algorithm = 4;
+    string algorithm = 3;
    
     // Map of engine-type and algorithm-type specific custom fields (dynamic
     // for this process operation)
@@ -249,14 +254,22 @@ message GraphAnalyticsEngineProcessRequest {
 message GraphAnalyticsEngineProcessResponse {
     // ID of the job
     uint64 job_id = 1;
-    // Client ID
-    string client_id = 2;
-    // Error?
-    bool error = 3;
     // Error code, 0 if no error
-    int32 error_code = 4;
+    int32 error_code = 2;
     // Error message, empty if no error
-    string error_message = 5;
+    string error_message = 3;
+}
+
+// Request arguments for GraphAnalyticsEngineRunLabelPropagation.
+message GraphAnalyticsEngineLabelPropagationRequest {    
+    // Graph ID
+    uint64 graph_id = 1;
+    // Start label attribute, must be stored in one column. Use id of vertex
+    // if set to "@id".
+    string start_label_attribute = 2;
+    // Flag to indicate whether synchronous (true) or asynchronous label
+    // propagation is used:
+    bool synchronous = 3;
 }
 
 // Request arguments for GraphAnalyticsEngineStoreResults.

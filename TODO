@@ -6,7 +6,7 @@
  + Implement irank
  + Test irank
  + write results irank
- - implement label propagation
+ + implement label propagation
  - test label propagation
  - write results label propagation
  - get rid of client IDs, polish API

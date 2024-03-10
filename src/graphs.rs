@@ -225,15 +225,18 @@ impl Graph {
         let mut tmp: Vec<EdgeTemp> = vec![];
         let number_v = self.number_of_vertices() as usize;
         let number_e = self.number_of_edges() as usize;
-        tmp.reserve(number_e);
-        for e in self.edges.iter() {
-            tmp.push(EdgeTemp {
-                from: e.from,
-                to: e.to,
-            });
+        if (!self.edges_indexed_from && by_from) || (!self.edges_indexed_to && by_to) {
+            tmp.reserve(number_e);
+            for e in self.edges.iter() {
+                tmp.push(EdgeTemp {
+                    from: e.from,
+                    to: e.to,
+                });
+            }
         }
 
-        if by_from {
+        if !self.edges_indexed_from && by_from {
+            info!("Graph: {}: Indexing edges by from...", self.graph_id);
             // Create lookup by from:
             tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
                 a.from.to_u64().cmp(&b.from.to_u64())
@@ -269,7 +272,8 @@ impl Graph {
             self.edges_indexed_from = true;
         }
 
-        if by_to {
+        if !self.edges_indexed_to && by_to {
+            info!("Graph: {}: Indexing edges by to...", self.graph_id);
             // Create lookup by to:
             tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
                 a.to.to_u64().cmp(&b.to.to_u64())

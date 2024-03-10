@@ -20,7 +20,7 @@ use log::info;
 use std::convert::Infallible;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
-use warp::{http::Response, http::StatusCode, Filter, Rejection};
+use warp::{http::Response, http::StatusCode, reply::WithStatus, Filter, Rejection};
 
 pub mod graphanalyticsengine {
     include!(concat!(
@@ -54,13 +54,20 @@ pub fn api_filter(
         .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and_then(api_drop_job);
-    let compute = warp::path!("v2" / "process")
+    let process = warp::path!("v2" / "process")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
-        .and_then(api_compute);
+        .and_then(api_process);
+    let label_prop = warp::path!("v2" / "labelpropagation")
+        .and(warp::post())
+        .and(with_auth(args.clone()))
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_label_propagation);
     let get_arangodb_graph = warp::path!("v2" / "loaddata")
         .and(warp::post())
         .and(with_auth(args.clone()))
@@ -112,7 +119,8 @@ pub fn api_filter(
     version
         .or(get_job)
         .or(drop_job)
-        .or(compute)
+        .or(process)
+        .or(label_prop)
         .or(get_arangodb_graph)
         .or(write_result_back_arangodb)
         .or(get_arangodb_graph_aql)
@@ -163,62 +171,74 @@ fn check_graph(graph: &Graph, graph_id: u64, edges_must_be_sealed: bool) -> Resu
     Ok(())
 }
 
+fn err_bad_req_process(e: String, ec: i32, c: StatusCode) -> WithStatus<Vec<u8>> {
+    warp::reply::with_status(
+        serde_json::to_vec(&GraphAnalyticsEngineProcessResponse {
+            job_id: 0,
+            error_code: ec,
+            error_message: e,
+        })
+        .expect("Could not serialize"),
+        c,
+    )
+}
+
+fn get_and_check_graph(
+    graphs: &Arc<Mutex<Graphs>>,
+    graph_id: u64,
+) -> Result<Arc<RwLock<Graph>>, WithStatus<Vec<u8>>> {
+    let graph_arc: Arc<RwLock<Graph>>;
+    {
+        let graphs = graphs.lock().unwrap();
+        let g = graphs.list.get(&graph_id);
+        if g.is_none() {
+            return Err(err_bad_req_process(
+                format!("Graph with id {} not found.", &graph_id),
+                404,
+                StatusCode::NOT_FOUND,
+            ));
+        }
+        graph_arc = g.unwrap().clone();
+    }
+
+    {
+        // Check graph:
+        let graph = graph_arc.read().unwrap();
+        let r = check_graph(graph.deref(), graph_id, true);
+        if let Err(e) = r {
+            return Err(err_bad_req_process(e, 400, StatusCode::BAD_REQUEST));
+        }
+    }
+    Ok(graph_arc)
+}
+
 /// This function triggers a computation:
-async fn api_compute(
+async fn api_process(
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
-    let err_bad_req = |e: String, c: StatusCode| {
-        warp::reply::with_status(
-            serde_json::to_vec(&GraphAnalyticsEngineProcessResponse {
-                job_id: 0,
-                client_id: "".to_string(),
-                error: true,
-                error_code: 400,
-                error_message: e,
-            })
-            .expect("Could not serialize"),
-            c,
-        )
-    };
     // Parse body and extract integers:
     let parsed: serde_json::Result<GraphAnalyticsEngineProcessRequest> =
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
-        return Ok(err_bad_req(
+        return Ok(err_bad_req_process(
             format!("Cannot parse JSON body of request: {}", e.to_string()),
+            400,
             StatusCode::BAD_REQUEST,
         ));
     }
     let body = parsed.unwrap();
 
-    /*
-    let client_id = decode_id(&body.client_id);
-    if let Err(e) = client_id {
-        return Ok(err_bad_req(
-            format!(
-                "Could not decode clientId {}: {}",
-                body.client_id,
-                e.to_string()
-            ),
-            StatusCode::BAD_REQUEST,
-        ));
-    }
-    let _client_id = client_id.unwrap();
-    */
     let graph_arc: Arc<RwLock<Graph>>;
-    {
-        let graphs = graphs.lock().unwrap();
-        let g = graphs.list.get(&body.graph_id);
-        if g.is_none() {
-            return Ok(err_bad_req(
-                format!("Graph with id {} not found.", &body.graph_id),
-                StatusCode::NOT_FOUND,
-            ));
+    match get_and_check_graph(&graphs, body.graph_id) {
+        Err(r) => {
+            return Ok(r);
         }
-        graph_arc = g.unwrap().clone();
+        Ok(g) => {
+            graph_arc = g;
+        }
     }
 
     // Computation ID is optional:
@@ -227,21 +247,13 @@ async fn api_compute(
         let comps = computations.lock().unwrap();
         let comp = comps.list.get(&body.job_id);
         if comp.is_none() {
-            return Ok(err_bad_req(
+            return Ok(err_bad_req_process(
                 format!("Could not find previous job id {}.", &body.job_id),
+                400,
                 StatusCode::BAD_REQUEST,
             ));
         }
         prev_comp = Some(comp.unwrap().clone());
-    }
-
-    {
-        // Check graph:
-        let graph = graph_arc.read().unwrap();
-        let r = check_graph(graph.deref(), body.graph_id, true);
-        if let Err(e) = r {
-            return Ok(err_bad_req(e, StatusCode::BAD_REQUEST));
-        }
     }
 
     let algorithm: u32 = match body.algorithm.as_ref() {
@@ -250,7 +262,6 @@ async fn api_compute(
         "aggregate_components" => 3,
         "pagerank" => 4,
         "irank" => 5,
-        "labelpropagation_sync" => 6,
         _ => 0,
     };
 
@@ -295,8 +306,9 @@ async fn api_compute(
         }
         3 => {
             if prev_comp.is_none() {
-                return Ok(err_bad_req(
+                return Ok(err_bad_req_process(
                     "Aggregation algorithm needs previous computation as absis to work".to_string(),
+                    400,
                     StatusCode::BAD_REQUEST,
                 ));
             }
@@ -305,10 +317,11 @@ async fn api_compute(
             let downcast = guard.as_any().downcast_ref::<ComponentsComputation>();
             if downcast.is_none() {
                 // Wrong actual type!
-                return Ok(err_bad_req(
+                return Ok(err_bad_req_process(
                     "Aggregation algorithm needs previous component computation as basis to
                         work"
                         .to_string(),
+                    400,
                     StatusCode::BAD_REQUEST,
                 ));
             }
@@ -415,52 +428,10 @@ async fn api_compute(
                 comp.progress = 100;
             });
         }
-        6 => {
-            {
-                // Make sure we have an edge index:
-                let mut graph = graph_arc.write().unwrap();
-                if !graph.edges_indexed_from {
-                    info!("Indexing edges by from...");
-                    graph.index_edges(true, false);
-                }
-                if !graph.edges_indexed_to {
-                    info!("Indexing edges by to...");
-                    graph.index_edges(false, true);
-                }
-            }
-            let comp_arc = Arc::new(RwLock::new(LabelPropagationComputation {
-                graph: graph_arc.clone(),
-                algorithm,
-                shall_stop: false,
-                total: 100,
-                progress: 0,
-                error_code: 0,
-                error_message: "".to_string(),
-                label: vec![],
-                result_position: 0,
-            }));
-            generic_comp_arc = comp_arc.clone();
-            std::thread::spawn(move || {
-                let graph = graph_arc.read().unwrap();
-                let res = labelpropagation_sync(&graph, 10, "startlabel");
-                info!("Finished irank computation!");
-                let mut comp = comp_arc.write().unwrap();
-                match res {
-                    Ok((label, _steps)) => {
-                        comp.label = label;
-                        comp.error_code = 0;
-                    }
-                    Err(e) => {
-                        comp.error_message = e;
-                        comp.error_code = 1;
-                    }
-                }
-                comp.progress = 100;
-            });
-        }
         _ => {
-            return Ok(err_bad_req(
+            return Ok(err_bad_req_process(
                 format!("Unknown algorithm: {}", body.algorithm),
+                400,
                 StatusCode::BAD_REQUEST,
             ));
         }
@@ -473,8 +444,90 @@ async fn api_compute(
     }
     let response = GraphAnalyticsEngineProcessResponse {
         job_id: comp_id,
-        client_id: body.client_id,
-        error: false,
+        error_code: 0,
+        error_message: "".to_string(),
+    };
+
+    // Write response:
+    let v = serde_json::to_vec(&response).expect("Should be serializable!");
+    Ok(warp::reply::with_status(v, StatusCode::OK))
+}
+
+/// This function triggers a label propagation computation:
+async fn api_label_propagation(
+    _user: String,
+    graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
+    // Parse body and extract integers:
+    let parsed: serde_json::Result<GraphAnalyticsEngineLabelPropagationRequest> =
+        serde_json::from_slice(&bytes[..]);
+    if let Err(e) = parsed {
+        return Ok(err_bad_req_process(
+            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    let body = parsed.unwrap();
+
+    let graph_arc: Arc<RwLock<Graph>>;
+    match get_and_check_graph(&graphs, body.graph_id) {
+        Err(r) => {
+            return Ok(r);
+        }
+        Ok(g) => {
+            graph_arc = g;
+        }
+    }
+
+    {
+        // Make sure we have an edge index:
+        let mut graph = graph_arc.write().unwrap();
+        graph.index_edges(true, true);
+    }
+
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
+    let comp_arc = Arc::new(RwLock::new(LabelPropagationComputation {
+        graph: graph_arc.clone(),
+        sync: body.synchronous,
+        shall_stop: false,
+        total: 100,
+        progress: 0,
+        error_code: 0,
+        error_message: "".to_string(),
+        label: vec![],
+        result_position: 0,
+    }));
+    generic_comp_arc = comp_arc.clone();
+    let startlabel = body.start_label_attribute.clone();
+    std::thread::spawn(move || {
+        let graph = graph_arc.read().unwrap();
+        // TODO: Add asynchronous variant here once implemented:
+        let res = labelpropagation_sync(&graph, 10, &startlabel);
+        info!("Finished label propagation computation!");
+        let mut comp = comp_arc.write().unwrap();
+        match res {
+            Ok((label, _steps)) => {
+                comp.label = label;
+                comp.error_code = 0;
+            }
+            Err(e) => {
+                comp.error_message = e;
+                comp.error_code = 1;
+            }
+        }
+        comp.progress = 100;
+    });
+
+    let comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        comp_id = comps.register(generic_comp_arc.clone());
+    }
+    let response = GraphAnalyticsEngineProcessResponse {
+        job_id: comp_id,
         error_code: 0,
         error_message: "".to_string(),
     };

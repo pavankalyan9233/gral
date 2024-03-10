@@ -298,7 +298,7 @@ impl Computation for PageRankComputation {
 
 pub struct LabelPropagationComputation {
     pub graph: Arc<RwLock<Graph>>,
-    pub algorithm: u32,
+    pub sync: bool,
     pub shall_stop: bool,
     pub total: u32,
     pub progress: u32,
@@ -319,7 +319,7 @@ impl Computation for LabelPropagationComputation {
         self.shall_stop = true;
     }
     fn algorithm_id(&self) -> u32 {
-        self.algorithm
+        6
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         self.graph.clone()
