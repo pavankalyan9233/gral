@@ -18,6 +18,7 @@ mod computations;
 mod conncomp;
 mod graphs;
 mod irank;
+mod labelpropagation;
 mod metrics;
 mod pagerank;
 

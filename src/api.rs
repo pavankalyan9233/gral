@@ -4,11 +4,12 @@ use crate::args::{with_args, GralArgs};
 use crate::auth::{with_auth, Unauthorized};
 use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
-    LoadComputation, PageRankComputation, StoreComputation,
+    LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
 use crate::irank::i_rank;
+use crate::labelpropagation::labelpropagation_sync;
 use crate::pagerank::page_rank;
 use crate::VERSION;
 
@@ -249,6 +250,7 @@ async fn api_compute(
         "aggregate_components" => 3,
         "pagerank" => 4,
         "irank" => 5,
+        "labelpropagation_sync" => 6,
         _ => 0,
     };
 
@@ -355,6 +357,7 @@ async fn api_compute(
             }
             let comp_arc = Arc::new(RwLock::new(PageRankComputation {
                 graph: graph_arc.clone(),
+                algorithm,
                 shall_stop: false,
                 total: 100,
                 progress: 0,
@@ -384,6 +387,7 @@ async fn api_compute(
             }
             let comp_arc = Arc::new(RwLock::new(PageRankComputation {
                 graph: graph_arc.clone(),
+                algorithm,
                 shall_stop: false,
                 total: 100,
                 progress: 0,
@@ -401,6 +405,49 @@ async fn api_compute(
                 match res {
                     Ok((rank, _steps)) => {
                         comp.rank = rank;
+                        comp.error_code = 0;
+                    }
+                    Err(e) => {
+                        comp.error_message = e;
+                        comp.error_code = 1;
+                    }
+                }
+                comp.progress = 100;
+            });
+        }
+        6 => {
+            {
+                // Make sure we have an edge index:
+                let mut graph = graph_arc.write().unwrap();
+                if !graph.edges_indexed_from {
+                    info!("Indexing edges by from...");
+                    graph.index_edges(true, false);
+                }
+                if !graph.edges_indexed_to {
+                    info!("Indexing edges by to...");
+                    graph.index_edges(false, true);
+                }
+            }
+            let comp_arc = Arc::new(RwLock::new(LabelPropagationComputation {
+                graph: graph_arc.clone(),
+                algorithm,
+                shall_stop: false,
+                total: 100,
+                progress: 0,
+                error_code: 0,
+                error_message: "".to_string(),
+                label: vec![],
+                result_position: 0,
+            }));
+            generic_comp_arc = comp_arc.clone();
+            std::thread::spawn(move || {
+                let graph = graph_arc.read().unwrap();
+                let res = labelpropagation_sync(&graph, 10, "startlabel");
+                info!("Finished irank computation!");
+                let mut comp = comp_arc.write().unwrap();
+                match res {
+                    Ok((label, _steps)) => {
+                        comp.label = label;
                         comp.error_code = 0;
                     }
                     Err(e) => {
