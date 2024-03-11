@@ -85,13 +85,23 @@ impl Computation for ComponentsComputation {
         self
     }
     fn nr_results(&self) -> u64 {
-        match self.number {
+        match &self.components {
             None => 0,
-            Some(n) => n,
+            Some(v) => v.len() as u64,
         }
     }
-    fn get_result(&self, _which: u64) -> (String, String) {
-        ("".to_string(), "".to_string())
+    fn get_result(&self, which: u64) -> (String, String) {
+        match &self.components {
+            None => ("".to_string(), "".to_string()),
+            Some(vs) => {
+                let guard = self.graph.read().unwrap();
+                let key = std::str::from_utf8(&guard.index_to_key[which as usize])
+                    .unwrap()
+                    .to_string();
+                let comp = std::str::from_utf8(&guard.index_to_key[vs[which as usize] as usize]).unwrap().to_string();
+                (key, comp)
+            },
+        }
     }
 }
 

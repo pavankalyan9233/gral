@@ -862,7 +862,7 @@ pub async fn write_result_to_arangodb(
                     cur_batch.extend_from_slice(key.as_bytes());
                     cur_batch.extend_from_slice(b"\"");
                 }
-                cur_batch.extend_from_slice(b",");
+                cur_batch.extend_from_slice(b",\"");
                 cur_batch.extend_from_slice(attribute_names[j].as_bytes());
                 cur_batch.extend_from_slice(b"\":\"");
                 cur_batch.extend_from_slice(value.as_bytes());
