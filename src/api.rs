@@ -9,7 +9,7 @@ use crate::computations::{
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
 use crate::irank::i_rank;
-use crate::labelpropagation::labelpropagation_sync;
+use crate::labelpropagation::{labelpropagation_async, labelpropagation_sync};
 use crate::pagerank::page_rank;
 use crate::VERSION;
 
@@ -504,8 +504,11 @@ async fn api_label_propagation(
     let startlabel = body.start_label_attribute.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        // TODO: Add asynchronous variant here once implemented:
-        let res = labelpropagation_sync(&graph, 64, &startlabel);
+        let res = if body.synchronous {
+            labelpropagation_sync(&graph, 64, &startlabel)
+        } else {
+            labelpropagation_async(&graph, 64, &startlabel)
+        };
         info!("Finished label propagation computation!");
         let mut comp = comp_arc.write().unwrap();
         match res {
