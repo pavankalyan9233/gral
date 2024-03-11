@@ -61,6 +61,13 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_process);
+    let pagerank = warp::path!("v2" / "pagerank")
+        .and(warp::post())
+        .and(with_auth(args.clone()))
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_pagerank);
     let irank = warp::path!("v2" / "irank")
         .and(warp::post())
         .and(with_auth(args.clone()))
@@ -127,6 +134,7 @@ pub fn api_filter(
         .or(get_job)
         .or(drop_job)
         .or(process)
+        .or(pagerank)
         .or(irank)
         .or(label_prop)
         .or(get_arangodb_graph)
@@ -262,7 +270,6 @@ async fn api_process(
         "wcc" => 1,
         "scc" => 2,
         "aggregate_components" => 3,
-        "pagerank" => 4,
         _ => 0,
     };
 
@@ -360,36 +367,6 @@ async fn api_process(
                 comp.progress = 1;
             });
         }
-        4 => {
-            {
-                // Make sure we have an edge index:
-                let mut graph = graph_arc.write().unwrap();
-                if !graph.edges_indexed_from {
-                    info!("Indexing edges by from...");
-                    graph.index_edges(true, false);
-                }
-            }
-            let comp_arc = Arc::new(RwLock::new(PageRankComputation {
-                graph: graph_arc.clone(),
-                algorithm,
-                shall_stop: false,
-                total: 100,
-                progress: 0,
-                error_code: 0,
-                error_message: "".to_string(),
-                rank: vec![],
-                result_position: 0,
-            }));
-            generic_comp_arc = comp_arc.clone();
-            std::thread::spawn(move || {
-                let graph = graph_arc.read().unwrap();
-                let (rank, _steps) = page_rank(&graph, 10, 0.85);
-                info!("Finished page rank computation!");
-                let mut comp = comp_arc.write().unwrap();
-                comp.rank = rank;
-                comp.progress = 100;
-            });
-        }
         _ => {
             return Ok(err_bad_req_process(
                 format!("Unknown algorithm: {}", body.algorithm),
@@ -415,15 +392,15 @@ async fn api_process(
     Ok(warp::reply::with_status(v, StatusCode::OK))
 }
 
-/// This function triggers an irank computation:
-async fn api_irank(
+/// This function triggers a pagerank computation:
+async fn api_pagerank(
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     // Parse body and extract integers:
-    let parsed: serde_json::Result<GraphAnalyticsEngineIRankRequest> =
+    let parsed: serde_json::Result<GraphAnalyticsEnginePageRankRequest> =
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Ok(err_bad_req_process(
@@ -461,18 +438,98 @@ async fn api_irank(
         progress: 0,
         error_code: 0,
         error_message: "".to_string(),
+        steps: 0,
         rank: vec![],
         result_position: 0,
     }));
     generic_comp_arc = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let res = i_rank(&graph, 10, 0.85);
+        let (rank, steps) = page_rank(&graph, body.maximum_supersteps, body.damping_factor);
+        info!("Finished pagerank computation!");
+        let mut comp = comp_arc.write().unwrap();
+        comp.rank = rank;
+        comp.steps = steps;
+        comp.error_code = 0;
+        comp.progress = 100;
+    });
+
+    let comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        comp_id = comps.register(generic_comp_arc.clone());
+    }
+    let response = GraphAnalyticsEngineProcessResponse {
+        job_id: comp_id,
+        error_code: 0,
+        error_message: "".to_string(),
+    };
+
+    // Write response:
+    let v = serde_json::to_vec(&response).expect("Should be serializable!");
+    Ok(warp::reply::with_status(v, StatusCode::OK))
+}
+
+/// This function triggers an irank computation:
+async fn api_irank(
+    _user: String,
+    graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
+    // Parse body and extract integers:
+    let parsed: serde_json::Result<GraphAnalyticsEnginePageRankRequest> =
+        serde_json::from_slice(&bytes[..]);
+    if let Err(e) = parsed {
+        return Ok(err_bad_req_process(
+            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    let body = parsed.unwrap();
+
+    let graph_arc: Arc<RwLock<Graph>>;
+    match get_and_check_graph(&graphs, body.graph_id) {
+        Err(r) => {
+            return Ok(r);
+        }
+        Ok(g) => {
+            graph_arc = g;
+        }
+    }
+
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
+    {
+        // Make sure we have an edge index:
+        let mut graph = graph_arc.write().unwrap();
+        if !graph.edges_indexed_from {
+            info!("Indexing edges by from...");
+            graph.index_edges(true, false);
+        }
+    }
+    let comp_arc = Arc::new(RwLock::new(PageRankComputation {
+        graph: graph_arc.clone(),
+        algorithm: 4,
+        shall_stop: false,
+        total: 100,
+        progress: 0,
+        error_code: 0,
+        error_message: "".to_string(),
+        steps: 0,
+        rank: vec![],
+        result_position: 0,
+    }));
+    generic_comp_arc = comp_arc.clone();
+    std::thread::spawn(move || {
+        let graph = graph_arc.read().unwrap();
+        let res = i_rank(&graph, body.maximum_supersteps, body.damping_factor);
         info!("Finished irank computation!");
         let mut comp = comp_arc.write().unwrap();
         match res {
-            Ok((rank, _steps)) => {
+            Ok((rank, steps)) => {
                 comp.rank = rank;
+                comp.steps = steps;
                 comp.error_code = 0;
             }
             Err(e) => {

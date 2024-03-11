@@ -98,9 +98,11 @@ impl Computation for ComponentsComputation {
                 let key = std::str::from_utf8(&guard.index_to_key[which as usize])
                     .unwrap()
                     .to_string();
-                let comp = std::str::from_utf8(&guard.index_to_key[vs[which as usize] as usize]).unwrap().to_string();
+                let comp = std::str::from_utf8(&guard.index_to_key[vs[which as usize] as usize])
+                    .unwrap()
+                    .to_string();
                 (key, comp)
-            },
+            }
         }
     }
 }
@@ -262,6 +264,7 @@ pub struct PageRankComputation {
     pub progress: u32,
     pub error_code: i32,
     pub error_message: String,
+    pub steps: u32,
     pub rank: Vec<f64>,
     pub result_position: usize,
 }

@@ -73,11 +73,20 @@ service GraphAnalyticsEngineService {
         };
     }
 
+    // Run pagerank computation on data which is previously loaded  and stores
+    // the results in-memory.
+    rpc GraphAnalyticsEngineRunPageRank(GraphAnalyticsEnginePageRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
+        option (google.api.http) = {
+            post: "/v2/pagerank"
+            body: "*"
+        };
+    }
+
     // Run irank computation on data which is previously loaded  and stores
     // the results in-memory.
-    rpc GraphAnalyticsEngineRunIRank(GraphAnalyticsEngineIRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
+    rpc GraphAnalyticsEngineRunIRank(GraphAnalyticsEnginePageRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            post: "/v2/process"
+            post: "/v2/irank"
             body: "*"
         };
     }
@@ -255,8 +264,8 @@ message GraphAnalyticsEngineProcessResponse {
     string error_message = 3;
 }
 
-// Request arguments for GraphAnalyticsEngineRunIRank:
-message GraphAnalyticsEngineIRankRequest {    
+// Request arguments for GraphAnalyticsEngineRunPageRank:
+message GraphAnalyticsEnginePageRankRequest {    
     // Graph ID
     uint64 graph_id = 1;
     // Damping factor:
