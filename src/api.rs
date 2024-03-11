@@ -7,7 +7,7 @@ use crate::computations::{
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
 use crate::conncomp::{strongly_connected_components, weakly_connected_components};
-use crate::graphs::{decode_id, encode_id, with_graphs, Graph, Graphs};
+use crate::graphs::{with_graphs, Graph, Graphs};
 use crate::irank::i_rank;
 use crate::labelpropagation::{labelpropagation_async, labelpropagation_sync};
 use crate::pagerank::page_rank;
@@ -151,21 +151,15 @@ fn version_json(_user: String) -> Result<Response<Vec<u8>>, Error> {
 
 fn check_graph(graph: &Graph, graph_id: u64, edges_must_be_sealed: bool) -> Result<(), String> {
     if !graph.vertices_sealed {
-        return Err(format!(
-            "Graph vertices not sealed: {}",
-            encode_id(graph_id)
-        ));
+        return Err(format!("Graph vertices not sealed: {}", graph_id));
     }
     if edges_must_be_sealed {
         if !graph.edges_sealed {
-            return Err(format!("Graph edges not sealed: {}", encode_id(graph_id)));
+            return Err(format!("Graph edges not sealed: {}", graph_id));
         }
     } else {
         if graph.edges_sealed {
-            return Err(format!(
-                "Graph edges must not be sealed: {}",
-                encode_id(graph_id)
-            ));
+            return Err(format!("Graph edges must not be sealed: {}", graph_id,));
         }
     }
     Ok(())
@@ -551,8 +545,6 @@ async fn api_write_result_back_arangodb(
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineStoreResultsResponse {
                 job_id: 0,
-                client_id: "".to_string(),
-                error: true,
                 error_code: sc.as_u16() as i32,
                 error_message: e,
             })
@@ -570,19 +562,6 @@ async fn api_write_result_back_arangodb(
         ));
     }
     let mut body = parsed.unwrap();
-
-    let client_id = decode_id(&body.client_id);
-    if let Err(e) = client_id {
-        return Ok(err_bad_req(
-            format!(
-                "Could not decode clientId {}: {}",
-                body.client_id,
-                e.to_string()
-            ),
-            StatusCode::BAD_REQUEST,
-        ));
-    }
-    let client_id = client_id.unwrap();
 
     let mut result_comps: Vec<Arc<RwLock<dyn Computation + Send + Sync>>> = vec![];
     {
@@ -669,8 +648,6 @@ async fn api_write_result_back_arangodb(
 
     let response = GraphAnalyticsEngineStoreResultsResponse {
         job_id: comp_id,
-        client_id: encode_id(client_id),
-        error: false,
         error_code: 0,
         error_message: "".to_string(),
     };
@@ -691,9 +668,7 @@ async fn api_get_arangodb_graph_aql(
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineLoadDataResponse {
                 job_id: 0,
-                client_id: "".to_string(),
                 graph_id: 0,
-                error: true,
                 error_code: 400,
                 error_message: e,
             })
@@ -710,25 +685,13 @@ async fn api_get_arangodb_graph_aql(
             e.to_string()
         )));
     }
-    let body = parsed.unwrap();
-
-    let client_id = decode_id(&body.client_id);
-    if let Err(e) = client_id {
-        return Ok(err_bad_req(format!(
-            "Could not decode clientId {}: {}",
-            body.client_id,
-            e.to_string()
-        )));
-    }
-    let _client_id = client_id.unwrap();
+    let _body = parsed.unwrap();
 
     // TO BE IMPLEMENTED
 
     let response = GraphAnalyticsEngineLoadDataResponse {
         job_id: 0,
-        client_id: body.client_id,
         graph_id: 0,
-        error: true,
         error_code: 1,
         error_message: "NOT_YET_IMPLEMENTED".to_string(),
     };
@@ -1048,9 +1011,7 @@ async fn api_get_arangodb_graph(
     if let Err(e) = parsed {
         let response = GraphAnalyticsEngineLoadDataResponse {
             job_id: 0,
-            client_id: "".to_string(),
             graph_id: 0,
-            error: true,
             error_code: 400,
             error_message: format!("Could not parse JSON body: {}", e.to_string()),
         };
@@ -1071,13 +1032,11 @@ async fn api_get_arangodb_graph(
     let graph = Graph::new(true, 64, 0, body.vertex_attributes.clone());
     let graph_clone = graph.clone(); // for background thread
 
-    let client_id = body.client_id.clone();
-
     // And store it amongst the graphs:
     let mut graphs = graphs.lock().unwrap();
     let graph_id = graphs.register(graph_clone.clone());
 
-    info!("Have created graph with id {}!", encode_id(graph_id));
+    info!("Have created graph with id {}!", graph_id);
 
     // Now create a job object:
     let comp_arc = Arc::new(RwLock::new(LoadComputation {
@@ -1121,9 +1080,7 @@ async fn api_get_arangodb_graph(
     // Write response:
     let response = GraphAnalyticsEngineLoadDataResponse {
         job_id: comp_id,
-        client_id,
         graph_id,
-        error: false,
         error_code: 0,
         error_message: "".to_string(),
     };

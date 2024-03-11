@@ -1,5 +1,3 @@
-use base64::{engine::general_purpose, Engine as _};
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use log::info;
 use metrics::increment_counter;
 use rand::Rng;
@@ -7,7 +5,6 @@ use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::io::Cursor;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
@@ -395,23 +392,4 @@ impl Graph {
             );
         }
     }
-}
-
-pub fn encode_id(id: u64) -> String {
-    let mut v: Vec<u8> = vec![];
-    v.write_u64::<BigEndian>(id).unwrap();
-    general_purpose::URL_SAFE_NO_PAD.encode(&v)
-}
-
-pub fn decode_id(graph_id: &String) -> Result<u64, String> {
-    let graph_id_decoded = general_purpose::URL_SAFE_NO_PAD.decode(graph_id.as_bytes());
-    if let Err(e) = graph_id_decoded {
-        return Err(format!("Cannot base64 decode graph_id {}: {}", graph_id, e,));
-    }
-    let graph_id_decoded = graph_id_decoded.unwrap();
-    if graph_id_decoded.len() < 8 {
-        return Err(format!("Too short base64 graph_id {}", graph_id));
-    }
-    let mut reader = Cursor::new(graph_id_decoded);
-    Ok(reader.read_u64::<BigEndian>().unwrap())
 }
