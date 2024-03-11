@@ -35,9 +35,12 @@ pub fn labelpropagation_sync(
 
     let nr = g.number_of_vertices() as usize;
     let pos = find_label_name_column(g, labelname)?;
-    let mut labels: Vec<String> = load_labels(g, pos);
-    let mut newlabels: Vec<String> = Vec::with_capacity(nr);
-    //println!("{:?}", labels);
+    let all_labels: Vec<String> = load_labels(g, pos);
+    let mut labels: Vec<&String> = Vec::with_capacity(nr);
+    for i in 0..nr {
+        labels.push(&all_labels[i]);
+    }
+    let mut newlabels: Vec<&String> = Vec::with_capacity(nr);
 
     // Do up to so many supersteps:
     let mut step: u32 = 0;
@@ -57,7 +60,7 @@ pub fn labelpropagation_sync(
             if edge_nr > 0 {
                 for wi in first_edge..last_edge {
                     let w = g.edges_by_from[wi].to_u64() as usize;
-                    let lab = &labels[w];
+                    let lab = labels[w];
                     let count = counts.get_mut(lab);
                     match count {
                         Some(countref) => {
@@ -76,7 +79,7 @@ pub fn labelpropagation_sync(
             if edge_nr > 0 {
                 for wi in first_edge..last_edge {
                     let w = g.edges_by_to[wi].to_u64() as usize;
-                    let lab = &labels[w];
+                    let lab = labels[w];
                     let count = counts.get_mut(lab);
                     match count {
                         Some(countref) => {
@@ -93,18 +96,17 @@ pub fn labelpropagation_sync(
                 let mut labellist: Vec<(&String, u64)> =
                     counts.iter().map(|(k, v)| (*k, *v)).collect();
                 labellist.sort_by(|a, b| (*b).1.cmp(&(*a).1));
-                newlabels.push(labellist[0].0.clone());
+                newlabels.push(labellist[0].0);
             } else {
-                newlabels.push(labels[v].clone());
+                newlabels.push(labels[v]);
             }
-            //println!("{:?}", labels);
         }
         let mut diffcount: u64 = 0;
         for v in 0..nr {
             if labels[v] != newlabels[v] {
                 diffcount += 1;
             }
-            labels[v] = newlabels[v].clone();
+            labels[v] = newlabels[v];
         }
         newlabels.clear();
         info!(
@@ -117,7 +119,11 @@ pub fn labelpropagation_sync(
     }
     let dur = start.elapsed();
     info!("label propagation (sync) completed in {dur:?} seconds.");
-    Ok((labels, step))
+    let mut result: Vec<String> = Vec::with_capacity(nr);
+    for s in &labels {
+        result.push((*s).clone());
+    }
+    Ok((result, step))
 }
 
 #[cfg(test)]
