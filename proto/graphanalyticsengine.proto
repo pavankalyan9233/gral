@@ -73,6 +73,15 @@ service GraphAnalyticsEngineService {
         };
     }
 
+    // Run irank computation on data which is previously loaded  and stores
+    // the results in-memory.
+    rpc GraphAnalyticsEngineRunIRank(GraphAnalyticsEngineIRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
+        option (google.api.http) = {
+            post: "/v2/process"
+            body: "*"
+        };
+    }
+
     // Run label propagation on data which is previously loaded and stores
     // the results in-memory.
     rpc GraphAnalyticsEngineRunLabelPropagation(GraphAnalyticsEngineLabelPropagationRequest) returns (GraphAnalyticsEngineProcessResponse) {
@@ -244,6 +253,16 @@ message GraphAnalyticsEngineProcessResponse {
     int32 error_code = 2;
     // Error message, empty if no error
     string error_message = 3;
+}
+
+// Request arguments for GraphAnalyticsEngineRunIRank:
+message GraphAnalyticsEngineIRankRequest {    
+    // Graph ID
+    uint64 graph_id = 1;
+    // Damping factor:
+    double damping_factor = 2;
+    // Maximal number of supersteps:
+    uint32 maximum_supersteps = 3;
 }
 
 // Request arguments for GraphAnalyticsEngineRunLabelPropagation.
