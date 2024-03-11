@@ -11,10 +11,10 @@
  + write results label propagation
  + get rid of client IDs, polish API
  + write results combined?
- - Fix APIs without user, e.g. graphs
- - why does it take 3 seconds to load small graph?
+ + Fix APIs without user, e.g. graphs
  + Bearer and bearer 
 
+ - why does it take 3 seconds to load small graph?
  - more generic error handling via handle_errors
  - add first metrics: number of graphs, number of computations, memory usage
  - better progress tracking in jobs
