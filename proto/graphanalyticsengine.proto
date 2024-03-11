@@ -187,12 +187,10 @@ message GraphAnalyticsEngineLoadDataRequest {
 
 // Generic error
 message GraphAnalyticsEngineErrorResponse {
-    // Error?
-    bool error = 1;
     // Error code, 0 if no error
-    int32 error_code = 2;
+    int32 error_code = 1;
     // Error message, empty if no error
-    string error_message = 3;
+    string error_message = 2;
 }
 
 // Response arguments from GraphAnalyticsEngineLoadData.
@@ -297,25 +295,21 @@ message GraphAnalyticsEngineStoreResultsResponse {
 
 // Response arguments from GraphAnalticsEngineListGraphs.
 message GraphAnalyticsEngineListGraphsResponse {
-    // Error?
-    bool error = 1;
     // Error code, 0 if no error
-    int32 error_code = 2;
+    int32 error_code = 1;
     // Error message, empty if no error
-    string error_message = 3;
+    string error_message = 2;
     // The graphs
-    repeated GraphAnalyticsEngineGraph graphs = 4;
+    repeated GraphAnalyticsEngineGraph graphs = 3;
 }
 
 message GraphAnalyticsEngineGetGraphResponse {
-    // Error?
-    bool error = 1;
     // Error code, 0 if no error
-    int32 error_code = 2;
+    int32 error_code = 1;
     // Error message, empty if no error
-    string error_message = 3;
+    string error_message = 2;
     // The graph
-    GraphAnalyticsEngineGraph graph = 4;
+    GraphAnalyticsEngineGraph graph = 3;
 }
 
 // ID of an engine and id of a graph
@@ -344,24 +338,20 @@ message GraphAnalyticsEngineGraph {
 message GraphAnalyticsEngineDeleteGraphResponse {
     // ID of graph
     uint64 graph_id = 1;
-    // Error?
-    bool error = 2;
-    // Error code, 0 if no error
-    int32 error_code = 3;
-    // Error message, empty if no error
-    string error_message = 4;
-}
-
-// Response arguments from GraphAnalyticsEngineListJobs.
-message GraphAnalyticsEngineListJobsResponse {
-    // Error?
-    bool error = 1;
     // Error code, 0 if no error
     int32 error_code = 2;
     // Error message, empty if no error
     string error_message = 3;
+}
+
+// Response arguments from GraphAnalyticsEngineListJobs.
+message GraphAnalyticsEngineListJobsResponse {
+    // Error code, 0 if no error
+    int32 error_code = 1;
+    // Error message, empty if no error
+    string error_message = 2;
     // The graphs
-    repeated GraphAnalyticsEngineJob jobs = 4;
+    repeated GraphAnalyticsEngineJob jobs = 3;
 }
 
 // Description of a job.

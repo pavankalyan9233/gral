@@ -826,7 +826,6 @@ async fn api_get_graph(
     let not_found_err = |j: String| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineGetGraphResponse {
-                error: true,
                 error_code: 404,
                 error_message: j.clone(),
                 graph: None,
@@ -846,7 +845,6 @@ async fn api_get_graph(
 
     // Write response:
     let response = GraphAnalyticsEngineGetGraphResponse {
-        error: false,
         error_code: 0,
         error_message: "".to_string(),
         graph: Some(GraphAnalyticsEngineGraph {
@@ -870,7 +868,6 @@ async fn api_dump_graph(
     let not_found_err = |j: String| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineGetGraphResponse {
-                error: true,
                 error_code: 404,
                 error_message: j.clone(),
                 graph: None,
@@ -894,7 +891,6 @@ async fn api_dump_graph(
 
     // Write response:
     let response = GraphAnalyticsEngineGetGraphResponse {
-        error: false,
         error_code: 0,
         error_message: "".to_string(),
         graph: Some(GraphAnalyticsEngineGraph {
@@ -965,7 +961,6 @@ async fn api_drop_graph(
     let not_found_err = |j: String| {
         warp::reply::with_status(
             serde_json::to_vec(&GraphAnalyticsEngineGetGraphResponse {
-                error: true,
                 error_code: 404,
                 error_message: j.clone(),
                 graph: None,
@@ -989,7 +984,6 @@ async fn api_drop_graph(
     // Write response:
     let response = GraphAnalyticsEngineDeleteGraphResponse {
         graph_id,
-        error: false,
         error_code: 0,
         error_message: "".to_string(),
     };
@@ -1114,7 +1108,6 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
 
     Ok(warp::reply::with_status(
         serde_json::to_vec(&GraphAnalyticsEngineErrorResponse {
-            error: true,
             error_code: code.as_u16() as i32,
             error_message: message,
         })

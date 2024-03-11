@@ -14,12 +14,11 @@
  - Fix APIs without user, e.g. graphs
  - why does it take 3 seconds to load small graph?
  + Bearer and bearer 
+
  - more generic error handling via handle_errors
- - remove stuff from grupload or implement HTTP upload
  - add first metrics: number of graphs, number of computations, memory usage
  - better progress tracking in jobs
  - interrupt jobs
- - Generalize write back of computation result to components computation
  - create target collection
  - job cancellation for load
  - Metrics for ArangoDB import and export
