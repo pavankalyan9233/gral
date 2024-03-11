@@ -505,7 +505,7 @@ async fn api_label_propagation(
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         // TODO: Add asynchronous variant here once implemented:
-        let res = labelpropagation_sync(&graph, 10, &startlabel);
+        let res = labelpropagation_sync(&graph, 64, &startlabel);
         info!("Finished label propagation computation!");
         let mut comp = comp_arc.write().unwrap();
         match res {

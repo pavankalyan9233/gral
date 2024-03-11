@@ -16,7 +16,11 @@ fn load_labels(g: &Graph, pos: usize) -> Vec<String> {
     let nr = g.number_of_vertices() as usize;
     let mut res: Vec<String> = Vec::with_capacity(nr);
     for i in 0..nr as usize {
-        res.push(col[i].to_string());
+        let mut s = col[i].to_string();
+        if s.starts_with("\"") && s.ends_with("\"") && s.len() >= 2 {
+            s = (&s[1..s.len() - 1]).to_string();
+        }
+        res.push(s);
     }
     res
 }
@@ -33,7 +37,7 @@ pub fn labelpropagation_sync(
     let pos = find_label_name_column(g, labelname)?;
     let mut labels: Vec<String> = load_labels(g, pos);
     let mut newlabels: Vec<String> = Vec::with_capacity(nr);
-    println!("{:?}", labels);
+    //println!("{:?}", labels);
 
     // Do up to so many supersteps:
     let mut step: u32 = 0;
@@ -93,7 +97,7 @@ pub fn labelpropagation_sync(
             } else {
                 newlabels.push(labels[v].clone());
             }
-            println!("{:?}", labels);
+            //println!("{:?}", labels);
         }
         let mut diffcount: u64 = 0;
         for v in 0..nr {
