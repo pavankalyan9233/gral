@@ -65,10 +65,20 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Process data which is previously loaded and stores the results in-memory.
-    rpc GraphAnalyticsEngineProcess(GraphAnalyticsEngineProcessRequest) returns (GraphAnalyticsEngineProcessResponse) {
+    // Process data with which is previously loaded with WCC and stores
+    // the results in-memory.
+    rpc GraphAnalyticsEngineRunWcc(GraphAnalyticsEngineWccSccRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            post: "/v2/process"
+            post: "/v2/wcc"
+            body: "*"
+        };
+    }
+
+    // Process data with which is previously loaded with SCC and stores
+    // the results in-memory.
+    rpc GraphAnalyticsEngineRunScc(GraphAnalyticsEngineWccSccRequest) returns (GraphAnalyticsEngineProcessResponse) {
+        option (google.api.http) = {
+            post: "/v2/scc"
             body: "*"
         };
     }
@@ -248,19 +258,14 @@ message GraphAnalyticsEngineLoadDataAqlRequest {
     map<string, string> custom_fields = 6;
 }
 
-// Request arguments for GraphAnalyticsEngineProcess.
-message GraphAnalyticsEngineProcessRequest {    
+// Request arguments for WCC or SCC:
+message GraphAnalyticsEngineWccSccRequest {    
     // Graph ID
     uint64 graph_id = 1;
-    // ID of a previous job to take the input from, this is to build pipelines.
-    uint64 job_id = 2;
-    // Name of algorithm, currently, we have "wcc", "scc" and
-    // "aggregate_components":
-    string algorithm = 3;
    
     // Map of engine-type and algorithm-type specific custom fields (dynamic
     // for this process operation)
-    map<string, string> custom_fields = 4;
+    map<string, string> custom_fields = 2;
 }
 
 // Response arguments from GraphAnalyticsEngineProcess.

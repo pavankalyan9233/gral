@@ -54,13 +54,20 @@ pub fn api_filter(
         .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and_then(api_drop_job);
-    let process = warp::path!("v2" / "process")
+    let wcc = warp::path!("v2" / "wcc")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
-        .and_then(api_process);
+        .and_then(api_wcc);
+    let scc = warp::path!("v2" / "scc")
+        .and(warp::post())
+        .and(with_auth(args.clone()))
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_scc);
     let aggregation_components = warp::path!("v2" / "aggregatecomponents")
         .and(warp::post())
         .and(with_auth(args.clone()))
@@ -140,7 +147,8 @@ pub fn api_filter(
     version
         .or(get_job)
         .or(drop_job)
-        .or(process)
+        .or(wcc)
+        .or(scc)
         .or(aggregation_components)
         .or(pagerank)
         .or(irank)
@@ -230,15 +238,15 @@ fn get_and_check_graph(
     Ok(graph_arc)
 }
 
-/// This function triggers a computation:
-async fn api_process(
+/// This function triggers a WCC computation:
+async fn api_wcc(
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
     computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     // Parse body and extract integers:
-    let parsed: serde_json::Result<GraphAnalyticsEngineProcessRequest> =
+    let parsed: serde_json::Result<GraphAnalyticsEngineWccSccRequest> =
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Ok(err_bad_req_process(
@@ -259,59 +267,98 @@ async fn api_process(
         }
     }
 
-    let algorithm: u32 = match body.algorithm.as_ref() {
-        "wcc" => 1,
-        "scc" => 2,
-        _ => 0,
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
+    let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
+        algorithm: "WCC".to_string(),
+        graph: graph_arc.clone(),
+        components: None,
+        next_in_component: None,
+        shall_stop: false,
+        number: None,
+    }));
+    generic_comp_arc = comp_arc.clone();
+    std::thread::spawn(move || {
+        let graph = graph_arc.read().unwrap();
+        let (nr, components, next) = weakly_connected_components(&graph);
+        info!("Found {} connected components.", nr);
+        let mut comp = comp_arc.write().unwrap();
+        comp.components = Some(components);
+        comp.next_in_component = Some(next);
+        comp.number = Some(nr);
+    });
+
+    let comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        comp_id = comps.register(generic_comp_arc.clone());
+    }
+    let response = GraphAnalyticsEngineProcessResponse {
+        job_id: comp_id,
+        error_code: 0,
+        error_message: "".to_string(),
     };
 
+    // Write response:
+    let v = serde_json::to_vec(&response).expect("Should be serializable!");
+    Ok(warp::reply::with_status(v, StatusCode::OK))
+}
+
+/// This function triggers a WCC computation:
+async fn api_scc(
+    _user: String,
+    graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
+    // Parse body and extract integers:
+    let parsed: serde_json::Result<GraphAnalyticsEngineWccSccRequest> =
+        serde_json::from_slice(&bytes[..]);
+    if let Err(e) = parsed {
+        return Ok(err_bad_req_process(
+            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    let body = parsed.unwrap();
+
+    let graph_arc: Arc<RwLock<Graph>>;
+    match get_and_check_graph(&graphs, body.graph_id) {
+        Err(r) => {
+            return Ok(r);
+        }
+        Ok(g) => {
+            graph_arc = g;
+        }
+    }
+
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
-    match algorithm {
-        1 | 2 => {
-            let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
-                algorithm,
-                graph: graph_arc.clone(),
-                components: None,
-                next_in_component: None,
-                shall_stop: false,
-                number: None,
-            }));
-            generic_comp_arc = comp_arc.clone();
-            std::thread::spawn(move || {
-                let (nr, components, next) = match algorithm {
-                    1 => {
-                        let graph = graph_arc.read().unwrap();
-                        weakly_connected_components(&graph)
-                    }
-                    2 => {
-                        {
-                            // Make sure we have an edge index:
-                            let mut graph = graph_arc.write().unwrap();
-                            if !graph.edges_indexed_from {
-                                info!("Indexing edges by from...");
-                                graph.index_edges(true, false);
-                            }
-                        }
-                        let graph = graph_arc.read().unwrap();
-                        strongly_connected_components(&graph)
-                    }
-                    _ => std::unreachable!(),
-                };
-                info!("Found {} connected components.", nr);
-                let mut comp = comp_arc.write().unwrap();
-                comp.components = Some(components);
-                comp.next_in_component = Some(next);
-                comp.number = Some(nr);
-            });
+    let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
+        algorithm: "SCC".to_string(),
+        graph: graph_arc.clone(),
+        components: None,
+        next_in_component: None,
+        shall_stop: false,
+        number: None,
+    }));
+    generic_comp_arc = comp_arc.clone();
+    std::thread::spawn(move || {
+        {
+            // Make sure we have an edge index:
+            let mut graph = graph_arc.write().unwrap();
+            if !graph.edges_indexed_from {
+                info!("Indexing edges by from...");
+                graph.index_edges(true, false);
+            }
         }
-        _ => {
-            return Ok(err_bad_req_process(
-                format!("Unknown algorithm: {}", body.algorithm),
-                400,
-                StatusCode::BAD_REQUEST,
-            ));
-        }
-    };
+        let graph = graph_arc.read().unwrap();
+        let (nr, components, next) = strongly_connected_components(&graph);
+        info!("Found {} connected components.", nr);
+        let mut comp = comp_arc.write().unwrap();
+        comp.components = Some(components);
+        comp.next_in_component = Some(next);
+        comp.number = Some(nr);
+    });
 
     let comp_id: u64;
     {
@@ -480,7 +527,7 @@ async fn api_pagerank(
     }
     let comp_arc = Arc::new(RwLock::new(PageRankComputation {
         graph: graph_arc.clone(),
-        algorithm: 4,
+        algorithm: "pagerank".to_string(),
         shall_stop: false,
         total: 100,
         progress: 0,
@@ -558,7 +605,7 @@ async fn api_irank(
     }
     let comp_arc = Arc::new(RwLock::new(PageRankComputation {
         graph: graph_arc.clone(),
-        algorithm: 4,
+        algorithm: "irank".to_string(),
         shall_stop: false,
         total: 100,
         progress: 0,
@@ -858,19 +905,6 @@ async fn api_get_arangodb_graph_aql(
     Ok(warp::reply::with_status(v, StatusCode::OK))
 }
 
-fn id_to_type(id: u32) -> String {
-    match id {
-        0 => "loaddata",
-        1 => "wcc",
-        2 => "scc",
-        3 => "aggregation",
-        4 => "pagerank",
-        5 => "storedata",
-        _ => "",
-    }
-    .to_string()
-}
-
 /// This function gets progress of a computation.
 async fn api_get_job(
     job_id: u64,
@@ -917,7 +951,7 @@ async fn api_get_job(
                 error_code,
                 error_message,
                 source_job: "".to_string(),
-                comp_type: id_to_type(comp.algorithm_id()),
+                comp_type: comp.algorithm_name(),
             };
             Ok(warp::reply::with_status(
                 serde_json::to_vec(&response).expect("Should be serializable"),
@@ -1102,7 +1136,7 @@ async fn api_list_jobs(
             error_code,
             error_message,
             source_job: "".to_string(),
-            comp_type: id_to_type(comp.algorithm_id()),
+            comp_type: comp.algorithm_name(),
         };
         response.push(j);
     }

@@ -14,7 +14,7 @@ pub trait Computation {
     fn get_total(&self) -> u32;
     fn get_progress(&self) -> u32;
     fn get_graph(&self) -> Arc<RwLock<Graph>>;
-    fn algorithm_id(&self) -> u32;
+    fn algorithm_name(&self) -> String;
     fn as_any(&self) -> &dyn Any;
     fn nr_results(&self) -> u64;
     fn get_result(&self, which: u64) -> (String, String);
@@ -47,7 +47,7 @@ pub fn with_computations(
 }
 
 pub struct ComponentsComputation {
-    pub algorithm: u32,
+    pub algorithm: String,
     pub graph: Arc<RwLock<Graph>>,
     pub components: Option<Vec<u64>>,
     pub next_in_component: Option<Vec<i64>>,
@@ -65,8 +65,8 @@ impl Computation for ComponentsComputation {
     fn cancel(&mut self) {
         self.shall_stop = true;
     }
-    fn algorithm_id(&self) -> u32 {
-        self.algorithm
+    fn algorithm_name(&self) -> String {
+        self.algorithm.clone()
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         self.graph.clone()
@@ -126,8 +126,8 @@ impl Computation for LoadComputation {
     fn cancel(&mut self) {
         self.shall_stop = true;
     }
-    fn algorithm_id(&self) -> u32 {
-        0
+    fn algorithm_name(&self) -> String {
+        "".to_string()
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         self.graph.clone()
@@ -181,8 +181,8 @@ impl Computation for AggregationComputation {
     fn cancel(&mut self) {
         self.shall_stop = true;
     }
-    fn algorithm_id(&self) -> u32 {
-        3
+    fn algorithm_name(&self) -> String {
+        "ComponentsAggregation".to_string()
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         self.graph.clone()
@@ -232,8 +232,8 @@ impl Computation for StoreComputation {
     fn cancel(&mut self) {
         self.shall_stop = true;
     }
-    fn algorithm_id(&self) -> u32 {
-        4
+    fn algorithm_name(&self) -> String {
+        "Store Operation".to_string()
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         let comp = self.comp[0].read().unwrap();
@@ -258,7 +258,7 @@ impl Computation for StoreComputation {
 
 pub struct PageRankComputation {
     pub graph: Arc<RwLock<Graph>>,
-    pub algorithm: u32,
+    pub algorithm: String,
     pub shall_stop: bool,
     pub total: u32,
     pub progress: u32,
@@ -279,8 +279,8 @@ impl Computation for PageRankComputation {
     fn cancel(&mut self) {
         self.shall_stop = true;
     }
-    fn algorithm_id(&self) -> u32 {
-        self.algorithm
+    fn algorithm_name(&self) -> String {
+        self.algorithm.clone()
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         self.graph.clone()
@@ -331,8 +331,8 @@ impl Computation for LabelPropagationComputation {
     fn cancel(&mut self) {
         self.shall_stop = true;
     }
-    fn algorithm_id(&self) -> u32 {
-        6
+    fn algorithm_name(&self) -> String {
+        "Label Propagation".to_string()
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         self.graph.clone()
