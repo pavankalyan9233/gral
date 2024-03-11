@@ -1,6 +1,6 @@
 use crate::graphs::Graph;
 use log::info;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::HashMap;
 
 fn find_label_name_column(g: &Graph, l: &str) -> Result<usize, String> {
@@ -45,6 +45,7 @@ pub fn labelpropagation_sync(
 
     // Do up to so many supersteps:
     let mut step: u32 = 0;
+    let mut rng = thread_rng();
     while step < supersteps {
         step += 1;
         info!(
@@ -94,10 +95,25 @@ pub fn labelpropagation_sync(
             }
             if !counts.is_empty() {
                 // Now count the multiplicities and take the largest one:
-                let mut labellist: Vec<(&String, u64)> =
-                    counts.iter().map(|(k, v)| (*k, *v)).collect();
-                labellist.sort_by(|a, b| (*b).1.cmp(&(*a).1));
-                newlabels.push(labellist[0].0);
+                let mut max_mult: u64 = 0;
+                let mut max_labels: Vec<&String> = Vec::with_capacity(5);
+                for (k, m) in counts.iter() {
+                    if *m >= max_mult {
+                        if *m > max_mult {
+                            max_mult = *m;
+                            max_labels.clear();
+                            max_labels.push(*k);
+                        } else {
+                            max_labels.push(*k);
+                        }
+                    }
+                }
+                let choice = if max_labels.len() == 1 {
+                    max_labels[0]
+                } else {
+                    max_labels[rng.gen_range(0..max_labels.len())]
+                };
+                newlabels.push(choice);
             } else {
                 newlabels.push(labels[v]);
             }
@@ -146,6 +162,7 @@ pub fn labelpropagation_async(
     // Do up to so many supersteps:
     let mut step: u32 = 0;
     let mut order: Vec<usize> = (0..nr).collect();
+    let mut rng = thread_rng();
     while step < supersteps {
         step += 1;
         info!(
@@ -155,7 +172,7 @@ pub fn labelpropagation_async(
         // Go through all vertices and determine new label, need to look at
         // directed edges in both directions!
         let mut diffcount: u64 = 0;
-        order.shuffle(&mut thread_rng());
+        order.shuffle(&mut rng);
         for vv in 0..nr {
             let v = order[vv];
             let mut counts = HashMap::<&String, u64>::with_capacity(101);
@@ -198,12 +215,27 @@ pub fn labelpropagation_async(
             }
             if !counts.is_empty() {
                 // Now count the multiplicities and take the largest one:
-                let mut labellist: Vec<(&String, u64)> =
-                    counts.iter().map(|(k, v)| (*k, *v)).collect();
-                labellist.sort_by(|a, b| (*b).1.cmp(&(*a).1));
-                if labels[v] != labellist[0].0 {
+                let mut max_mult: u64 = 0;
+                let mut max_labels: Vec<&String> = Vec::with_capacity(5);
+                for (k, m) in counts.iter() {
+                    if *m >= max_mult {
+                        if *m > max_mult {
+                            max_mult = *m;
+                            max_labels.clear();
+                            max_labels.push(*k);
+                        } else {
+                            max_labels.push(*k);
+                        }
+                    }
+                }
+                let choice = if max_labels.len() == 1 {
+                    max_labels[0]
+                } else {
+                    max_labels[rng.gen_range(0..max_labels.len())]
+                };
+                if labels[v] != choice {
                     diffcount += 1;
-                    labels[v] = labellist[0].0;
+                    labels[v] = choice;
                 }
             }
         }
