@@ -73,6 +73,15 @@ service GraphAnalyticsEngineService {
         };
     }
 
+    // Run aggregation computation on components result which is previously
+    // computed loaded and stores the results in-memory.
+    rpc GraphAnalyticsEngineRunCompAggregation(GraphAnalyticsEngineAggregateComponentsRequest) returns (GraphAnalyticsEngineProcessResponse) {
+        option (google.api.http) = {
+            post: "/v2/aggregatecomponents"
+            body: "*"
+        };
+    }
+
     // Run pagerank computation on data which is previously loaded  and stores
     // the results in-memory.
     rpc GraphAnalyticsEngineRunPageRank(GraphAnalyticsEnginePageRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
@@ -251,7 +260,7 @@ message GraphAnalyticsEngineProcessRequest {
    
     // Map of engine-type and algorithm-type specific custom fields (dynamic
     // for this process operation)
-    map<string, string> custom_fields = 10;
+    map<string, string> custom_fields = 4;
 }
 
 // Response arguments from GraphAnalyticsEngineProcess.
@@ -262,6 +271,16 @@ message GraphAnalyticsEngineProcessResponse {
     int32 error_code = 2;
     // Error message, empty if no error
     string error_message = 3;
+}
+
+// Request arguments for GraphAnalyticsEngineRunCompAggregation:
+message GraphAnalyticsEngineAggregateComponentsRequest {    
+    // Graph ID
+    uint64 graph_id = 1;
+    // Job ID
+    uint64 job_id = 2;
+    // Aggregation attribute:
+    string aggregation_attribute = 3;
 }
 
 // Request arguments for GraphAnalyticsEngineRunPageRank:

@@ -61,6 +61,13 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_process);
+    let aggregation_components = warp::path!("v2" / "aggregatecomponents")
+        .and(warp::post())
+        .and(with_auth(args.clone()))
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_aggregate_components);
     let pagerank = warp::path!("v2" / "pagerank")
         .and(warp::post())
         .and(with_auth(args.clone()))
@@ -134,6 +141,7 @@ pub fn api_filter(
         .or(get_job)
         .or(drop_job)
         .or(process)
+        .or(aggregation_components)
         .or(pagerank)
         .or(irank)
         .or(label_prop)
@@ -251,25 +259,9 @@ async fn api_process(
         }
     }
 
-    // Computation ID is optional:
-    let mut prev_comp: Option<Arc<RwLock<dyn Computation + Send + Sync>>> = None;
-    if body.job_id != 0 {
-        let comps = computations.lock().unwrap();
-        let comp = comps.list.get(&body.job_id);
-        if comp.is_none() {
-            return Ok(err_bad_req_process(
-                format!("Could not find previous job id {}.", &body.job_id),
-                400,
-                StatusCode::BAD_REQUEST,
-            ));
-        }
-        prev_comp = Some(comp.unwrap().clone());
-    }
-
     let algorithm: u32 = match body.algorithm.as_ref() {
         "wcc" => 1,
         "scc" => 2,
-        "aggregate_components" => 3,
         _ => 0,
     };
 
@@ -312,61 +304,6 @@ async fn api_process(
                 comp.number = Some(nr);
             });
         }
-        3 => {
-            if prev_comp.is_none() {
-                return Ok(err_bad_req_process(
-                    "Aggregation algorithm needs previous computation as absis to work".to_string(),
-                    400,
-                    StatusCode::BAD_REQUEST,
-                ));
-            }
-            let prev_comp = prev_comp.unwrap();
-            let guard = prev_comp.read().unwrap();
-            let downcast = guard.as_any().downcast_ref::<ComponentsComputation>();
-            if downcast.is_none() {
-                // Wrong actual type!
-                return Ok(err_bad_req_process(
-                    "Aggregation algorithm needs previous component computation as basis to
-                        work"
-                        .to_string(),
-                    400,
-                    StatusCode::BAD_REQUEST,
-                ));
-            }
-            let attr = body.custom_fields.get("aggregationAttribute");
-            let attr = match attr {
-                Some(s) => s.clone(),
-                None => "value".to_string(),
-            };
-            let comp_arc = Arc::new(RwLock::new(AggregationComputation {
-                graph: graph_arc.clone(),
-                compcomp: prev_comp.clone(),
-                aggregation_attribute: attr.to_string(),
-                shall_stop: false,
-                total: 1,
-                progress: 0,
-                error_code: 0,
-                error_message: "".to_string(),
-                result: vec![],
-            }));
-            generic_comp_arc = comp_arc.clone();
-            let prev_comp_clone = prev_comp.clone();
-            std::thread::spawn(move || {
-                // Lock first the computation, then the graph!
-                let guard = prev_comp_clone.read().unwrap();
-                let compcomp = guard
-                    .as_any()
-                    .downcast_ref::<ComponentsComputation>()
-                    .unwrap();
-                // already checked outside!
-
-                let res = aggregate_over_components(compcomp, attr);
-                info!("Aggregated over {} connected components.", res.len());
-                let mut comp = comp_arc.write().unwrap();
-                comp.result = res;
-                comp.progress = 1;
-            });
-        }
         _ => {
             return Ok(err_bad_req_process(
                 format!("Unknown algorithm: {}", body.algorithm),
@@ -375,6 +312,117 @@ async fn api_process(
             ));
         }
     };
+
+    let comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        comp_id = comps.register(generic_comp_arc.clone());
+    }
+    let response = GraphAnalyticsEngineProcessResponse {
+        job_id: comp_id,
+        error_code: 0,
+        error_message: "".to_string(),
+    };
+
+    // Write response:
+    let v = serde_json::to_vec(&response).expect("Should be serializable!");
+    Ok(warp::reply::with_status(v, StatusCode::OK))
+}
+
+/// This function triggers an aggregation computation over components:
+async fn api_aggregate_components(
+    _user: String,
+    graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
+    // Parse body and extract integers:
+    let parsed: serde_json::Result<GraphAnalyticsEngineAggregateComponentsRequest> =
+        serde_json::from_slice(&bytes[..]);
+    if let Err(e) = parsed {
+        return Ok(err_bad_req_process(
+            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    let body = parsed.unwrap();
+
+    let graph_arc: Arc<RwLock<Graph>>;
+    match get_and_check_graph(&graphs, body.graph_id) {
+        Err(r) => {
+            return Ok(r);
+        }
+        Ok(g) => {
+            graph_arc = g;
+        }
+    }
+
+    // Computation ID is optional:
+    let mut prev_comp: Option<Arc<RwLock<dyn Computation + Send + Sync>>> = None;
+    if body.job_id != 0 {
+        let comps = computations.lock().unwrap();
+        let comp = comps.list.get(&body.job_id);
+        if comp.is_none() {
+            return Ok(err_bad_req_process(
+                format!("Could not find previous job id {}.", &body.job_id),
+                400,
+                StatusCode::BAD_REQUEST,
+            ));
+        }
+        prev_comp = Some(comp.unwrap().clone());
+    }
+
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
+    if prev_comp.is_none() {
+        return Ok(err_bad_req_process(
+            "Aggregation algorithm needs previous computation as absis to work".to_string(),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    let prev_comp = prev_comp.unwrap();
+    let guard = prev_comp.read().unwrap();
+    let downcast = guard.as_any().downcast_ref::<ComponentsComputation>();
+    if downcast.is_none() {
+        // Wrong actual type!
+        return Ok(err_bad_req_process(
+            "Aggregation algorithm needs previous component computation as basis to
+                work"
+                .to_string(),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    let attr = body.aggregation_attribute.clone();
+    let comp_arc = Arc::new(RwLock::new(AggregationComputation {
+        graph: graph_arc.clone(),
+        compcomp: prev_comp.clone(),
+        aggregation_attribute: attr.clone(),
+        shall_stop: false,
+        total: 1,
+        progress: 0,
+        error_code: 0,
+        error_message: "".to_string(),
+        result: vec![],
+    }));
+    generic_comp_arc = comp_arc.clone();
+    let prev_comp_clone = prev_comp.clone();
+    std::thread::spawn(move || {
+        // Lock first the computation, then the graph!
+        let guard = prev_comp_clone.read().unwrap();
+        let compcomp = guard
+            .as_any()
+            .downcast_ref::<ComponentsComputation>()
+            .unwrap();
+        // already checked outside!
+
+        let res = aggregate_over_components(compcomp, attr);
+        info!("Aggregated over {} connected components.", res.len());
+        let mut comp = comp_arc.write().unwrap();
+        comp.result = res;
+        comp.progress = 1;
+    });
 
     let comp_id: u64;
     {
