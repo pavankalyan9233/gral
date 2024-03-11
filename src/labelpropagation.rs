@@ -45,8 +45,8 @@ pub fn labelpropagation_sync(
         );
         // Go through all vertices and determine new label, need to look at
         // directed edges in both directions!
-        let mut counts = HashMap::<&String, u64>::with_capacity(101);
         for v in 0..nr {
+            let mut counts = HashMap::<&String, u64>::with_capacity(101);
             let first_edge = g.edge_index_by_from[v] as usize;
             let last_edge = g.edge_index_by_from[v + 1] as usize;
             let edge_nr = last_edge - first_edge;
