@@ -1,5 +1,6 @@
 use crate::graphs::Graph;
 use log::info;
+use rand::{seq::SliceRandom, thread_rng};
 use std::collections::HashMap;
 
 fn find_label_name_column(g: &Graph, l: &str) -> Result<usize, String> {
@@ -144,6 +145,7 @@ pub fn labelpropagation_async(
 
     // Do up to so many supersteps:
     let mut step: u32 = 0;
+    let mut order: Vec<usize> = (0..nr).collect();
     while step < supersteps {
         step += 1;
         info!(
@@ -153,7 +155,9 @@ pub fn labelpropagation_async(
         // Go through all vertices and determine new label, need to look at
         // directed edges in both directions!
         let mut diffcount: u64 = 0;
-        for v in 0..nr {
+        order.shuffle(&mut thread_rng());
+        for vv in 0..nr {
+            let v = order[vv];
             let mut counts = HashMap::<&String, u64>::with_capacity(101);
             let first_edge = g.edge_index_by_from[v] as usize;
             let last_edge = g.edge_index_by_from[v + 1] as usize;
