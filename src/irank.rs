@@ -1,5 +1,5 @@
 use crate::graphs::Graph;
-use log::info;
+use log::{error, info};
 use std::collections::HashMap;
 
 fn find_collection_name_column(g: &Graph) -> Result<usize, String> {
@@ -9,7 +9,10 @@ fn find_collection_name_column(g: &Graph) -> Result<usize, String> {
         .iter()
         .position(|s| s == "@collectionname");
     match pos {
-        None => Err("Need @collectionname as a column in column store!".to_string()),
+        None => {
+            error!("Need @collectionname as a column in column store for irank!");
+            Err("Need @collectionname as a column in column store!".to_string())
+        }
         Some(pos) => Ok(pos),
     }
 }
