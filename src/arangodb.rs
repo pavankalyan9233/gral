@@ -827,8 +827,10 @@ pub async fn write_result_to_arangodb(
         // Now ask all computations for their number of items and look for
         // the minimum:
         let mut nr_items = results[0].nr_results();
+        info!("Found {} result items in computation 0.", nr_items);
         for i in 1..nr_results {
             let items = results[i].nr_results();
+            info!("Found {} result items in computation {}.", items, i);
             if items < nr_items {
                 nr_items = items;
             }
