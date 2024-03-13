@@ -1,6 +1,6 @@
 use crate::graphs::Graph;
 use log::info;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::HashMap;
 
 fn find_label_name_column(g: &Graph, l: &str) -> Result<usize, String> {
@@ -30,6 +30,7 @@ pub fn labelpropagation_sync(
     g: &Graph,
     supersteps: u32,
     labelname: &str,
+    random_tiebreak: bool,
 ) -> Result<(Vec<String>, u32), String> {
     info!("Running synchronous label propagation...");
     let start = std::time::SystemTime::now();
@@ -45,6 +46,7 @@ pub fn labelpropagation_sync(
 
     // Do up to so many supersteps:
     let mut step: u32 = 0;
+    let mut rng = thread_rng(); // in case we break ties randomly!
     while step < supersteps {
         step += 1;
         info!(
@@ -92,27 +94,52 @@ pub fn labelpropagation_sync(
                     }
                 }
             }
-            if !counts.is_empty() {
-                // Now count the multiplicities and take the largest one,
-                // break the tie by taking the smallest label:
-                let mut max_mult: u64 = 0;
-                let mut max_label: &String = labels[v];
-                for (k, m) in counts.iter() {
-                    if *m >= max_mult {
-                        if *m > max_mult {
-                            max_mult = *m;
-                            max_label = *k;
-                        } else {
-                            if *k < max_label {
-                                max_label = *k;
+            let mut choice: &String = labels[v]; // default to old label!
+            if random_tiebreak {
+                if !counts.is_empty() {
+                    // Now count the multiplicities and take the largest one:
+                    let mut max_mult: u64 = 0;
+                    let mut max_labels: Vec<&String> = Vec::with_capacity(5);
+                    for (k, m) in counts.iter() {
+                        if *m >= max_mult {
+                            if *m > max_mult {
+                                max_mult = *m;
+                                max_labels.clear();
+                                max_labels.push(*k);
+                            } else {
+                                max_labels.push(*k);
                             }
                         }
                     }
+                    choice = if max_labels.len() == 1 {
+                        max_labels[0]
+                    } else {
+                        max_labels[rng.gen_range(0..max_labels.len())]
+                    }
                 }
-                newlabels.push(max_label);
             } else {
-                newlabels.push(labels[v]);
+                // deterministic tiebreak:
+                if !counts.is_empty() {
+                    // Now count the multiplicities and take the largest one,
+                    // break the tie by taking the smallest label:
+                    let mut max_mult: u64 = 0;
+                    let mut max_label: &String = labels[v];
+                    for (k, m) in counts.iter() {
+                        if *m >= max_mult {
+                            if *m > max_mult {
+                                max_mult = *m;
+                                max_label = *k;
+                            } else {
+                                if *k < max_label {
+                                    max_label = *k;
+                                }
+                            }
+                        }
+                    }
+                    choice = max_label;
+                }
             }
+            newlabels.push(choice);
         }
         let mut diffcount: u64 = 0;
         for v in 0..nr {
@@ -143,6 +170,7 @@ pub fn labelpropagation_async(
     g: &Graph,
     supersteps: u32,
     labelname: &str,
+    random_tiebreak: bool,
 ) -> Result<(Vec<String>, u32), String> {
     info!("Running asynchronous label propagation...");
     let start = std::time::SystemTime::now();
@@ -209,27 +237,54 @@ pub fn labelpropagation_async(
                     }
                 }
             }
-            if !counts.is_empty() {
-                // Now count the multiplicities and take the largest one,
-                // break the tie by taking the smallest label:
-                let mut max_mult: u64 = 0;
-                let mut max_label: &String = labels[v];
-                for (k, m) in counts.iter() {
-                    if *m >= max_mult {
-                        if *m > max_mult {
-                            max_mult = *m;
-                            max_label = *k;
-                        } else {
-                            if *k < max_label {
-                                max_label = *k;
+            let mut choice: &String = labels[v];
+            if random_tiebreak {
+                if !counts.is_empty() {
+                    // Now count the multiplicities and take the largest one:
+                    let mut max_mult: u64 = 0;
+                    let mut max_labels: Vec<&String> = Vec::with_capacity(5);
+                    for (k, m) in counts.iter() {
+                        if *m >= max_mult {
+                            if *m > max_mult {
+                                max_mult = *m;
+                                max_labels.clear();
+                                max_labels.push(*k);
+                            } else {
+                                max_labels.push(*k);
                             }
                         }
                     }
+                    choice = if max_labels.len() == 1 {
+                        max_labels[0]
+                    } else {
+                        max_labels[rng.gen_range(0..max_labels.len())]
+                    }
                 }
-                if labels[v] != max_label {
-                    diffcount += 1;
-                    labels[v] = max_label;
+            } else {
+                // deterministic tiebreak:
+                if !counts.is_empty() {
+                    // Now count the multiplicities and take the largest one,
+                    // break the tie by taking the smallest label:
+                    let mut max_mult: u64 = 0;
+                    let mut max_label: &String = labels[v];
+                    for (k, m) in counts.iter() {
+                        if *m >= max_mult {
+                            if *m > max_mult {
+                                max_mult = *m;
+                                max_label = *k;
+                            } else {
+                                if *k < max_label {
+                                    max_label = *k;
+                                }
+                            }
+                        }
+                    }
+                    choice = max_label;
                 }
+            }
+            if labels[v] != choice {
+                diffcount += 1;
+                labels[v] = choice;
             }
         }
         info!(

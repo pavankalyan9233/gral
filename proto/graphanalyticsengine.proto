@@ -308,6 +308,10 @@ message GraphAnalyticsEngineLabelPropagationRequest {
     // Flag to indicate whether synchronous (true) or asynchronous label
     // propagation is used:
     bool synchronous = 3;
+    // Flag indicating if ties in the label choice are broken randomly
+    // (uniform distribution) or deterministically (smallest label amongst
+    // the most frequent ones):
+    bool random_tiebreak = 4;
 }
 
 // Request arguments for GraphAnalyticsEngineStoreResults.

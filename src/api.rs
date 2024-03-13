@@ -703,9 +703,9 @@ async fn api_label_propagation(
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let res = if body.synchronous {
-            labelpropagation_sync(&graph, 64, &startlabel)
+            labelpropagation_sync(&graph, 64, &startlabel, body.random_tiebreak)
         } else {
-            labelpropagation_async(&graph, 64, &startlabel)
+            labelpropagation_async(&graph, 64, &startlabel, body.random_tiebreak)
         };
         info!("Finished label propagation computation!");
         let mut comp = comp_arc.write().unwrap();
