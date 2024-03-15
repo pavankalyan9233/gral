@@ -2,6 +2,7 @@
 use hmac::{Hmac, Mac};
 use jwt::header::HeaderType;
 use jwt::{AlgorithmType, Header, SignWithKey, Token, VerifyWithKey};
+use log::info;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::{Arc, Mutex};
@@ -133,6 +134,8 @@ async fn authorize(
     // Now let's extract the auth token, if this already fails, we block
     // the request (note the ?):
     let token = extract_auth_token(&headers)?;
+
+    info!("Token received for authorization: {token}");
 
     // Do we authenticate via the auth service?
     let auth_service;

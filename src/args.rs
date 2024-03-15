@@ -29,7 +29,7 @@ OPTIONS:
   --arangodb-endpoints   Network endpoints for ArangoDB deployment (multiple,
                          separated by commas are possible)
                          [default: 'https://localhost:8529']
-  --authentication BOOL  Check authentication [default: false]
+  --authentication BOOL  Check authentication [default: true]
   --arangodb-user USER   ArangoDB user to fall back to without authentication
   --arangodb-jwt-secrets Path name with jwt secrets [default: 'secrets.jwt']
   --auth-service ADDR    Hostname and port of authentication service
@@ -185,7 +185,7 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
             .unwrap_or(default_endpoint),
         authentication: pargs
             .opt_value_from_str("--authentication")?
-            .unwrap_or(false),
+            .unwrap_or(true),
         arangodb_user: pargs
             .opt_value_from_str("--arangodb-user")?
             .unwrap_or(default_arangodb_user),
