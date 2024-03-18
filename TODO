@@ -1,33 +1,23 @@
- + Test pagerank
- + Remember loaded fields in graph, change setup of column store
- + Graph ids integers (API change)
- + job ids integers (API change)
- + Write results pagerank
- + Implement irank
- + Test irank
- + write results irank
- + implement label propagation
- + test label propagation
- + write results label propagation
- + get rid of client IDs, polish API
- + write results combined?
- + Fix APIs without user, e.g. graphs
- + Bearer and bearer 
-
- - why does it take 3 seconds to load small graph?
- - more generic error handling via handle_errors
+ - display memory usage per graph and per computation via API
  - add first metrics: number of graphs, number of computations, memory usage
- - better progress tracking in jobs
- - interrupt jobs
- - create target collection
- - job cancellation for load
- - Metrics for ArangoDB import and export
- - AQL query load (for subgraph import)
- - use projections
- - subgraph import via dump endpoint
+ - CI integration (CircleCI? github actions?)
+ - Add integration test with ArangoDB and service
+ - documentation of API
+ - example usage in documentation
+
+ - benchmark against Neo4j?
+ - more tests
+ - better progress tracking in compute jobs
  - Progress report on load of vertices and edges
  - Progress report on writeback of results
- - direct randomize/upload
- - Extend end to end test
- - coverage?
- - Tune randomize (parallelization)
+ - interrupt jobs
+ - create target collection if not already there
+ - Metrics for ArangoDB import and export
+ - AQL query load (for subgraph import)
+ - job cancellation for load
+ - use projections in 3.12
+ - subgraph import via dump endpoint
+ - direct randomize/upload to quickly make random graphs
+ - why does it take 3 seconds to load small graph?
+
+ - more algorithms
