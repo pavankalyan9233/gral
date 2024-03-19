@@ -991,7 +991,7 @@ async fn api_drop_job(
                 let mut comp = comp_arc.write().unwrap();
                 comp.cancel();
             }
-            comps.list.remove(&job_id);
+            comps.remove(job_id);
 
             // Write response:
             let response = GraphAnalyticsEngineDeleteJobResponse {
@@ -1172,7 +1172,7 @@ async fn api_drop_graph(
 
     // The following will automatically free graph if no longer used by
     // a computation:
-    graphs.list.remove(&graph_id);
+    graphs.remove(graph_id);
     info!("Have dropped graph {}!", graph_id);
 
     // Write response:

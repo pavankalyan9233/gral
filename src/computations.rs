@@ -1,3 +1,4 @@
+use metrics::{decrement_gauge, increment_gauge};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
@@ -36,7 +37,14 @@ impl Computations {
         let comp_id = self.next_id;
         self.next_id += 1;
         self.list.insert(comp_id, comp);
+        increment_gauge!("number_of_computations", 1.0);
         comp_id
+    }
+    pub fn remove(&mut self, id: u64) {
+        let found = self.list.remove(&id);
+        if found.is_some() {
+            decrement_gauge!("number_of_computations", 1.0);
+        }
     }
 }
 

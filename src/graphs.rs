@@ -1,5 +1,5 @@
 use log::info;
-use metrics::increment_counter;
+use metrics::{decrement_gauge, increment_counter, increment_gauge};
 use rand::Rng;
 use serde_json::Value;
 use std::cmp::Ordering;
@@ -139,7 +139,14 @@ impl Graphs {
             guard.graph_id = graph_id;
         }
         self.list.insert(graph_id, graph);
+        increment_gauge!("number_of_graphs", 1.0);
         graph_id
+    }
+    pub fn remove(&mut self, id: u64) {
+        let found = self.list.remove(&id);
+        if found.is_some() {
+            decrement_gauge!("number_of_graphs", 1.0);
+        }
     }
 }
 
