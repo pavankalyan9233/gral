@@ -1,10 +1,10 @@
  + display memory usage per graph 
  + change API version to 1
  + add first metrics: number of graphs, number of computations
+ + display memory usage per computation via API
 
- - display memory usage per computation via API
- - CI integration (CircleCI? github actions?)
  - Add integration test with ArangoDB and service
+ - CI integration (CircleCI? github actions?)
  - documentation of API
  - example usage in documentation
 

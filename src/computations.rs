@@ -116,10 +116,10 @@ impl Computation for ComponentsComputation {
     }
     fn memory_usage(&self) -> usize {
         let mut total: usize = 0;
-        if let Some(c) = self.components {
+        if let Some(c) = &self.components {
             total += c.len() * std::mem::size_of::<u64>();
         }
-        if let Some(n) = self.next_in_component {
+        if let Some(n) = &self.next_in_component {
             total += n.len() * std::mem::size_of::<u64>()
         }
         total
