@@ -31,7 +31,7 @@ pub fn labelpropagation_sync(
     supersteps: u32,
     labelname: &str,
     random_tiebreak: bool,
-) -> Result<(Vec<String>, u32), String> {
+) -> Result<(Vec<String>, usize, u32), String> {
     info!("Running synchronous label propagation...");
     let start = std::time::SystemTime::now();
 
@@ -160,10 +160,12 @@ pub fn labelpropagation_sync(
     let dur = start.elapsed();
     info!("label propagation (sync) completed in {dur:?} seconds.");
     let mut result: Vec<String> = Vec::with_capacity(nr);
+    let mut total_label_size: usize = 0;
     for s in &labels {
+        total_label_size += s.len();
         result.push((*s).clone());
     }
-    Ok((result, step))
+    Ok((result, total_label_size, step))
 }
 
 pub fn labelpropagation_async(
@@ -171,7 +173,7 @@ pub fn labelpropagation_async(
     supersteps: u32,
     labelname: &str,
     random_tiebreak: bool,
-) -> Result<(Vec<String>, u32), String> {
+) -> Result<(Vec<String>, usize, u32), String> {
     info!("Running asynchronous label propagation...");
     let start = std::time::SystemTime::now();
 
@@ -298,10 +300,12 @@ pub fn labelpropagation_async(
     let dur = start.elapsed();
     info!("label propagation (sync) completed in {dur:?} seconds.");
     let mut result: Vec<String> = Vec::with_capacity(nr);
+    let mut total_label_size: usize = 0;
     for s in &labels {
+        total_label_size += s.len();
         result.push((*s).clone());
     }
-    Ok((result, step))
+    Ok((result, total_label_size, step))
 }
 
 #[cfg(test)]
@@ -322,7 +326,7 @@ mod tests {
         }
         g.vertex_column_types = vec!["string".to_string()];
         g.index_edges(true, true);
-        let (labels, _steps) = labelpropagation_sync(&g, 10, "startlabel").unwrap();
+        let (labels, _size, _steps) = labelpropagation_sync(&g, 10, "startlabel", false).unwrap();
         println!("{:?}", labels);
     }
 
@@ -337,7 +341,7 @@ mod tests {
         }
         g.vertex_column_types = vec!["string".to_string()];
         g.index_edges(true, true);
-        let (labels, _steps) = labelpropagation_sync(&g, 5, "startlabel").unwrap();
+        let (labels, _size, _steps) = labelpropagation_sync(&g, 5, "startlabel", false).unwrap();
         println!("{:?}", labels);
     }
 }

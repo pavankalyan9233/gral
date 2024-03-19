@@ -432,6 +432,8 @@ message GraphAnalyticsEngineJob {
     string source_job = 8;
     // Computation type:
     string comp_type = 9;
+    // Memory usage:
+    uint64 memory_usage = 10;
 }
 
 // Response for a delete job request.

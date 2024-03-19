@@ -697,6 +697,7 @@ async fn api_label_propagation(
         error_message: "".to_string(),
         label: vec![],
         result_position: 0,
+        label_size_sum: 0,
     }));
     generic_comp_arc = comp_arc.clone();
     let startlabel = body.start_label_attribute.clone();
@@ -710,8 +711,9 @@ async fn api_label_propagation(
         info!("Finished label propagation computation!");
         let mut comp = comp_arc.write().unwrap();
         match res {
-            Ok((label, _steps)) => {
+            Ok((label, label_size, _steps)) => {
                 comp.label = label;
+                comp.label_size_sum = label_size;
                 comp.error_code = 0;
             }
             Err(e) => {
@@ -923,6 +925,7 @@ async fn api_get_job(
                 error_code: 404,
                 error_message: j,
                 comp_type: "".to_string(),
+                memory_usage: 0,
             })
             .unwrap(),
             StatusCode::NOT_FOUND,
@@ -952,6 +955,7 @@ async fn api_get_job(
                 error_message,
                 source_job: "".to_string(),
                 comp_type: comp.algorithm_name(),
+                memory_usage: comp.memory_usage() as u64,
             };
             Ok(warp::reply::with_status(
                 serde_json::to_vec(&response).expect("Should be serializable"),
@@ -1140,6 +1144,7 @@ async fn api_list_jobs(
             error_message,
             source_job: "".to_string(),
             comp_type: comp.algorithm_name(),
+            memory_usage: comp.memory_usage() as u64,
         };
         response.push(j);
     }

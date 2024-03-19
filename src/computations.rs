@@ -19,6 +19,7 @@ pub trait Computation {
     fn as_any(&self) -> &dyn Any;
     fn nr_results(&self) -> u64;
     fn get_result(&self, which: u64) -> (String, String);
+    fn memory_usage(&self) -> usize;
 }
 
 pub struct Computations {
@@ -113,6 +114,16 @@ impl Computation for ComponentsComputation {
             }
         }
     }
+    fn memory_usage(&self) -> usize {
+        let mut total: usize = 0;
+        if let Some(c) = self.components {
+            total += c.len() * std::mem::size_of::<u64>();
+        }
+        if let Some(n) = self.next_in_component {
+            total += n.len() * std::mem::size_of::<u64>()
+        }
+        total
+    }
 }
 
 pub struct LoadComputation {
@@ -154,6 +165,10 @@ impl Computation for LoadComputation {
     }
     fn get_result(&self, _which: u64) -> (String, String) {
         ("".to_string(), "".to_string())
+    }
+    fn memory_usage(&self) -> usize {
+        // Memory for graph accounted for there!
+        0
     }
 }
 
@@ -219,6 +234,9 @@ impl Computation for AggregationComputation {
             ),
         )
     }
+    fn memory_usage(&self) -> usize {
+        self.result.len() * std::mem::size_of::<Component>()
+    }
 }
 
 pub struct StoreComputation {
@@ -261,6 +279,10 @@ impl Computation for StoreComputation {
     }
     fn get_result(&self, _which: u64) -> (String, String) {
         ("".to_string(), "".to_string())
+    }
+    fn memory_usage(&self) -> usize {
+        // Memory for graph accounted for there!
+        0
     }
 }
 
@@ -315,6 +337,9 @@ impl Computation for PageRankComputation {
         }
         (key, format!("{:.8}", self.rank[which as usize]))
     }
+    fn memory_usage(&self) -> usize {
+        self.rank.len() * std::mem::size_of::<f64>()
+    }
 }
 
 pub struct LabelPropagationComputation {
@@ -327,6 +352,7 @@ pub struct LabelPropagationComputation {
     pub error_message: String,
     pub label: Vec<String>,
     pub result_position: usize,
+    pub label_size_sum: usize,
 }
 
 impl Computation for LabelPropagationComputation {
@@ -366,5 +392,8 @@ impl Computation for LabelPropagationComputation {
                 .to_string();
         }
         (key, self.label[which as usize].clone())
+    }
+    fn memory_usage(&self) -> usize {
+        self.label_size_sum + self.label.len() * std::mem::size_of::<String>()
     }
 }
