@@ -8,13 +8,13 @@
  - documentation of API
  - example usage in documentation
 
+ - create target collection if not already there
  - benchmark against Neo4j?
  - more tests
  - better progress tracking in compute jobs
  - Progress report on load of vertices and edges
  - Progress report on writeback of results
  - interrupt jobs
- - create target collection if not already there
  - Metrics for ArangoDB import and export
  - AQL query load (for subgraph import)
  - job cancellation for load
