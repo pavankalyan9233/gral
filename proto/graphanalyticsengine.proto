@@ -50,7 +50,7 @@ service GraphAnalyticsEngineService {
     // of the engine for later processing.
     rpc GraphAnalyticsEngineLoadData(GraphAnalyticsEngineLoadDataRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
-            post: "/v2/loaddata"
+            post: "/v1/loaddata"
             body: "*"
         };
     }
@@ -60,7 +60,7 @@ service GraphAnalyticsEngineService {
     // - graphanalytics.engine.load-data on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineLoadDataAql(GraphAnalyticsEngineLoadDataAqlRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
-            post: "/v2/loaddataaql"
+            post: "/v1/loaddataaql"
             body: "*"
         };
     }
@@ -69,7 +69,7 @@ service GraphAnalyticsEngineService {
     // the results in-memory.
     rpc GraphAnalyticsEngineRunWcc(GraphAnalyticsEngineWccSccRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            post: "/v2/wcc"
+            post: "/v1/wcc"
             body: "*"
         };
     }
@@ -78,7 +78,7 @@ service GraphAnalyticsEngineService {
     // the results in-memory.
     rpc GraphAnalyticsEngineRunScc(GraphAnalyticsEngineWccSccRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            post: "/v2/scc"
+            post: "/v1/scc"
             body: "*"
         };
     }
@@ -87,7 +87,7 @@ service GraphAnalyticsEngineService {
     // computed loaded and stores the results in-memory.
     rpc GraphAnalyticsEngineRunCompAggregation(GraphAnalyticsEngineAggregateComponentsRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            post: "/v2/aggregatecomponents"
+            post: "/v1/aggregatecomponents"
             body: "*"
         };
     }
@@ -96,7 +96,7 @@ service GraphAnalyticsEngineService {
     // the results in-memory.
     rpc GraphAnalyticsEngineRunPageRank(GraphAnalyticsEnginePageRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            post: "/v2/pagerank"
+            post: "/v1/pagerank"
             body: "*"
         };
     }
@@ -105,7 +105,7 @@ service GraphAnalyticsEngineService {
     // the results in-memory.
     rpc GraphAnalyticsEngineRunIRank(GraphAnalyticsEnginePageRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            post: "/v2/irank"
+            post: "/v1/irank"
             body: "*"
         };
     }
@@ -114,7 +114,7 @@ service GraphAnalyticsEngineService {
     // the results in-memory.
     rpc GraphAnalyticsEngineRunLabelPropagation(GraphAnalyticsEngineLabelPropagationRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
-            post: "/v2/labelpropagation"
+            post: "/v1/labelpropagation"
             body: "*"
         };
     }
@@ -124,7 +124,7 @@ service GraphAnalyticsEngineService {
     // - graphanalytics.engine.store-results on the graph analytics engine identified by the given ID.
     rpc GraphAnalyticsEngineStoreResults(GraphAnalyticsEngineStoreResultsRequest) returns (GraphAnalyticsEngineStoreResultsResponse) {
         option (google.api.http) = {
-            post: "/v2/storeresults"
+            post: "/v1/storeresults"
             body: "*"
         };
     }
@@ -132,56 +132,56 @@ service GraphAnalyticsEngineService {
     // List the graphs in the engine:
     rpc GraphAnalyticsEngineListGraphs(Empty) returns (GraphAnalyticsEngineListGraphsResponse) {
         option (google.api.http) = {
-            get: "/v2/graphs"
+            get: "/v1/graphs"
         };
     }
    
     // Get information about a specific graph:
     rpc GraphAnalyticsEngineGetGraph(GraphAnalyticsEngineGraphId) returns (GraphAnalyticsEngineGetGraphResponse) {
         option (google.api.http) = {
-            get: "/v2/graphs/{graph_id}"
+            get: "/v1/graphs/{graph_id}"
         };
     }
 
     // Delete a specific graph:
     rpc GraphAnalyticsEngineDeleteGraph(GraphAnalyticsEngineGraphId) returns (GraphAnalyticsEngineDeleteGraphResponse) {
         option (google.api.http) = {
-            delete: "/v2/graphs/{graph_id}"
+            delete: "/v1/graphs/{graph_id}"
         };
     }
 
     // List the jobs in the engine:
     rpc GraphAnalyticsEngineListJobs(Empty) returns (GraphAnalyticsEngineListJobsResponse) {
         option (google.api.http) = {
-            get: "/v2/jobs"
+            get: "/v1/jobs"
         };
     }
    
     // Get information about a specific job (in particular progress and result when done):
     rpc GraphAnalyticsEngineGetJob(GraphAnalyticsEngineJobId) returns (GraphAnalyticsEngineJob) {
         option (google.api.http) = {
-            get: "/v2/jobs/{job_id}"
+            get: "/v1/jobs/{job_id}"
         };
     }
 
     // Delete a specific job
     rpc GraphAnalyticsEngineDeleteJob(GraphAnalyticsEngineJobId) returns (GraphAnalyticsEngineDeleteJobResponse) {
         option (google.api.http) = {
-            delete: "/v2/{job_id}"
+            delete: "/v1/{job_id}"
         };
     }
 
     // Get metrics, for now, the return type is not defined, therefore commented out:
     //rpc GraphAnalyticsEngineMetrics(Empty) returns (PrometheusMetrics) {
     //    option (google.api.http) = {
-    //        get: "/v2/metrics"
+    //        get: "/v1/metrics"
     //    };
     //}
 
     // Shutdown
     rpc GraphAnalticsEngineShutdown(Empty) returns (GraphAnalyticsEngineShutdownResponse) {
         option(google.api.http) = {
-            delete: "/v2/shutdown"
+            delete: "/v1/shutdown"
         };
     }
 }
