@@ -5,11 +5,34 @@ use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::mem::size_of;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 pub mod examples;
+
+// Got this function from stack overflow:
+//  https://stackoverflow.com/questions/76454260/rust-serde-get-runtime-heap-size-of-vecserde-jsonvalue
+fn sizeof_val(v: &serde_json::Value) -> usize {
+    std::mem::size_of::<serde_json::Value>()
+        + match v {
+            serde_json::Value::Null => 0,
+            serde_json::Value::Bool(_) => 0,
+            serde_json::Value::Number(_) => 0, // Incorrect if arbitrary_precision is enabled. oh well
+            serde_json::Value::String(s) => s.capacity(),
+            serde_json::Value::Array(a) => a.iter().map(sizeof_val).sum(),
+            serde_json::Value::Object(o) => o
+                .iter()
+                .map(|(k, v)| {
+                    std::mem::size_of::<String>()
+                        + k.capacity()
+                        + sizeof_val(v)
+                        + std::mem::size_of::<usize>() * 3 // As a crude approximation, I pretend each map entry has 3 words of overhead
+                })
+                .sum(),
+        }
+}
 
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
 pub struct VertexHash(u64);
@@ -90,6 +113,10 @@ pub struct Graph {
     // Flag, if edges are already indexed:
     pub edges_indexed_from: bool,
     pub edges_indexed_to: bool,
+
+    // For memory size computations:
+    pub vertex_id_size_sum: usize,
+    pub vertex_json_size_sum: usize,
 }
 
 pub struct Graphs {
@@ -155,6 +182,8 @@ impl Graph {
             edges_sealed: false,
             edges_indexed_from: false,
             edges_indexed_to: false,
+            vertex_id_size_sum: 0,
+            vertex_json_size_sum: 0,
         }))
     }
 
@@ -198,8 +227,10 @@ impl Graph {
         for j in 0..self.vertex_nr_cols {
             let mut v: Value = Value::Null;
             std::mem::swap(&mut v, &mut columns[j]);
+            self.vertex_json_size_sum += sizeof_val(&v);
             self.vertex_json[j].push(v);
         }
+        self.vertex_id_size_sum += key.len();
     }
 
     pub fn number_of_vertices(&self) -> u64 {
@@ -391,5 +422,40 @@ impl Graph {
                 self.edges[i as usize].to.to_u64()
             );
         }
+    }
+
+    // The following is only an estimate, it will never be accurate up to
+    // the last byte, but it will be good enough for most purposes:
+    pub fn memory_usage(&self) -> usize {
+        let nrv = self.number_of_vertices() as usize;
+        let nre = self.number_of_edges() as usize;
+        let size_hash = size_of::<VertexHash>();
+        let size_index = size_of::<VertexIndex>();
+        // First what we always have:
+        let mut total: usize = nrv * (
+                // index_to_hash:
+                size_hash +
+                // hash_to_index:
+                size_hash + size_index
+            ) + nre * (
+                // edges:
+                size_of::<Edge>()
+                // Heuristics for the (hopefully few) exceptions:
+            ) + self.exceptions.len() * (48 + size_hash)
+                // index_to_key:
+              + nrv * size_of::<Vec<u8>>() + self.vertex_id_size_sum
+                // JSON data:
+              + self.vertex_json.len() * nrv * size_of::<Vec<Value>>()
+              + self.vertex_json_size_sum;
+
+        // Edge index, if present:
+        if self.edges_indexed_from {
+            // edge_index_by_to and edge_by_to:
+            total += nrv * size_of::<u64>() + nre * size_index;
+        }
+        if self.edges_indexed_to {
+            total += nrv * size_of::<u64>() + nre * size_index;
+        }
+        total
     }
 }

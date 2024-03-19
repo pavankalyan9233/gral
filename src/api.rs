@@ -1042,6 +1042,7 @@ async fn api_get_graph(
             graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
+            memory_usage: graph.memory_usage() as u64,
         }),
     };
     Ok(warp::reply::with_status(
@@ -1088,6 +1089,7 @@ async fn api_dump_graph(
             graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
+            memory_usage: graph.memory_usage() as u64,
         }),
     };
     Ok(warp::reply::with_status(
@@ -1108,6 +1110,7 @@ async fn api_list_graphs(_user: String, graphs: Arc<Mutex<Graphs>>) -> Result<Ve
             graph_id: graph.graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
+            memory_usage: graph.memory_usage() as u64,
         };
         response.push(g);
     }

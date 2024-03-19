@@ -388,6 +388,8 @@ message GraphAnalyticsEngineGraph {
     uint64 number_of_vertices = 2;
     // Number of edges:
     uint64 number_of_edges = 3;
+    // Memory usage:
+    uint64 memory_usage = 4;
 }
 
 // Response for a delete graph request.
