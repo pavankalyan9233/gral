@@ -71,7 +71,7 @@ async fn main() {
     let (tx_shutdown, rx_shutdown) = oneshot::channel::<()>();
     let tx_arc = Arc::new(Mutex::new(Some(tx_shutdown)));
     let tx_clone = tx_arc.clone();
-    let shutdown = warp::path!("v2" / "shutdown")
+    let shutdown = warp::path!("v1" / "shutdown")
         .and(warp::delete())
         .and(with_auth(the_args.clone()))
         .map(move |_user| {
@@ -92,7 +92,7 @@ async fn main() {
     let the_graphs = Arc::new(Mutex::new(Graphs::new()));
     let the_computations = Arc::new(Mutex::new(Computations::new()));
 
-    let api_metrics = warp::path!("v2" / "metrics").and(warp::get()).map(move || {
+    let api_metrics = warp::path!("v1" / "metrics").and(warp::get()).map(move || {
         let out = metrics_handle.render();
         warp::reply::with_status(out, StatusCode::OK)
     });

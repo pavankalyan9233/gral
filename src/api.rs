@@ -40,63 +40,63 @@ pub fn api_filter(
     computations: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    let version = warp::path!("v2" / "version")
+    let version = warp::path!("v1" / "version")
         .and(warp::get())
         .and(with_auth(args.clone()))
         .map(version_json);
-    let get_job = warp::path!("v2" / "jobs" / u64)
+    let get_job = warp::path!("v1" / "jobs" / u64)
         .and(warp::get())
         .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and_then(api_get_job);
-    let drop_job = warp::path!("v2" / "jobs" / u64)
+    let drop_job = warp::path!("v1" / "jobs" / u64)
         .and(warp::delete())
         .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and_then(api_drop_job);
-    let wcc = warp::path!("v2" / "wcc")
+    let wcc = warp::path!("v1" / "wcc")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_wcc);
-    let scc = warp::path!("v2" / "scc")
+    let scc = warp::path!("v1" / "scc")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_scc);
-    let aggregation_components = warp::path!("v2" / "aggregatecomponents")
+    let aggregation_components = warp::path!("v1" / "aggregatecomponents")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_aggregate_components);
-    let pagerank = warp::path!("v2" / "pagerank")
+    let pagerank = warp::path!("v1" / "pagerank")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_pagerank);
-    let irank = warp::path!("v2" / "irank")
+    let irank = warp::path!("v1" / "irank")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_irank);
-    let label_prop = warp::path!("v2" / "labelpropagation")
+    let label_prop = warp::path!("v1" / "labelpropagation")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_label_propagation);
-    let get_arangodb_graph = warp::path!("v2" / "loaddata")
+    let get_arangodb_graph = warp::path!("v1" / "loaddata")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
@@ -104,41 +104,41 @@ pub fn api_filter(
         .and(with_args(args.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_arangodb_graph);
-    let write_result_back_arangodb = warp::path!("v2" / "storeresults")
+    let write_result_back_arangodb = warp::path!("v1" / "storeresults")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
         .and(with_args(args.clone()))
         .and(warp::body::bytes())
         .and_then(api_write_result_back_arangodb);
-    let get_arangodb_graph_aql = warp::path!("v2" / "loaddataaql")
+    let get_arangodb_graph_aql = warp::path!("v1" / "loaddataaql")
         .and(warp::post())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_get_arangodb_graph_aql);
-    let get_graph = warp::path!("v2" / "graphs" / u64)
+    let get_graph = warp::path!("v1" / "graphs" / u64)
         .and(warp::get())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_get_graph);
-    let dump_graph = warp::path!("v2" / "dumpgraph" / u64)
+    let dump_graph = warp::path!("v1" / "dumpgraph" / u64)
         .and(warp::put())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_dump_graph);
-    let drop_graph = warp::path!("v2" / "graphs" / u64)
+    let drop_graph = warp::path!("v1" / "graphs" / u64)
         .and(warp::delete())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_drop_graph);
-    let list_graphs = warp::path!("v2" / "graphs")
+    let list_graphs = warp::path!("v1" / "graphs")
         .and(warp::get())
         .and(with_auth(args.clone()))
         .and(with_graphs(graphs.clone()))
         .and_then(api_list_graphs);
-    let list_jobs = warp::path!("v2" / "jobs")
+    let list_jobs = warp::path!("v1" / "jobs")
         .and(warp::get())
         .and(with_auth(args.clone()))
         .and(with_computations(computations.clone()))
@@ -173,7 +173,7 @@ fn version_json(_user: String) -> Result<Response<Vec<u8>>, Error> {
     let body = serde_json::json!({
         "version": version_str,
         "apiMinVersion": 1,
-        "apiMaxVersion": 2
+        "apiMaxVersion": 1
     });
     let v = serde_json::to_vec(&body).expect("Should be serializable");
     Response::builder()
