@@ -432,37 +432,49 @@ impl Graph {
     }
 
     // The following is only an estimate, it will never be accurate up to
-    // the last byte, but it will be good enough for most purposes:
-    pub fn memory_usage(&self) -> usize {
+    // the last byte, but it will be good enough for most purposes. The
+    // first result is the total memory usage, the second is the number of
+    // bytes per vertex and the second is the number of bytes per edge.
+    pub fn memory_usage(&self) -> (usize, usize, usize) {
         let nrv = self.number_of_vertices() as usize;
         let nre = self.number_of_edges() as usize;
         let size_hash = size_of::<VertexHash>();
         let size_index = size_of::<VertexIndex>();
+
         // First what we always have:
-        let mut total: usize = nrv * (
+        let mut total_v: usize = nrv * (
                 // index_to_hash:
                 size_hash +
                 // hash_to_index:
                 size_hash + size_index
-            ) + nre * (
-                // edges:
-                size_of::<Edge>()
-                // Heuristics for the (hopefully few) exceptions:
-            ) + self.exceptions.len() * (48 + size_hash)
+            )  // Heuristics for the (hopefully few) exceptions:
+              + self.exceptions.len() * (48 + size_hash)
                 // index_to_key:
               + nrv * size_of::<Vec<u8>>() + self.vertex_id_size_sum
                 // JSON data:
               + self.vertex_json.len() * nrv * size_of::<Vec<Value>>()
               + self.vertex_json_size_sum;
 
+        let mut total_e: usize = nre
+            * (
+                // edges:
+                size_of::<Edge>()
+            );
+
         // Edge index, if present:
         if self.edges_indexed_from {
             // edge_index_by_to and edge_by_to:
-            total += nrv * size_of::<u64>() + nre * size_index;
+            total_v += nrv * size_of::<u64>();
+            total_e += nre * size_index;
         }
         if self.edges_indexed_to {
-            total += nrv * size_of::<u64>() + nre * size_index;
+            total_v += nrv * size_of::<u64>();
+            total_e += nre * size_index;
         }
-        total
+        (
+            total_v + total_e,
+            if nrv == 0 { 0 } else { total_v / nrv },
+            if nre == 0 { 0 } else { total_e / nre },
+        )
     }
 }
