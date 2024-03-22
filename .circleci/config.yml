@@ -30,8 +30,8 @@ commands:
     - run:
         name: Install protobuf dependency
         command: |
-          sudo apt update -y
-          sudo apt install protobuf-compiler -y
+          apt update -y
+          apt install protobuf-compiler -y
 
 jobs:
   do_copy_workspace:
