@@ -64,6 +64,21 @@ jobs:
           name: Clippy
           command: cargo clippy
 
+    format:
+      docker:
+        - image: cimg/rust:1.76.0
+      working_directory: ~/app
+      steps:
+        - get_code
+        - install_protobuf
+        - restore_cache:
+            keys:
+              - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+
+        - run:
+            name: Format check
+            command: cargo fmt --all -- --check
+
 
       - *notify_slack_on_fail
 
@@ -224,12 +239,16 @@ workflows:
         equal: [main, << pipeline.git.branch >>]
     jobs:
       - do_copy_workspace
-      - build:
-          requires:
-            - do_copy_workspace
       - lint:
           requires:
             - do_copy_workspace
+      - format:
+          requires:
+            - do_copy_workspace
+      - build:
+          requires:
+            - do_copy_workspace
+
       #- coverage:
       #    requires:
       #      - do_copy_workspace
@@ -248,17 +267,20 @@ workflows:
       #      - lint
       #    tag: latest
 
-  deploy:
-    when:
-      equal: [main, << pipeline.git.branch >>]
-    jobs:
-      - do_copy_workspace
-      - build:
-          requires:
-            - do_copy_workspace
-      - lint:
-          requires:
-            - do_copy_workspace
+      #deploy:
+      #  when:
+      #    equal: [main, << pipeline.git.branch >>]
+      #  jobs:
+      #    - do_copy_workspace
+      #    - build:
+      #        requires:
+      #          - do_copy_workspace
+      #    - lint:
+      #        requires:
+      #          - do_copy_workspace
+      #    - format:
+      #        requires:
+      #          - do_copy_workspace
       #- docs:
       #    requires:
       #      - do_copy_workspace
