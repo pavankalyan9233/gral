@@ -30,8 +30,8 @@ commands:
     - run:
         name: Install protobuf dependency
         command: |
-          apt update -y
-          apt install protobuf-compiler -y
+          sudo apt update -y
+          sudo apt install protobuf-compiler -y
 
 jobs:
   do_copy_workspace:
@@ -136,7 +136,7 @@ jobs:
 
   build:
     docker:
-      - image: elixir:1.15.7-slim
+      - image: cimg/rust:1.76.0
     working_directory: ~/app
     steps:
       - get_code
@@ -152,23 +152,23 @@ jobs:
 
       - run:
           name: Build release
+          # TODO: Is this everything we need right now? Or any additional flags required here?
           command: |
-            # TODO: Is this everything we need right now? Or any additional flags required here?
-                     cargo build
+            cargo build
 
+      # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
+      # be cached (target/debug/build, target/debug/deps, ...).
       - save_cache:
-          key: v1-mix-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
-          paths: ["deps"]
-      - save_cache:
-          key: v1-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
-          paths: ["_build"]
+          key: v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          paths: ["target"]
+
       - persist_to_workspace:
           root: .
           paths:
-            - build
-            - _build/prod
-      - store_test_results:
-          path: _build/test/lib/hello_phoenix
+            - target
+      # TODO: Store test results?
+      #- store_test_results:
+      #    path: _build/test/lib/hello_phoenix
 
   # TODO: Documentation
   #docs:
