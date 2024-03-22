@@ -25,18 +25,21 @@ commands:
           name: Get code from workspace
           command: cp -r /tmp/workspace/code/. ~/app
 
+  install_protobuf:
+    steps:
+    - run:
+        name: Install protobuf dependency
+        command: |
+          sudo apt update -y
+          sudo apt install protobuf-compiler -y
+
 jobs:
-  install_protobuf_and_copy_code:
+  do_copy_workspace:
     docker:
       - image: cimg/rust:1.76.0
     working_directory: ~/app
     steps:
       - checkout
-      - run:
-          name: Install dependencies
-          command: |
-            sudo apt update -y
-            sudo apt install protobuf-compiler -y
       - run:
           name: Copy code to workspace
           command: |
@@ -52,6 +55,7 @@ jobs:
     working_directory: ~/app
     steps:
       - get_code
+      - install_protobuf
       - restore_cache:
           keys:
             - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
@@ -136,6 +140,7 @@ jobs:
     working_directory: ~/app
     steps:
       - get_code
+      - install_protobuf
 
       - restore_cache:
           keys:
@@ -218,22 +223,22 @@ workflows:
       not:
         equal: [main, << pipeline.git.branch >>]
     jobs:
-      - install_protobuf_and_copy_code
+      - do_copy_workspace
       - build:
           requires:
-            - install_protobuf_and_copy_code
+            - do_copy_workspace
       - lint:
           requires:
-            - install_protobuf_and_copy_code
+            - do_copy_workspace
       #- coverage:
       #    requires:
-      #      - install_protobuf_and_copy_code
+      #      - do_copy_workspace
       #- integration:
       #    requires:
-      #      - install_protobuf_and_copy_code
+      #      - do_copy_workspace
       #- docs:
       #    requires:
-      #      - install_protobuf_and_copy_code
+      #      - do_copy_workspace
       #- build-and-push-docker-image:
       #    context:
       #      - slack
@@ -247,16 +252,16 @@ workflows:
     when:
       equal: [main, << pipeline.git.branch >>]
     jobs:
-      - install_protobuf_and_copy_code
+      - do_copy_workspace
       - build:
           requires:
-            - install_protobuf_and_copy_code
+            - do_copy_workspace
       - lint:
           requires:
-            - install_protobuf_and_copy_code
+            - do_copy_workspace
       #- docs:
       #    requires:
-      #      - install_protobuf_and_copy_code
+      #      - do_copy_workspace
       #- build-and-push-docker-image:
       #    context:
       #      - slack
