@@ -8,8 +8,5 @@ pub fn init() {
     register_gauge!("number_of_graphs");
     describe_gauge!("number_of_graphs", "Current number of graphs in memory");
     register_gauge!("number_of_jobs");
-    describe_gauge!(
-        "number_of_jobs",
-        "Current number of jobs in memory"
-    );
+    describe_gauge!("number_of_jobs", "Current number of jobs in memory");
 }
