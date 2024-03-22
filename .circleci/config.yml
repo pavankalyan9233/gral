@@ -66,22 +66,22 @@ jobs:
 
       - *notify_slack_on_fail
 
-    formatter:
-      docker:
-        - image: cimg/rust:1.76.0
-      working_directory: ~/app
-      steps:
-        - get_code
-        - install_protobuf
-        - restore_cache:
-            keys:
-              - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+  formatter:
+    docker:
+      - image: cimg/rust:1.76.0
+    working_directory: ~/app
+    steps:
+      - get_code
+      - install_protobuf
+      - restore_cache:
+          keys:
+            - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
-        - run:
-            name: Format check
-            command: cargo fmt --all -- --check
+      - run:
+          name: Format check
+          command: cargo fmt --all -- --check
 
-        - *notify_slack_on_fail
+      - *notify_slack_on_fail
 
     # TODO: coverage:
     #docker:
