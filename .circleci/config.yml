@@ -64,6 +64,8 @@ jobs:
           name: Clippy
           command: cargo clippy
 
+      - *notify_slack_on_fail
+
     format:
       docker:
         - image: cimg/rust:1.76.0
@@ -79,8 +81,7 @@ jobs:
             name: Format check
             command: cargo fmt --all -- --check
 
-
-      - *notify_slack_on_fail
+        - *notify_slack_on_fail
 
     # TODO: coverage:
     #docker:
@@ -245,9 +246,7 @@ workflows:
       - format:
           requires:
             - do_copy_workspace
-      - build:
-          requires:
-            - do_copy_workspace
+            -
 
       #- coverage:
       #    requires:
