@@ -18,8 +18,7 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
         nr_e
     );
     info!("{:?} Creating mini...", start.elapsed());
-    let mut mini: Vec<u64> = vec![];
-    mini.reserve(nr_v as usize);
+    let mut mini: Vec<u64> = Vec::with_capacity(nr_v as usize);
     for i in 0..nr_v {
         mini.push(i);
     }

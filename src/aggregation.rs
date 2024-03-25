@@ -10,8 +10,7 @@ pub fn aggregate_over_components(
     let start = Instant::now();
     info!("Aggregating over components...");
 
-    let mut result = vec![];
-    result.reserve(1000000); // just heuristics
+    let mut result = Vec::with_capacity(1000000); // just heuristics
 
     let graph_arc = comp.get_graph();
     let graph = graph_arc.read().unwrap();

@@ -5,8 +5,6 @@ use metrics_exporter_prometheus::PrometheusBuilder;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
-use tracing;
-use tracing_subscriber;
 use warp::{http::Response, http::StatusCode, Filter};
 
 mod aggregation;

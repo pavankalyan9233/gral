@@ -18,8 +18,8 @@ fn load_labels(g: &Graph, pos: usize) -> Vec<String> {
     let mut res: Vec<String> = Vec::with_capacity(nr);
     for i in 0..nr as usize {
         let mut s = col[i].to_string();
-        if s.starts_with("\"") && s.ends_with("\"") && s.len() >= 2 {
-            s = (&s[1..s.len() - 1]).to_string();
+        if s.starts_with('\"') && s.ends_with('\"') && s.len() >= 2 {
+            s = (s[1..s.len() - 1]).to_string();
         }
         res.push(s);
     }
@@ -129,10 +129,8 @@ pub fn labelpropagation_sync(
                             if *m > max_mult {
                                 max_mult = *m;
                                 max_label = *k;
-                            } else {
-                                if *k < max_label {
-                                    max_label = *k;
-                                }
+                            } else if *k < max_label {
+                                max_label = *k;
                             }
                         }
                     }
@@ -274,10 +272,8 @@ pub fn labelpropagation_async(
                             if *m > max_mult {
                                 max_mult = *m;
                                 max_label = *k;
-                            } else {
-                                if *k < max_label {
-                                    max_label = *k;
-                                }
+                            } else if *k < max_label {
+                                max_label = *k;
                             }
                         }
                     }

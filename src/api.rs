@@ -186,10 +186,8 @@ fn check_graph(graph: &Graph, graph_id: u64, edges_must_be_sealed: bool) -> Resu
         if !graph.edges_sealed {
             return Err(format!("Graph edges not sealed: {}", graph_id));
         }
-    } else {
-        if graph.edges_sealed {
-            return Err(format!("Graph edges must not be sealed: {}", graph_id,));
-        }
+    } else if graph.edges_sealed {
+        return Err(format!("Graph edges must not be sealed: {}", graph_id,));
     }
     Ok(())
 }

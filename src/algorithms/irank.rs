@@ -40,7 +40,7 @@ fn determine_size_table(g: &Graph, pos: usize, sizes: &HashMap<String, u64>) -> 
     let col = &g.vertex_json[pos];
     let nr = g.number_of_vertices() as usize;
     let mut res: Vec<u64> = Vec::with_capacity(nr);
-    for i in 0..nr as usize {
+    for i in 0..nr {
         let s = col[i].to_string();
         let count = sizes.get(&s);
         assert!(count.is_some());
@@ -62,7 +62,7 @@ pub fn i_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> Result<(Vec<f6
     info!("Building size table...");
     let size_table = determine_size_table(g, pos, &sizes);
 
-    let mut rank = vec![1.0 / nr as f64; nr as usize];
+    let mut rank = vec![1.0 / nr as f64; nr];
     let mut new_rank: Vec<f64> = Vec::with_capacity(nr);
     for i in 0..nr {
         new_rank.push(1.0 / size_table[i] as f64 * (1.0 - damping_factor));
