@@ -161,6 +161,12 @@ struct EdgeTemp {
     pub to: VertexIndex,
 }
 
+pub struct MemoryUsageGraph {
+    pub bytes_total: usize,
+    pub bytes_per_vertex: usize,
+    pub bytes_per_edge: usize,
+}
+
 impl Graph {
     pub fn new(
         store_keys: bool,
@@ -435,7 +441,7 @@ impl Graph {
     // the last byte, but it will be good enough for most purposes. The
     // first result is the total memory usage, the second is the number of
     // bytes per vertex and the second is the number of bytes per edge.
-    pub fn memory_usage(&self) -> (usize, usize, usize) {
+    pub fn memory_usage(&self) -> MemoryUsageGraph {
         let nrv = self.number_of_vertices() as usize;
         let nre = self.number_of_edges() as usize;
         let size_hash = size_of::<VertexHash>();
@@ -471,10 +477,10 @@ impl Graph {
             total_v += nrv * size_of::<u64>();
             total_e += nre * size_index;
         }
-        (
-            total_v + total_e,
-            if nrv == 0 { 0 } else { total_v / nrv },
-            if nre == 0 { 0 } else { total_e / nre },
-        )
+        MemoryUsageGraph {
+            bytes_total: total_v + total_e,
+            bytes_per_vertex: if nrv == 0 { 0 } else { total_v / nrv },
+            bytes_per_edge: if nre == 0 { 0 } else { total_e / nre },
+        }
     }
 }

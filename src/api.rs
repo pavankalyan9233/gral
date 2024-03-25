@@ -1039,7 +1039,7 @@ async fn api_get_graph(
     let graph = graph_arc.read().unwrap();
 
     // Write response:
-    let (total, per_vertex, per_edge) = graph.memory_usage();
+    let mem_usage = graph.memory_usage();
     let response = GraphAnalyticsEngineGetGraphResponse {
         error_code: 0,
         error_message: "".to_string(),
@@ -1047,9 +1047,9 @@ async fn api_get_graph(
             graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
-            memory_usage: total as u64,
-            memory_per_vertex: per_vertex as u64,
-            memory_per_edge: per_edge as u64,
+            memory_usage: mem_usage.bytes_total as u64,
+            memory_per_vertex: mem_usage.bytes_per_vertex as u64,
+            memory_per_edge: mem_usage.bytes_per_edge as u64,
         }),
     };
     Ok(warp::reply::with_status(
@@ -1089,7 +1089,7 @@ async fn api_dump_graph(
     graph.dump();
 
     // Write response:
-    let (total, per_vertex, per_edge) = graph.memory_usage();
+    let mem_usage = graph.memory_usage();
     let response = GraphAnalyticsEngineGetGraphResponse {
         error_code: 0,
         error_message: "".to_string(),
@@ -1097,9 +1097,9 @@ async fn api_dump_graph(
             graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
-            memory_usage: total as u64,
-            memory_per_vertex: per_vertex as u64,
-            memory_per_edge: per_edge as u64,
+            memory_usage: mem_usage.bytes_total as u64,
+            memory_per_vertex: mem_usage.bytes_per_vertex as u64,
+            memory_per_edge: mem_usage.bytes_per_edge as u64,
         }),
     };
     Ok(warp::reply::with_status(
@@ -1116,14 +1116,14 @@ async fn api_list_graphs(_user: String, graphs: Arc<Mutex<Graphs>>) -> Result<Ve
         let graph = graph_arc.read().unwrap();
 
         // Write response:
-        let (total, per_vertex, per_edge) = graph.memory_usage();
+        let mem_usage = graph.memory_usage();
         let g = GraphAnalyticsEngineGraph {
             graph_id: graph.graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
-            memory_usage: total as u64,
-            memory_per_vertex: per_vertex as u64,
-            memory_per_edge: per_edge as u64,
+            memory_usage: mem_usage.bytes_total as u64,
+            memory_per_vertex: mem_usage.bytes_per_vertex as u64,
+            memory_per_edge: mem_usage.bytes_per_edge as u64,
         };
         response.push(g);
     }
