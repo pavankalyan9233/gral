@@ -89,15 +89,14 @@ jobs:
     working_directory: ~/app
     steps:
       - get_code
+      - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-      - restore_cache:
-          keys:
-            - v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+            - v1-coverage-build-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
       - run:
           name: Coverage UnitTests
           command: |
+            cargo install grcov
             CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo_profile/cargo-test-%p-%m.profraw' cargo test
             grcov ./cargo_profile --binary-path ./target/debug/deps/ -s ./cargo_profile -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
 
@@ -105,7 +104,7 @@ jobs:
           path: target/coverage/html
 
       - save_cache:
-          key: v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+          key: v1-coverage-build-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
           paths: ["target"]
           # TODO Later - *notify_slack_on_fail
 
