@@ -93,8 +93,7 @@ where
             Err(e) => {
                 return Err(format!(
                     "Could not parse error body, error: {}, status code: {:?}",
-                    e,
-                    status,
+                    e, status,
                 ));
             }
             Ok(e) => {
@@ -126,8 +125,7 @@ async fn handle_arangodb_response(
             Err(e) => {
                 return Err(format!(
                     "Could not parse error body, error: {}, status code: {:?}",
-                    e,
-                    status,
+                    e, status,
                 ));
             }
             Ok(e) => {
@@ -146,7 +144,7 @@ async fn handle_arangodb_response(
 
 type ShardMap = HashMap<String, Vec<String>>;
 
-fn compute_shard_map(sd: &ShardDistribution, coll_list: &Vec<String>) -> Result<ShardMap, String> {
+fn compute_shard_map(sd: &ShardDistribution, coll_list: &[String]) -> Result<ShardMap, String> {
     let mut result: ShardMap = HashMap::new();
     for c in coll_list.iter() {
         // Handle the case of a smart edge collection. If c is
@@ -160,7 +158,7 @@ fn compute_shard_map(sd: &ShardDistribution, coll_list: &Vec<String>) -> Result<
             None => (),
             Some(coll_dist) => {
                 // Keys of coll_dist are the shards, value has leader:
-                for (shard, _) in &(coll_dist.plan) {
+                for shard in coll_dist.plan.keys() {
                     ignore.insert(shard.clone());
                 }
             }
@@ -198,7 +196,7 @@ struct DBServerInfo {
 
 async fn get_all_shard_data(
     req: &GraphAnalyticsEngineLoadDataRequest,
-    endpoints: &Vec<String>,
+    endpoints: &[String],
     jwt_token: &String,
     shard_map: &ShardMap,
     result_channels: Vec<std::sync::mpsc::Sender<Bytes>>,
@@ -662,8 +660,8 @@ pub async fn fetch_graph_from_arangodb(
                             let from_opt = graph.index_from_vertex_key(from_key);
                             let to_key = &tos[i];
                             let to_opt = graph.index_from_vertex_key(to_key);
-                            if from_opt.is_some() && to_opt.is_some() {
-                                edges.push((from_opt.unwrap(), to_opt.unwrap()));
+                            if let (Some(fo), Some(to)) = (from_opt, to_opt) {
+                                edges.push((fo, to));
                             } else {
                                 eprintln!(
                                     "Did not find _from value {} or _to value {} in vertex keys!",
@@ -838,8 +836,7 @@ pub async fn write_result_to_arangodb(
 
         let new_batch = |l: usize| -> Vec<u8> {
             let mut res = Vec::with_capacity(200 * l); // heuristics
-            res.write_u8(b'[')
-                .expect("Assumed to be able to write");
+            res.write_u8(b'[').expect("Assumed to be able to write");
             res
         };
         let mut cur_batch: Vec<u8> = new_batch(req.batch_size as usize);
