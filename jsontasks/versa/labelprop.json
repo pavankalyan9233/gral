@@ -1,0 +1,6 @@
+{
+  "graph_id": 1,
+  "start_label_attribute": "_id",
+  "synchronous": true,
+  "random_tiebreak": false
+}
