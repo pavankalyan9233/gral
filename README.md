@@ -5,4 +5,4 @@ This is a prototype. It strives to implement a server process `gral`
 the API described in `design/GraphAnaphAnalyticsEngine.md` in this
 repository.
 
-TO BE CONTINUED
+TO BE CONTINUED...
