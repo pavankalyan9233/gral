@@ -246,6 +246,9 @@ workflows:
       - formatter:
           requires:
             - do_copy_workspace
+      - build:
+          requires:
+            - do_copy_workspace
 
       #- coverage:
       #    requires:
