@@ -1,2 +1,6 @@
+# Rust related
 /target
 /tls
+
+# IDE related
+.idea/

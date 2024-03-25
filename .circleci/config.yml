@@ -1,0 +1,295 @@
+version: 2.1
+
+orbs:
+  gcp-gcr: circleci/gcp-gcr@0.15
+  slack: circleci/slack@4.12.5
+
+aliases:
+  - &notify_slack_on_fail
+    slack/notify:
+      channel: "C05MRHRKPRS" # status-sloth
+      event: fail
+      template: basic_fail_1
+  - &notify_slack_on_release
+    slack/notify:
+      channel: "C05MRHRKPRS" # status-sloth
+      event: pass
+      template: success_tagged_deploy_1
+
+commands:
+  get_code:
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: Get code from workspace
+          command: cp -r /tmp/workspace/code/. ~/app
+
+  install_protobuf:
+    steps:
+    - run:
+        name: Install protobuf dependency
+        command: |
+          sudo apt update -y
+          sudo apt install protobuf-compiler -y
+
+jobs:
+  do_copy_workspace:
+    docker:
+      - image: cimg/rust:1.76.0
+    working_directory: ~/app
+    steps:
+      - checkout
+      - run:
+          name: Copy code to workspace
+          command: |
+            mkdir -p /tmp/workspace/code
+            cp -r . /tmp/workspace/code
+      - persist_to_workspace:
+          root: /tmp/workspace
+          paths: code
+
+  lint:
+    docker:
+      - image: cimg/rust:1.76.0
+    working_directory: ~/app
+    steps:
+      - get_code
+      - install_protobuf
+      - restore_cache:
+          keys:
+            - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+
+      - run:
+          name: Clippy
+          command: cargo clippy
+
+      - *notify_slack_on_fail
+
+  formatter:
+    docker:
+      - image: cimg/rust:1.76.0
+    working_directory: ~/app
+    steps:
+      - get_code
+      - install_protobuf
+      - restore_cache:
+          keys:
+            - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+
+      - run:
+          name: Format check
+          command: cargo fmt --all -- --check
+
+      - *notify_slack_on_fail
+
+    # TODO: coverage:
+    #docker:
+    #  - image: elixir:1.15.4-slim
+    #working_directory: ~/app
+    #steps:
+    #  - get_code
+    #  - restore_cache:
+    #      keys:
+    #        - v1-mix-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+    #  - restore_cache:
+    #      keys:
+    #        - v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+
+    #  - run:
+    #      name: Coverage UnitTests
+    #      command: |
+    #        mix test --cover --export-coverage default
+    #        mix test.coverage || true
+
+    #  - store_artifacts:
+    #      path: cover
+
+    #  - save_cache:
+    #      key: v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+    #      paths: ["_build"]
+
+    #  - save_cache:
+    #      key: v1-coverage-build-cache-{{ .Branch }}
+    #      paths: ["_build"]
+
+    #  - *notify_slack_on_fail
+
+  # TODO: Integration tests.
+  #integration:
+  #  docker:
+  #    - image: elixir:1.15.4-slim
+  #    - image: arangodb/enterprise:3.11.3
+  #      command: |
+  #        /bin/sh -c "echo 'SuperSecretThingy' > /tmp/arangodb.secret && arangodb --mode=cluster --local=true --auth.jwt-secret=/tmp/arangodb.secret"
+
+  #  working_directory: ~/app
+  #  steps:
+  #    - get_code
+  #    - restore_cache:
+  #        keys:
+  #          - v1-mix-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+  #    - restore_cache:
+  #        keys:
+  #          - v1-integration-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+
+  #    - run:
+  #        name: GraphEngine integration tests
+  #        working_directory: ~/app/apps/graph_engine
+  #        environment:
+  #          MIX_ENV: integration
+  #          ARANGODB_DATABASE: sloth
+  #        command: |
+  #          mix test
+  #    - run:
+  #        name: SlothWeb integration tests
+  #        working_directory: ~/app/apps/sloth_web
+  #        environment:
+  #          MIX_ENV: integration
+  #          ARANGODB_DATABASE: sloth
+  #        command: |
+  #          mix test
+
+  build:
+    docker:
+      - image: cimg/rust:1.76.0
+    working_directory: ~/app
+    steps:
+      - get_code
+      - install_protobuf
+
+      - restore_cache:
+          keys:
+            - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+
+      - run:
+          name: Run tests
+          command: cargo test
+
+      - run:
+          name: Build release
+          # TODO: Is this everything we need right now? Or any additional flags required here?
+          command: |
+            cargo build --release
+
+      # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
+      # be cached (target/debug/build, target/debug/deps, ...).
+      - save_cache:
+          key: v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          paths: ["target"]
+
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target
+      # TODO: Store test results?
+      #- store_test_results:
+      #    path: _build/test/lib/hello_phoenix
+
+  # TODO: Documentation
+  #docs:
+  #  docker:
+  #    - image: elixir:1.15.7
+  #  working_directory: ~/app
+  #  steps:
+  #    - get_code
+
+  #    - run:
+  #        name: Build documentation
+  #        command: |
+  #          mix docs
+
+  #    - store_artifacts:
+  #        path: doc/
+
+  #build-and-push-docker-image:
+  #  description: Build and push a docker image
+  #  parameters:
+  #    tag:
+  #      default: "latest"
+  #      type: string
+  #  machine:
+  #    image: ubuntu-2204:current
+  #  resource_class: medium
+  #  steps:
+  #    - attach_workspace:
+  #        at: .
+  #    - gcp-gcr/gcr-auth
+  #    - gcp-gcr/build-image:
+  #        image: graph-analytics/sloth
+  #        registry-url: gcr.io
+  #        tag: << parameters.tag >>
+  #        dockerfile: build/deploy.dockerfile
+  #        extra_build_args: --build-arg GIT_HASH=$CIRCLE_SHA1
+  #    - gcp-gcr/push-image:
+  #        digest-path: /tmp/digest.txt
+  #        image: graph-analytics/sloth
+  #        registry-url: gcr.io
+  #        tag: << parameters.tag >>
+  #    - run:
+  #        name: Digest
+  #        command: |
+  #          echo "Digest is: $(</tmp/digest.txt)"
+  #    - *notify_slack_on_fail
+  #    - *notify_slack_on_release
+
+workflows:
+  pr:
+    when:
+      not:
+        equal: [main, << pipeline.git.branch >>]
+    jobs:
+      - do_copy_workspace
+      - lint:
+          requires:
+            - do_copy_workspace
+      - formatter:
+          requires:
+            - do_copy_workspace
+      - build:
+          requires:
+            - do_copy_workspace
+
+      #- coverage:
+      #    requires:
+      #      - do_copy_workspace
+      #- integration:
+      #    requires:
+      #      - do_copy_workspace
+      #- docs:
+      #    requires:
+      #      - do_copy_workspace
+      #- build-and-push-docker-image:
+      #    context:
+      #      - slack
+      #      - gcp-sloth
+      #    requires:
+      #      - build
+      #      - lint
+      #    tag: latest
+
+      #deploy:
+      #  when:
+      #    equal: [main, << pipeline.git.branch >>]
+      #  jobs:
+      #    - do_copy_workspace
+      #    - build:
+      #        requires:
+      #          - do_copy_workspace
+      #    - lint:
+      #        requires:
+      #          - do_copy_workspace
+      #    - formatter:
+      #        requires:
+      #          - do_copy_workspace
+      #- docs:
+      #    requires:
+      #      - do_copy_workspace
+      #- build-and-push-docker-image:
+      #    context:
+      #      - slack
+      #      - gcp-sloth
+      #    requires:
+      #      - build
+      #      - lint
+      #    tag: main
