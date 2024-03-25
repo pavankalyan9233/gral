@@ -83,35 +83,31 @@ jobs:
 
       - *notify_slack_on_fail
 
-    # TODO: coverage:
-    #docker:
-    #  - image: elixir:1.15.4-slim
-    #working_directory: ~/app
-    #steps:
-    #  - get_code
-    #  - restore_cache:
-    #      keys:
-    #        - v1-mix-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
-    #  - restore_cache:
-    #      keys:
-    #        - v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+    coverage:
+      docker:
+        - image: cimg/rust:1.76.0
+      working_directory: ~/app
+      steps:
+        - get_code
+        - restore_cache:
+            keys:
+              - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+        - restore_cache:
+          keys:
+            - v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
 
-    #  - run:
-    #      name: Coverage UnitTests
-    #      command: |
-    #        mix test --cover --export-coverage default
-    #        mix test.coverage || true
+        - run:
+            name: Coverage UnitTests
+            command: |
+              CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo_profile/cargo-test-%p-%m.profraw' cargo test
+              grcov ./cargo_profile --binary-path ./target/debug/deps/ -s ./cargo_profile -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
 
-    #  - store_artifacts:
-    #      path: cover
+        - store_artifacts:
+            path: target/coverage/html
 
-    #  - save_cache:
-    #      key: v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
-    #      paths: ["_build"]
-
-    #  - save_cache:
-    #      key: v1-coverage-build-cache-{{ .Branch }}
-    #      paths: ["_build"]
+        - save_cache:
+            key: v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+            paths: ["target"]
 
     #  - *notify_slack_on_fail
 
@@ -249,10 +245,9 @@ workflows:
       - build:
           requires:
             - do_copy_workspace
-
-      #- coverage:
-      #    requires:
-      #      - do_copy_workspace
+      - coverage:
+          requires:
+            - do_copy_workspace
       #- integration:
       #    requires:
       #      - do_copy_workspace
