@@ -16,8 +16,8 @@ fn load_labels(g: &Graph, pos: usize) -> Vec<String> {
     let col = &g.vertex_json[pos];
     let nr = g.number_of_vertices() as usize;
     let mut res: Vec<String> = Vec::with_capacity(nr);
-    for i in 0..nr {
-        let mut s = col[i].to_string();
+    for co in col {
+        let mut s = co.to_string();
         if s.starts_with('\"') && s.ends_with('\"') && s.len() >= 2 {
             s = (s[1..s.len() - 1]).to_string();
         }
@@ -39,8 +39,8 @@ pub fn labelpropagation_sync(
     let pos = find_label_name_column(g, labelname)?;
     let all_labels: Vec<String> = load_labels(g, pos);
     let mut labels: Vec<&String> = Vec::with_capacity(nr);
-    for i in 0..nr {
-        labels.push(&all_labels[i]);
+    for lab in all_labels.iter() {
+        labels.push(lab);
     }
     let mut newlabels: Vec<&String> = Vec::with_capacity(nr);
 
@@ -179,8 +179,8 @@ pub fn labelpropagation_async(
     let pos = find_label_name_column(g, labelname)?;
     let all_labels: Vec<String> = load_labels(g, pos);
     let mut labels: Vec<&String> = Vec::with_capacity(nr);
-    for i in 0..nr {
-        labels.push(&all_labels[i]);
+    for lab in all_labels.iter() {
+        labels.push(lab);
     }
 
     // Do up to so many supersteps:
@@ -197,10 +197,9 @@ pub fn labelpropagation_async(
         // directed edges in both directions!
         let mut diffcount: u64 = 0;
         order.shuffle(&mut rng);
-        for vv in 0..nr {
-            let v = order[vv];
+        for v in order.iter() {
             let mut counts = HashMap::<&String, u64>::with_capacity(101);
-            let first_edge = g.edge_index_by_from[v] as usize;
+            let first_edge = g.edge_index_by_from[*v] as usize;
             let last_edge = g.edge_index_by_from[v + 1] as usize;
             let edge_nr = last_edge - first_edge;
             if edge_nr > 0 {
@@ -219,7 +218,7 @@ pub fn labelpropagation_async(
                 }
             };
             // Now incoming edges:
-            let first_edge = g.edge_index_by_to[v] as usize;
+            let first_edge = g.edge_index_by_to[*v] as usize;
             let last_edge = g.edge_index_by_to[v + 1] as usize;
             let edge_nr = last_edge - first_edge;
             if edge_nr > 0 {
@@ -237,7 +236,7 @@ pub fn labelpropagation_async(
                     }
                 }
             }
-            let mut choice: &String = labels[v];
+            let mut choice: &String = labels[*v];
             if random_tiebreak {
                 if !counts.is_empty() {
                     // Now count the multiplicities and take the largest one:
@@ -266,7 +265,7 @@ pub fn labelpropagation_async(
                     // Now count the multiplicities and take the largest one,
                     // break the tie by taking the smallest label:
                     let mut max_mult: u64 = 0;
-                    let mut max_label: &String = labels[v];
+                    let mut max_label: &String = labels[*v];
                     for (k, m) in counts.iter() {
                         if *m >= max_mult {
                             if *m > max_mult {
@@ -280,9 +279,9 @@ pub fn labelpropagation_async(
                     choice = max_label;
                 }
             }
-            if labels[v] != choice {
+            if labels[*v] != choice {
                 diffcount += 1;
-                labels[v] = choice;
+                labels[*v] = choice;
             }
         }
         info!(

@@ -19,10 +19,9 @@ fn find_collection_name_column(g: &Graph) -> Result<usize, String> {
 
 fn count_collection_names(g: &Graph, pos: usize) -> Result<HashMap<String, u64>, String> {
     let col = &g.vertex_json[pos];
-    let nr = g.number_of_vertices();
     let mut res: HashMap<String, u64> = HashMap::with_capacity(101);
-    for i in 0..nr as usize {
-        let s = col[i].to_string();
+    for co in col.iter() {
+        let s = co.to_string();
         let count = res.get_mut(&s);
         match count {
             None => {
@@ -40,8 +39,8 @@ fn determine_size_table(g: &Graph, pos: usize, sizes: &HashMap<String, u64>) -> 
     let col = &g.vertex_json[pos];
     let nr = g.number_of_vertices() as usize;
     let mut res: Vec<u64> = Vec::with_capacity(nr);
-    for i in 0..nr {
-        let s = col[i].to_string();
+    for co in col.iter() {
+        let s = co.to_string();
         let count = sizes.get(&s);
         assert!(count.is_some());
         if let Some(count) = count {
@@ -64,8 +63,8 @@ pub fn i_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> Result<(Vec<f6
 
     let mut rank = vec![1.0 / nr as f64; nr];
     let mut new_rank: Vec<f64> = Vec::with_capacity(nr);
-    for i in 0..nr {
-        new_rank.push(1.0 / size_table[i] as f64 * (1.0 - damping_factor));
+    for st in size_table.iter() {
+        new_rank.push(1.0 / *st as f64 * (1.0 - damping_factor));
     }
     // Do up to so many supersteps:
     let mut step: u32 = 0;
@@ -74,18 +73,18 @@ pub fn i_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> Result<(Vec<f6
         info!("{:?} irank step {step}...", start.elapsed());
         // Go through all vertices and send rank away:
         let mut sink_sum: f64 = 0.0;
-        for v in 0..nr {
+        for (v, rankv) in rank.iter().enumerate() {
             let first_edge = g.edge_index_by_from[v] as usize;
             let last_edge = g.edge_index_by_from[v + 1] as usize;
             let edge_nr = last_edge - first_edge;
             if edge_nr > 0 {
-                let tosend = damping_factor * rank[v] / edge_nr as f64;
+                let tosend = damping_factor * rankv / edge_nr as f64;
                 for wi in first_edge..last_edge {
                     let w = g.edges_by_from[wi].to_u64() as usize;
                     new_rank[w] += tosend;
                 }
             } else {
-                sink_sum += rank[v] * damping_factor;
+                sink_sum += rankv * damping_factor;
             }
         }
         let sink_contribution = sink_sum / nr as f64;

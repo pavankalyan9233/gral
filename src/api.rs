@@ -252,17 +252,13 @@ async fn api_wcc(
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
-    
     let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
         algorithm: "WCC".to_string(),
         graph: graph_arc.clone(),
@@ -317,17 +313,13 @@ async fn api_scc(
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
-    
     let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
         algorithm: "SCC".to_string(),
         graph: graph_arc.clone(),
@@ -390,15 +382,12 @@ async fn api_aggregate_components(
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
     // Computation ID is optional:
     let mut prev_comp: Option<Arc<RwLock<dyn Computation + Send + Sync>>> = None;
@@ -501,17 +490,13 @@ async fn api_pagerank(
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
-    
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
@@ -580,17 +565,13 @@ async fn api_irank(
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
-    
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
@@ -666,15 +647,12 @@ async fn api_label_propagation(
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
     {
         // Make sure we have an edge index:
@@ -682,7 +660,6 @@ async fn api_label_propagation(
         graph.index_edges(true, true);
     }
 
-    
     let comp_arc = Arc::new(RwLock::new(LabelPropagationComputation {
         graph: graph_arc.clone(),
         sync: body.synchronous,
@@ -892,10 +869,7 @@ async fn api_get_arangodb_graph_aql(
     let parsed: serde_json::Result<GraphAnalyticsEngineLoadDataAqlRequest> =
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
-        return Ok(err_bad_req(format!(
-            "Could not parse JSON body: {}",
-            e
-        )));
+        return Ok(err_bad_req(format!("Could not parse JSON body: {}", e)));
     }
     let _body = parsed.unwrap();
 
@@ -941,9 +915,7 @@ async fn api_get_job(
     let comps = computations.lock().unwrap();
     let comp_arc = comps.list.get(&job_id);
     match comp_arc {
-        None => {
-            Ok(not_found_err(format!("Could not find jobId {}", job_id)))
-        }
+        None => Ok(not_found_err(format!("Could not find jobId {}", job_id))),
         Some(comp_arc) => {
             let comp = comp_arc.read().unwrap();
             let graph_arc = comp.get_graph();
@@ -993,9 +965,7 @@ async fn api_drop_job(
     let mut comps = computations.lock().unwrap();
     let comp_arc = comps.list.get(&job_id);
     match comp_arc {
-        None => {
-            Ok(not_found_err(format!("Could not find job {}", job_id)))
-        }
+        None => Ok(not_found_err(format!("Could not find job {}", job_id))),
         Some(comp_arc) => {
             {
                 let mut comp = comp_arc.write().unwrap();

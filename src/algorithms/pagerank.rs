@@ -14,18 +14,18 @@ pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, 
         info!("{:?} Page rank step {step}...", start.elapsed());
         // Go through all vertices and send rank away:
         let mut sink_sum: f64 = 0.0;
-        for v in 0..nr {
+        for (v, rankv) in rank.iter().enumerate() {
             let first_edge = g.edge_index_by_from[v] as usize;
             let last_edge = g.edge_index_by_from[v + 1] as usize;
             let edge_nr = last_edge - first_edge;
             if edge_nr > 0 {
-                let tosend = damping_factor * rank[v] / edge_nr as f64;
+                let tosend = damping_factor * rankv / edge_nr as f64;
                 for wi in first_edge..last_edge {
                     let w = g.edges_by_from[wi].to_u64() as usize;
                     new_rank[w] += tosend;
                 }
             } else {
-                sink_sum += rank[v] * damping_factor;
+                sink_sum += rankv * damping_factor;
             }
         }
         let sink_contribution = sink_sum / nr as f64;
