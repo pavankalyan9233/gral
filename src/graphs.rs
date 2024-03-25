@@ -386,7 +386,7 @@ impl Graph {
             None => None,
             Some(vh) => {
                 let index = self.hash_to_index.get(&vh);
-                index.map(|index| *index)
+                index.copied()
             }
         }
     }

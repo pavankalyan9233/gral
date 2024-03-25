@@ -3,7 +3,7 @@
 use log::{info, warn};
 use std::convert::Infallible;
 use std::env::VarError;
-use std::ffi::OsString;
+
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
