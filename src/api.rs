@@ -1,4 +1,5 @@
 use crate::aggregation::aggregate_over_components;
+use crate::algorithms;
 use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
 use crate::args::{with_args, GralArgs};
 use crate::auth::{with_auth, Unauthorized};
@@ -6,11 +7,7 @@ use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
-use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{with_graphs, Graph, Graphs};
-use crate::irank::i_rank;
-use crate::labelpropagation::{labelpropagation_async, labelpropagation_sync};
-use crate::pagerank::page_rank;
 use crate::VERSION;
 
 use bytes::Bytes;
@@ -279,7 +276,7 @@ async fn api_wcc(
     generic_comp_arc = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let (nr, components, next) = weakly_connected_components(&graph);
+        let (nr, components, next) = algorithms::conncomp::weakly_connected_components(&graph);
         info!("Found {} connected components.", nr);
         let mut comp = comp_arc.write().unwrap();
         comp.components = Some(components);
@@ -352,7 +349,7 @@ async fn api_scc(
             }
         }
         let graph = graph_arc.read().unwrap();
-        let (nr, components, next) = strongly_connected_components(&graph);
+        let (nr, components, next) = algorithms::conncomp::strongly_connected_components(&graph);
         info!("Found {} connected components.", nr);
         let mut comp = comp_arc.write().unwrap();
         comp.components = Some(components);
@@ -540,7 +537,8 @@ async fn api_pagerank(
     generic_comp_arc = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let (rank, steps) = page_rank(&graph, body.maximum_supersteps, body.damping_factor);
+        let (rank, steps) =
+            algorithms::pagerank::page_rank(&graph, body.maximum_supersteps, body.damping_factor);
         info!("Finished pagerank computation!");
         let mut comp = comp_arc.write().unwrap();
         comp.rank = rank;
@@ -618,7 +616,7 @@ async fn api_irank(
     generic_comp_arc = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let res = i_rank(&graph, body.maximum_supersteps, body.damping_factor);
+        let res = algorithms::irank::i_rank(&graph, body.maximum_supersteps, body.damping_factor);
         info!("Finished irank computation!");
         let mut comp = comp_arc.write().unwrap();
         match res {
@@ -704,9 +702,19 @@ async fn api_label_propagation(
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let res = if body.synchronous {
-            labelpropagation_sync(&graph, 64, &startlabel, body.random_tiebreak)
+            algorithms::labelpropagation::labelpropagation_sync(
+                &graph,
+                64,
+                &startlabel,
+                body.random_tiebreak,
+            )
         } else {
-            labelpropagation_async(&graph, 64, &startlabel, body.random_tiebreak)
+            algorithms::labelpropagation::labelpropagation_async(
+                &graph,
+                64,
+                &startlabel,
+                body.random_tiebreak,
+            )
         };
         info!("Finished label propagation computation!");
         let mut comp = comp_arc.write().unwrap();
