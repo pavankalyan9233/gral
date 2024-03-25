@@ -5,7 +5,7 @@ pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, 
     info!("Running page rank...");
     let start = std::time::SystemTime::now();
     let nr = g.number_of_vertices() as usize;
-    let mut rank = vec![1.0 / nr as f64; nr as usize];
+    let mut rank = vec![1.0 / nr as f64; nr];
     let mut new_rank = vec![1.0 / nr as f64 * (1.0 - damping_factor); nr];
     // Do up to so many supersteps:
     let mut step: u32 = 0;

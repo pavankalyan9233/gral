@@ -16,7 +16,7 @@ fn load_labels(g: &Graph, pos: usize) -> Vec<String> {
     let col = &g.vertex_json[pos];
     let nr = g.number_of_vertices() as usize;
     let mut res: Vec<String> = Vec::with_capacity(nr);
-    for i in 0..nr as usize {
+    for i in 0..nr {
         let mut s = col[i].to_string();
         if s.starts_with('\"') && s.ends_with('\"') && s.len() >= 2 {
             s = (s[1..s.len() - 1]).to_string();

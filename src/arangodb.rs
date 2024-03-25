@@ -93,7 +93,7 @@ where
             Err(e) => {
                 return Err(format!(
                     "Could not parse error body, error: {}, status code: {:?}",
-                    e.to_string(),
+                    e,
                     status,
                 ));
             }
@@ -106,7 +106,7 @@ where
         }
     }
     let body = resp.json::<T>().await;
-    body.map_err(|e| format!("Could not parse response body, error: {}", e.to_string()))
+    body.map_err(|e| format!("Could not parse response body, error: {}", e))
 }
 
 // This function handles an empty HTTP response from ArangoDB, including
@@ -126,7 +126,7 @@ async fn handle_arangodb_response(
             Err(e) => {
                 return Err(format!(
                     "Could not parse error body, error: {}, status code: {:?}",
-                    e.to_string(),
+                    e,
                     status,
                 ));
             }
@@ -148,7 +148,7 @@ type ShardMap = HashMap<String, Vec<String>>;
 
 fn compute_shard_map(sd: &ShardDistribution, coll_list: &Vec<String>) -> Result<ShardMap, String> {
     let mut result: ShardMap = HashMap::new();
-    for c in coll_list.into_iter() {
+    for c in coll_list.iter() {
         // Handle the case of a smart edge collection. If c is
         // one, then we also find a collection called `_to_`+c.
         // In this case, we must not get those shards, because their
@@ -410,10 +410,10 @@ struct DumpStartBody {
 }
 
 fn collection_name_from_id(id: &str) -> String {
-    let pos = id.find("/");
+    let pos = id.find('/');
     match pos {
         None => "".to_string(),
-        Some(p) => (&id[0..p]).to_string(),
+        Some(p) => id[0..p].to_string(),
     }
 }
 
@@ -431,7 +431,7 @@ pub async fn fetch_graph_from_arangodb(
         let guard = args.lock().unwrap();
         endpoints = guard
             .arangodb_endpoints
-            .split(",")
+            .split(',')
             .map(|s| s.to_owned())
             .collect();
         jwt_token = create_jwt_token(&guard, &user, 60 * 60 * 2 /* seconds */);
@@ -477,7 +477,7 @@ pub async fn fetch_graph_from_arangodb(
         // We use multiple threads to receive the data in batches:
         let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
-        let prog_reported = Arc::new(Mutex::new(0 as u64));
+        let prog_reported = Arc::new(Mutex::new(0_u64));
         for _i in 0..req.parallelism {
             let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
             senders.push(sender);
@@ -512,7 +512,7 @@ pub async fn fetch_graph_from_arangodb(
                         match id {
                             Value::String(i) => {
                                 let mut buf = vec![];
-                                buf.extend_from_slice((&i[..]).as_bytes());
+                                buf.extend_from_slice(i[..].as_bytes());
                                 vertex_keys.push(buf);
                                 idstr = i;
                             }
@@ -564,7 +564,7 @@ pub async fn fetch_graph_from_arangodb(
                         nr_vertices = graph.number_of_vertices();
                     }
                     let mut prog = prog_reported_clone.lock().unwrap();
-                    if nr_vertices > *prog + 1000000 as u64 {
+                    if nr_vertices > *prog + 1000000_u64 {
                         *prog = nr_vertices;
                         info!(
                             "{:?} Have imported {} vertices.",
@@ -597,7 +597,7 @@ pub async fn fetch_graph_from_arangodb(
     {
         let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
-        let prog_reported = Arc::new(Mutex::new(0 as u64));
+        let prog_reported = Arc::new(Mutex::new(0_u64));
         for _i in 0..req.parallelism {
             let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
             senders.push(sender);
@@ -625,7 +625,7 @@ pub async fn fetch_graph_from_arangodb(
                         match from {
                             Value::String(i) => {
                                 let mut buf = vec![];
-                                buf.extend_from_slice((&i[..]).as_bytes());
+                                buf.extend_from_slice(i[..].as_bytes());
                                 froms.push(buf);
                             }
                             _ => {
@@ -639,7 +639,7 @@ pub async fn fetch_graph_from_arangodb(
                         match to {
                             Value::String(i) => {
                                 let mut buf = vec![];
-                                buf.extend_from_slice((&i[..]).as_bytes());
+                                buf.extend_from_slice(i[..].as_bytes());
                                 tos.push(buf);
                             }
                             _ => {
@@ -684,7 +684,7 @@ pub async fn fetch_graph_from_arangodb(
                         nr_edges = graph.number_of_edges();
                     }
                     let mut prog = prog_reported_clone.lock().unwrap();
-                    if nr_edges > *prog + 1000000 as u64 {
+                    if nr_edges > *prog + 1000000_u64 {
                         *prog = nr_edges;
                         info!(
                             "{:?} Have imported {} edges.",
@@ -773,7 +773,7 @@ pub async fn write_result_to_arangodb(
         let guard = args.lock().unwrap();
         endpoints = guard
             .arangodb_endpoints
-            .split(",")
+            .split(',')
             .map(|s| s.to_owned())
             .collect();
         jwt_token = create_jwt_token(&guard, &user, 60 * 60 * 2 /* seconds */);
@@ -838,7 +838,7 @@ pub async fn write_result_to_arangodb(
 
         let new_batch = |l: usize| -> Vec<u8> {
             let mut res = Vec::with_capacity(200 * l); // heuristics
-            res.write_u8('[' as u8)
+            res.write_u8(b'[')
                 .expect("Assumed to be able to write");
             res
         };
@@ -855,7 +855,7 @@ pub async fn write_result_to_arangodb(
                 first = false;
             }
             cur_batch
-                .write_u8('{' as u8)
+                .write_u8(b'{')
                 .expect("Assumed to be able to write");
             for j in 0..results.len() {
                 let (key, value) = results[j].get_result(i);
@@ -874,7 +874,7 @@ pub async fn write_result_to_arangodb(
             count += 1;
             if count >= req.batch_size {
                 cur_batch
-                    .write_u8(']' as u8)
+                    .write_u8(b']')
                     .expect("Assumed to be able to write");
                 if let Err(e) = senders[sender_round_robin].blocking_send(Batch {
                     body: cur_batch.into(),
@@ -903,7 +903,7 @@ pub async fn write_result_to_arangodb(
         }
         if count > 0 {
             cur_batch
-                .write_u8(']' as u8)
+                .write_u8(b']')
                 .expect("Assumed to be able to write");
             if let Err(e) = senders[sender_round_robin].blocking_send(Batch {
                 body: cur_batch.into(),
@@ -919,7 +919,7 @@ pub async fn write_result_to_arangodb(
     let res = producer.join().unwrap();
     if let Err(e) = res {
         error_msg.push_str(&e[..]);
-        error_msg.push_str(" ");
+        error_msg.push(' ');
     }
 
     // Join async workers:
@@ -932,7 +932,7 @@ pub async fn write_result_to_arangodb(
             Err(msg) => {
                 info!("Got error result: {}", msg);
                 error_msg.push_str(&msg[..]);
-                error_msg.push_str(" ");
+                error_msg.push(' ');
             }
         }
     }

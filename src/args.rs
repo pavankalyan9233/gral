@@ -91,7 +91,7 @@ fn read_jwt_secrets(jwt_path: &String) -> Vec<Vec<u8>> {
                         }
                         Ok(len) => {
                             if len != 0 {
-                                if de.file_name() == OsString::from("token") {
+                                if de.file_name() == *"token" {
                                     use_to_sign = secrets.len();
                                 }
                                 secrets.push(buf);

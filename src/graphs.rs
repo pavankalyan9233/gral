@@ -218,12 +218,12 @@ impl Graph {
             let mut rng = rand::thread_rng();
             loop {
                 actual = VertexHash(rng.gen::<u64>());
-                if let Some(_) = self.hash_to_index.get_mut(&actual) {
+                if self.hash_to_index.get_mut(&actual).is_some() {
                     break;
                 }
             }
             let oi = self.hash_to_index.get_mut(&hash).unwrap();
-            *oi = VertexIndex((*oi).0 | 0x800000000000000);
+            *oi = VertexIndex(oi.0 | 0x800000000000000);
             exceptional.push((i, actual));
             exceptional_keys.push(key.clone());
             if self.store_keys {
@@ -304,7 +304,7 @@ impl Graph {
                     }
                 }
                 self.edges_by_from.push(e.to);
-                pos = pos + 1;
+                pos += 1;
             }
             while cur_from.to_u64() < number_v as u64 {
                 cur_from = VertexIndex::new(cur_from.to_u64() + 1);
@@ -340,7 +340,7 @@ impl Graph {
                     }
                 }
                 self.edges_by_to.push(e.from);
-                pos = pos + 1;
+                pos += 1;
             }
             while cur_to.to_u64() < number_v as u64 {
                 cur_to = VertexIndex::new(cur_to.to_u64() + 1);
@@ -386,10 +386,7 @@ impl Graph {
             None => None,
             Some(vh) => {
                 let index = self.hash_to_index.get(&vh);
-                match index {
-                    None => None,
-                    Some(index) => Some(*index),
-                }
+                index.map(|index| *index)
             }
         }
     }
