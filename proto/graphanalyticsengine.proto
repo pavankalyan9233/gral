@@ -390,6 +390,10 @@ message GraphAnalyticsEngineGraph {
     uint64 number_of_edges = 3;
     // Memory usage:
     uint64 memory_usage = 4;
+    // Memory usage per vertex:
+    uint64 memory_per_vertex = 5;
+    // Memory usage per edge:
+    uint64 memory_per_edge = 6;
 }
 
 // Response for a delete graph request.

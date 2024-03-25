@@ -10,17 +10,14 @@ use tracing_subscriber;
 use warp::{http::Response, http::StatusCode, Filter};
 
 mod aggregation;
+mod algorithms;
 mod api;
 mod arangodb;
 mod args;
 mod auth;
 mod computations;
-mod conncomp;
 mod graphs;
-mod irank;
-mod labelpropagation;
 mod metrics;
-mod pagerank;
 
 use crate::api::{api_filter, handle_errors};
 use crate::args::parse_args;

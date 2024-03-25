@@ -1,4 +1,5 @@
 use crate::aggregation::aggregate_over_components;
+use crate::algorithms;
 use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
 use crate::args::{with_args, GralArgs};
 use crate::auth::{with_auth, Unauthorized};
@@ -6,11 +7,7 @@ use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
-use crate::conncomp::{strongly_connected_components, weakly_connected_components};
 use crate::graphs::{with_graphs, Graph, Graphs};
-use crate::irank::i_rank;
-use crate::labelpropagation::{labelpropagation_async, labelpropagation_sync};
-use crate::pagerank::page_rank;
 use crate::VERSION;
 
 use bytes::Bytes;
@@ -279,7 +276,7 @@ async fn api_wcc(
     generic_comp_arc = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let (nr, components, next) = weakly_connected_components(&graph);
+        let (nr, components, next) = algorithms::conncomp::weakly_connected_components(&graph);
         info!("Found {} connected components.", nr);
         let mut comp = comp_arc.write().unwrap();
         comp.components = Some(components);
@@ -352,7 +349,7 @@ async fn api_scc(
             }
         }
         let graph = graph_arc.read().unwrap();
-        let (nr, components, next) = strongly_connected_components(&graph);
+        let (nr, components, next) = algorithms::conncomp::strongly_connected_components(&graph);
         info!("Found {} connected components.", nr);
         let mut comp = comp_arc.write().unwrap();
         comp.components = Some(components);
@@ -540,7 +537,8 @@ async fn api_pagerank(
     generic_comp_arc = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let (rank, steps) = page_rank(&graph, body.maximum_supersteps, body.damping_factor);
+        let (rank, steps) =
+            algorithms::pagerank::page_rank(&graph, body.maximum_supersteps, body.damping_factor);
         info!("Finished pagerank computation!");
         let mut comp = comp_arc.write().unwrap();
         comp.rank = rank;
@@ -618,7 +616,7 @@ async fn api_irank(
     generic_comp_arc = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let res = i_rank(&graph, body.maximum_supersteps, body.damping_factor);
+        let res = algorithms::irank::i_rank(&graph, body.maximum_supersteps, body.damping_factor);
         info!("Finished irank computation!");
         let mut comp = comp_arc.write().unwrap();
         match res {
@@ -704,9 +702,19 @@ async fn api_label_propagation(
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let res = if body.synchronous {
-            labelpropagation_sync(&graph, 64, &startlabel, body.random_tiebreak)
+            algorithms::labelpropagation::labelpropagation_sync(
+                &graph,
+                64,
+                &startlabel,
+                body.random_tiebreak,
+            )
         } else {
-            labelpropagation_async(&graph, 64, &startlabel, body.random_tiebreak)
+            algorithms::labelpropagation::labelpropagation_async(
+                &graph,
+                64,
+                &startlabel,
+                body.random_tiebreak,
+            )
         };
         info!("Finished label propagation computation!");
         let mut comp = comp_arc.write().unwrap();
@@ -1039,6 +1047,7 @@ async fn api_get_graph(
     let graph = graph_arc.read().unwrap();
 
     // Write response:
+    let mem_usage = graph.memory_usage();
     let response = GraphAnalyticsEngineGetGraphResponse {
         error_code: 0,
         error_message: "".to_string(),
@@ -1046,7 +1055,9 @@ async fn api_get_graph(
             graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
-            memory_usage: graph.memory_usage() as u64,
+            memory_usage: mem_usage.bytes_total as u64,
+            memory_per_vertex: mem_usage.bytes_per_vertex as u64,
+            memory_per_edge: mem_usage.bytes_per_edge as u64,
         }),
     };
     Ok(warp::reply::with_status(
@@ -1086,6 +1097,7 @@ async fn api_dump_graph(
     graph.dump();
 
     // Write response:
+    let mem_usage = graph.memory_usage();
     let response = GraphAnalyticsEngineGetGraphResponse {
         error_code: 0,
         error_message: "".to_string(),
@@ -1093,7 +1105,9 @@ async fn api_dump_graph(
             graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
-            memory_usage: graph.memory_usage() as u64,
+            memory_usage: mem_usage.bytes_total as u64,
+            memory_per_vertex: mem_usage.bytes_per_vertex as u64,
+            memory_per_edge: mem_usage.bytes_per_edge as u64,
         }),
     };
     Ok(warp::reply::with_status(
@@ -1110,11 +1124,14 @@ async fn api_list_graphs(_user: String, graphs: Arc<Mutex<Graphs>>) -> Result<Ve
         let graph = graph_arc.read().unwrap();
 
         // Write response:
+        let mem_usage = graph.memory_usage();
         let g = GraphAnalyticsEngineGraph {
             graph_id: graph.graph_id,
             number_of_vertices: graph.number_of_vertices(),
             number_of_edges: graph.number_of_edges(),
-            memory_usage: graph.memory_usage() as u64,
+            memory_usage: mem_usage.bytes_total as u64,
+            memory_per_vertex: mem_usage.bytes_per_vertex as u64,
+            memory_per_edge: mem_usage.bytes_per_edge as u64,
         };
         response.push(g);
     }
