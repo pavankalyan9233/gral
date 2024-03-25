@@ -92,7 +92,7 @@ jobs:
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-coverage-build-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-coverage-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
       - run:
           name: Coverage UnitTests
           command: |
@@ -105,7 +105,7 @@ jobs:
           path: target/coverage/html
 
       - save_cache:
-          key: v1-coverage-build-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          key: v1-coverage-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
           paths: ["target/debug/deps"]
           # TODO Later - *notify_slack_on_fail
 
