@@ -2,5 +2,11 @@
 /target
 /tls
 
+# Rust testing related
+cargo_profile/
+
 # IDE related
 .idea/
+
+# macOS related
+**/.DS_Store
