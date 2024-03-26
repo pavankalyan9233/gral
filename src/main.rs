@@ -18,8 +18,8 @@ use crate::api::{api_filter, handle_errors};
 use crate::computations::Computations;
 use crate::graphs::Graphs;
 
-use gral::auth::auth::with_auth;
 use gral::args::args::parse_args;
+use gral::auth::auth::with_auth;
 
 pub const VERSION: u32 = 0x00100;
 
