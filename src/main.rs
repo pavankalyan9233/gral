@@ -6,13 +6,13 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use warp::{http::Response, http::StatusCode, Filter};
 
-use gral::api::api::{api_filter, handle_errors};
-use gral::args::args::parse_args;
-use gral::auth::auth::with_auth;
-use gral::computations::computations::Computations;
-use gral::constants;
-use gral::graphs::graphs::Graphs;
-use gral::metrics::metrics;
+use gral::args::parser::parse_args;
+use gral::compute::computations::Computations;
+use gral::environment;
+use gral::graph_store::graphs::Graphs;
+use gral::http_server::api::{api_filter, handle_errors};
+use gral::security::auth::with_auth;
+use gral::statistics::metrics;
 
 #[tokio::main]
 async fn main() {
@@ -26,7 +26,7 @@ async fn main() {
     let metrics_handle = prom_builder
         .install_recorder()
         .expect("failed to install Prometheus recorder");
-    metrics::metrics::init();
+    metrics::init();
 
     let args = match parse_args() {
         Ok(v) => v,
@@ -68,7 +68,7 @@ async fn main() {
                     .expect("Expected to be able to send signal!");
             }
             let mut v = Vec::new();
-            v.write_u32::<BigEndian>(constants::constants::VERSION)
+            v.write_u32::<BigEndian>(environment::constants::VERSION)
                 .unwrap();
 
             Response::builder()
@@ -78,10 +78,12 @@ async fn main() {
     let the_graphs = Arc::new(Mutex::new(Graphs::new()));
     let the_computations = Arc::new(Mutex::new(Computations::new()));
 
-    let api_metrics = warp::path!("v1" / "metrics").and(warp::get()).map(move || {
-        let out = metrics_handle.render();
-        warp::reply::with_status(out, StatusCode::OK)
-    });
+    let api_metrics = warp::path!("v1" / "statistics")
+        .and(warp::get())
+        .map(move || {
+            let out = metrics_handle.render();
+            warp::reply::with_status(out, StatusCode::OK)
+        });
 
     let apifilters = shutdown
         .with(log_incoming)

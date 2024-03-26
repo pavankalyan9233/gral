@@ -1,9 +1,9 @@
 pub mod algorithms;
-pub mod api;
-pub mod arangodb;
 pub mod args;
-pub mod auth;
-pub mod computations;
-pub mod constants;
-pub mod graphs;
-pub mod metrics;
+pub mod compute;
+pub mod environment;
+pub mod graph_loader;
+pub mod graph_store;
+pub mod http_server;
+pub mod security;
+pub mod statistics;

@@ -1,10 +1,10 @@
-use crate::api::graphanalyticsengine::{
+use crate::args::parser::GralArgs;
+use crate::compute::computations::{Computation, LoadComputation, StoreComputation};
+use crate::graph_store::graphs::{Graph, VertexHash, VertexIndex};
+use crate::http_server::graphanalyticsengine::{
     GraphAnalyticsEngineLoadDataRequest, GraphAnalyticsEngineStoreResultsRequest,
 };
-use crate::args::args::GralArgs;
-use crate::auth::auth::create_jwt_token;
-use crate::computations::computations::{Computation, LoadComputation, StoreComputation};
-use crate::graphs::graphs::{Graph, VertexHash, VertexIndex};
+use crate::security::auth::create_jwt_token;
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};

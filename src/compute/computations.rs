@@ -6,7 +6,7 @@ use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 
-use crate::graphs::graphs::Graph;
+use crate::graph_store::graphs::Graph;
 
 pub trait Computation {
     fn is_ready(&self) -> bool;
@@ -46,6 +46,12 @@ impl Computations {
         if found.is_some() {
             decrement_gauge!("number_of_jobs", 1.0);
         }
+    }
+}
+
+impl Default for Computations {
+    fn default() -> Self {
+        Computations::new()
     }
 }
 

@@ -1,17 +1,17 @@
 use crate::algorithms;
-use crate::arangodb::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
-use crate::computations::aggregation::aggregate_over_components;
-use crate::computations::computations::{
+use crate::compute::aggregation::aggregate_over_components;
+use crate::compute::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
-use crate::constants::constants::VERSION;
-use crate::graphs::graphs::{with_graphs, Graph, Graphs};
+use crate::environment::constants::VERSION;
+use crate::graph_loader::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
+use crate::graph_store::graphs::{with_graphs, Graph, Graphs};
 
-use crate::args::args::{with_args, GralArgs};
-use crate::auth::auth::{with_auth, Unauthorized};
+use crate::args::parser::{with_args, GralArgs};
+use crate::security::auth::{with_auth, Unauthorized};
 
-use crate::api::graphanalyticsengine::*;
+use crate::http_server::graphanalyticsengine::*;
 use bytes::Bytes;
 use http::Error;
 use log::info;

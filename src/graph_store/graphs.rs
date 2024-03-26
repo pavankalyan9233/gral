@@ -34,6 +34,7 @@ fn sizeof_val(v: &serde_json::Value) -> usize {
 
 #[derive(Eq, Hash, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
 pub struct VertexHash(u64);
+
 impl VertexHash {
     pub fn new(x: u64) -> VertexHash {
         VertexHash(x)
@@ -42,6 +43,7 @@ impl VertexHash {
 
 #[derive(Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
 pub struct VertexIndex(u64);
+
 impl VertexIndex {
     pub fn new(x: u64) -> VertexIndex {
         VertexIndex(x)
@@ -145,6 +147,12 @@ impl Graphs {
         if found.is_some() {
             decrement_gauge!("number_of_graphs", 1.0);
         }
+    }
+}
+
+impl Default for Graphs {
+    fn default() -> Self {
+        Graphs::new()
     }
 }
 

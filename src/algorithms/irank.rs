@@ -1,4 +1,4 @@
-use crate::graphs::graphs::Graph;
+use crate::graph_store::graphs::Graph;
 use log::{error, info};
 use std::collections::HashMap;
 
@@ -112,8 +112,8 @@ pub fn i_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> Result<(Vec<f6
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphs::examples::make_cyclic_graph;
-    use crate::graphs::examples::make_star_graph;
+    use crate::graph_store::examples::make_cyclic_graph;
+    use crate::graph_store::examples::make_star_graph;
     use serde_json::json;
 
     #[test]
