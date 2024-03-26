@@ -98,7 +98,7 @@ jobs:
           command: |
             cargo install grcov
             rustup component add llvm-tools-preview
-            CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test
+            CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test --lib
             grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
 
       - store_artifacts:
@@ -125,6 +125,7 @@ jobs:
       - run:
           name: Integration Tests
           command: |
+            RUST_BACKTRACE=1
             cargo test --test '*'
 
   build:
@@ -141,7 +142,7 @@ jobs:
 
       - run:
           name: Run tests
-          command: cargo test
+          command: cargo test --lib
 
       - run:
           name: Build release
