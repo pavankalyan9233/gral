@@ -1,14 +1,15 @@
 use crate::aggregation::aggregate_over_components;
 use crate::algorithms;
 use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
-use crate::args::{with_args, GralArgs};
-use crate::auth::{with_auth, Unauthorized};
 use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
 use crate::graphs::{with_graphs, Graph, Graphs};
 use crate::VERSION;
+
+use gral::args::args::{with_args, GralArgs};
+use gral::auth::auth::{with_auth, Unauthorized};
 
 use bytes::Bytes;
 use graphanalyticsengine::*;

@@ -13,7 +13,7 @@ use warp::{
     reject, Filter, Rejection,
 };
 
-use crate::args::{with_args, GralArgs};
+use crate::args::args::{GralArgs, with_args};
 
 mod authentication {
     tonic::include_proto! {"authentication"}

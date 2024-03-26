@@ -1,4 +1,3 @@
-use auth::with_auth;
 use byteorder::{BigEndian, WriteBytesExt};
 use log::{debug, info, warn, LevelFilter};
 use metrics_exporter_prometheus::PrometheusBuilder;
@@ -11,16 +10,16 @@ mod aggregation;
 mod algorithms;
 mod api;
 mod arangodb;
-mod args;
-mod auth;
 mod computations;
 mod graphs;
 mod metrics;
 
 use crate::api::{api_filter, handle_errors};
-use crate::args::parse_args;
 use crate::computations::Computations;
 use crate::graphs::Graphs;
+
+use gral::auth::auth::with_auth;
+use gral::args::args::parse_args;
 
 pub const VERSION: u32 = 0x00100;
 

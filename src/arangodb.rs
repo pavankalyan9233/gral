@@ -1,8 +1,8 @@
 use crate::api::graphanalyticsengine::{
     GraphAnalyticsEngineLoadDataRequest, GraphAnalyticsEngineStoreResultsRequest,
 };
-use crate::args::GralArgs;
-use crate::auth::create_jwt_token;
+use gral::args::args::GralArgs;
+use gral::auth::auth::create_jwt_token;
 use crate::computations::{Computation, LoadComputation, StoreComputation};
 use crate::graphs::{Graph, VertexHash, VertexIndex};
 use byteorder::WriteBytesExt;
