@@ -58,7 +58,7 @@ jobs:
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Clippy
@@ -75,7 +75,7 @@ jobs:
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Format check
@@ -83,37 +83,31 @@ jobs:
 
       - *notify_slack_on_fail
 
-    # TODO: coverage:
-    #docker:
-    #  - image: elixir:1.15.4-slim
-    #working_directory: ~/app
-    #steps:
-    #  - get_code
-    #  - restore_cache:
-    #      keys:
-    #        - v1-mix-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
-    #  - restore_cache:
-    #      keys:
-    #        - v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+  coverage:
+    docker:
+      - image: cimg/rust:1.76.0
+    working_directory: ~/app
+    steps:
+      - get_code
+      - install_protobuf
+      - restore_cache:
+          keys:
+            - v1-coverage-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+      - run:
+          name: Coverage UnitTests
+          command: |
+            cargo install grcov
+            rustup component add llvm-tools-preview
+            CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test
+            grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
 
-    #  - run:
-    #      name: Coverage UnitTests
-    #      command: |
-    #        mix test --cover --export-coverage default
-    #        mix test.coverage || true
+      - store_artifacts:
+          path: target/coverage/html
 
-    #  - store_artifacts:
-    #      path: cover
-
-    #  - save_cache:
-    #      key: v1-coverage-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
-    #      paths: ["_build"]
-
-    #  - save_cache:
-    #      key: v1-coverage-build-cache-{{ .Branch }}
-    #      paths: ["_build"]
-
-    #  - *notify_slack_on_fail
+      - save_cache:
+          key: v1-coverage-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          paths: ["target/debug/deps"]
+          # TODO Later - *notify_slack_on_fail
 
   # TODO: Integration tests.
   #integration:
@@ -160,7 +154,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Run tests
@@ -175,8 +169,8 @@ jobs:
       # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
       # be cached (target/debug/build, target/debug/deps, ...).
       - save_cache:
-          key: v1-cargo-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-          paths: ["target"]
+          key: v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          paths: ["target/debug/deps"]
 
       - persist_to_workspace:
           root: .
@@ -249,10 +243,9 @@ workflows:
       - build:
           requires:
             - do_copy_workspace
-
-      #- coverage:
-      #    requires:
-      #      - do_copy_workspace
+      - coverage:
+          requires:
+            - do_copy_workspace
       #- integration:
       #    requires:
       #      - do_copy_workspace
