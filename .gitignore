@@ -1,5 +1,6 @@
 # Rust related
 /target
+/tls
 
 # Rust testing related
 cargo_profile/

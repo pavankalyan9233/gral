@@ -5,8 +5,6 @@ use metrics_exporter_prometheus::PrometheusBuilder;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
-use tracing;
-use tracing_subscriber;
 use warp::{http::Response, http::StatusCode, Filter};
 
 mod aggregation;
@@ -80,7 +78,7 @@ async fn main() {
                     .expect("Expected to be able to send signal!");
             }
             let mut v = Vec::new();
-            v.write_u32::<BigEndian>(VERSION as u32).unwrap();
+            v.write_u32::<BigEndian>(VERSION).unwrap();
 
             Response::builder()
                 .header("Content-Type", "x-application-gral")
@@ -106,7 +104,7 @@ async fn main() {
     let ip_addr: IpAddr = args
         .bind_addr
         .parse()
-        .expect(format!("Could not parse bind address: {}", args.bind_addr).as_str());
+        .unwrap_or_else(|_| panic!("Could not parse bind address: {}", args.bind_addr));
 
     if args.use_tls {
         if args.use_auth {
