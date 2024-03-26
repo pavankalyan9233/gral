@@ -10,8 +10,6 @@ use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 use xxhash_rust::xxh3::xxh3_64_with_seed;
 
-pub mod examples;
-
 // Got this function from stack overflow:
 //  https://stackoverflow.com/questions/76454260/rust-serde-get-runtime-heap-size-of-vecserde-jsonvalue
 fn sizeof_val(v: &serde_json::Value) -> usize {

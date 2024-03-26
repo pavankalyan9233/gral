@@ -1,35 +1,24 @@
-use crate::aggregation::aggregate_over_components;
 use crate::algorithms;
-use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
-use crate::computations::{
+use crate::arangodb::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
+use crate::computations::aggregation::aggregate_over_components;
+use crate::computations::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
-use crate::graphs::{with_graphs, Graph, Graphs};
-use crate::VERSION;
+use crate::constants::constants::VERSION;
+use crate::graphs::graphs::{with_graphs, Graph, Graphs};
 
-use gral::args::args::{with_args, GralArgs};
-use gral::auth::auth::{with_auth, Unauthorized};
+use crate::args::args::{with_args, GralArgs};
+use crate::auth::auth::{with_auth, Unauthorized};
 
+use crate::api::graphanalyticsengine::*;
 use bytes::Bytes;
-use graphanalyticsengine::*;
 use http::Error;
 use log::info;
 use std::convert::Infallible;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::{http::Response, http::StatusCode, reply::WithStatus, Filter, Rejection};
-
-pub mod graphanalyticsengine {
-    include!(concat!(
-        env!("OUT_DIR"),
-        "/arangodb.cloud.internal.graphanalytics.v1.rs"
-    ));
-    include!(concat!(
-        env!("OUT_DIR"),
-        "/arangodb.cloud.internal.graphanalytics.v1.serde.rs"
-    ));
-}
 
 /// The following function puts together the filters for the API.
 /// To this end, it relies on the following async functions below.
@@ -770,9 +759,9 @@ async fn api_write_result_back_arangodb(
 
     if result_comps.len() != body.attribute_names.len() {
         return Ok(err_bad_req(
-                format!("Number of computations ({}) must be the same as the number of attribute names ({})", 
-                        result_comps.len(), body.attribute_names.len()),
-                StatusCode::BAD_REQUEST));
+            format!("Number of computations ({}) must be the same as the number of attribute names ({})",
+                    result_comps.len(), body.attribute_names.len()),
+            StatusCode::BAD_REQUEST));
     }
 
     // Set a few sensible defaults:
