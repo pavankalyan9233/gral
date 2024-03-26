@@ -62,7 +62,7 @@ jobs:
 
       - run:
           name: Clippy
-          command: cargo clippy
+          command: cargo clippy -- -D warnings
 
       - *notify_slack_on_fail
 
