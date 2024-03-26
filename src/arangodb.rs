@@ -492,8 +492,7 @@ pub async fn fetch_graph_from_arangodb(
                         std::time::SystemTime::now().duration_since(begin),
                         body.len()
                     );
-                    let mut vertex_keys: Vec<Vec<u8>> = vec![];
-                    vertex_keys.reserve(400000);
+                    let mut vertex_keys: Vec<Vec<u8>> = Vec::with_capacity(400000);
                     let mut vertex_json: Vec<Vec<Value>> = vec![];
                     for line in body.lines() {
                         let v: Value = match serde_json::from_str(line) {
@@ -506,13 +505,12 @@ pub async fn fetch_graph_from_arangodb(
                             Ok(val) => val,
                         };
                         let id = &v["_id"];
-                        let idstr: &String;
-                        match id {
+                        let idstr: &String = match id {
                             Value::String(i) => {
                                 let mut buf = vec![];
                                 buf.extend_from_slice(i[..].as_bytes());
                                 vertex_keys.push(buf);
-                                idstr = i;
+                                i
                             }
                             _ => {
                                 return Err(format!(
@@ -520,7 +518,7 @@ pub async fn fetch_graph_from_arangodb(
                                     line
                                 ));
                             }
-                        }
+                        };
                         // If we get here, we have to extract the field
                         // values in `fields` from the json and store it
                         // to vertex_json:
@@ -533,8 +531,7 @@ pub async fn fetch_graph_from_arangodb(
                         };
 
                         let mut cols: Vec<Value> = Vec::with_capacity(fields.len());
-                        for i in 0..fields.len() {
-                            let f = &fields[i];
+                        for f in fields.iter() {
                             let j = get_value(&v, f);
                             cols.push(j);
                         }
@@ -605,10 +602,8 @@ pub async fn fetch_graph_from_arangodb(
                 while let Ok(resp) = receiver.recv() {
                     let body = std::str::from_utf8(resp.as_ref())
                         .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
-                    let mut froms: Vec<Vec<u8>> = vec![];
-                    froms.reserve(1000000);
-                    let mut tos: Vec<Vec<u8>> = vec![];
-                    tos.reserve(1000000);
+                    let mut froms: Vec<Vec<u8>> = Vec::with_capacity(1000000);
+                    let mut tos: Vec<Vec<u8>> = Vec::with_capacity(1000000);
                     for line in body.lines() {
                         let v: Value = match serde_json::from_str(line) {
                             Err(err) => {
@@ -648,8 +643,8 @@ pub async fn fetch_graph_from_arangodb(
                             }
                         }
                     }
-                    let mut edges: Vec<(VertexIndex, VertexIndex)> = vec![];
-                    edges.reserve(froms.len());
+                    let mut edges: Vec<(VertexIndex, VertexIndex)> =
+                        Vec::with_capacity(froms.len());
                     {
                         // First translate keys to indexes by reading
                         // the graph object:
@@ -819,15 +814,19 @@ pub async fn write_result_to_arangodb(
         let nr_results = result_comp_arcs.len();
         let mut results: Vec<RwLockReadGuard<'_, dyn Computation + Send + Sync>> =
             Vec::with_capacity(nr_results);
-        for i in 0..nr_results {
+        // In the following, we must do a trick to please the compiler as
+        // well as the linter: We must use result_comp_arcs[i] to get the
+        // lock guard, otherwise the borrow checker complains that _r does
+        // not live long enough. But just running i over a range is not
+        // ok with clippy:
+        for (i, _r) in result_comp_arcs.iter().enumerate() {
             results.push(result_comp_arcs[i].read().unwrap());
         }
         // Now ask all computations for their number of items and look for
         // the minimum:
-        let mut nr_items = results[0].nr_results();
-        info!("Found {} result items in computation 0.", nr_items);
-        for i in 1..nr_results {
-            let items = results[i].nr_results();
+        let mut nr_items = u64::MAX;
+        for (i, r) in results.iter().enumerate() {
+            let items = r.nr_results();
             info!("Found {} result items in computation {}.", items, i);
             if items < nr_items {
                 nr_items = items;

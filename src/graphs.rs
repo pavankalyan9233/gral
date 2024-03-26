@@ -48,7 +48,7 @@ impl VertexIndex {
     pub fn new(x: u64) -> VertexIndex {
         VertexIndex(x)
     }
-    pub fn to_u64(&self) -> u64 {
+    pub fn to_u64(self) -> u64 {
         self.0
     }
 }
@@ -237,9 +237,9 @@ impl Graph {
             self.index_to_key.push(key.clone());
         }
         assert_eq!(self.vertex_nr_cols, columns.len());
-        for j in 0..self.vertex_nr_cols {
+        for (j, col) in columns.iter_mut().enumerate() {
             let mut v: Value = Value::Null;
-            std::mem::swap(&mut v, &mut columns[j]);
+            std::mem::swap(&mut v, col);
             self.vertex_json_size_sum += sizeof_val(&v);
             self.vertex_json[j].push(v);
         }

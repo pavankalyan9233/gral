@@ -169,7 +169,7 @@ async fn authorize(
 
 async fn use_service(
     auth_service: String,
-    user: String,
+    user: &str,
     expiry_in_seconds: u64,
 ) -> Result<String, String> {
     let url = "http://".to_string() + &auth_service;
@@ -180,7 +180,7 @@ async fn use_service(
         .unwrap();
     let mut client = AuthenticationV1Client::new(channel);
     let request = tonic::Request::new(CreateTokenRequest {
-        user: Some(user),
+        user: Some(user.to_string()),
         lifetime: Some(Duration {
             seconds: expiry_in_seconds as i64,
             nanos: 0,
@@ -190,18 +190,14 @@ async fn use_service(
     Ok(response.get_ref().token.clone())
 }
 
-fn jwt_token_by_service(auth_service: String, user: String, expiry_in_seconds: u64) -> String {
+fn jwt_token_by_service(auth_service: String, user: &str, expiry_in_seconds: u64) -> String {
     let fut = use_service(auth_service, user, expiry_in_seconds);
     futures::executor::block_on(fut).unwrap()
 }
 
-pub fn create_jwt_token(gral_args: &GralArgs, user: &String, expiry_in_seconds: u64) -> String {
+pub fn create_jwt_token(gral_args: &GralArgs, user: &str, expiry_in_seconds: u64) -> String {
     if !gral_args.auth_service.is_empty() {
-        return jwt_token_by_service(
-            gral_args.auth_service.clone(),
-            user.clone(),
-            expiry_in_seconds,
-        );
+        return jwt_token_by_service(gral_args.auth_service.clone(), user, expiry_in_seconds);
     }
     // set user to empty for a superuser token
     // set expiry_in_seconds to 0 for a permanent token
@@ -229,7 +225,7 @@ pub fn create_jwt_token(gral_args: &GralArgs, user: &String, expiry_in_seconds: 
         preferred_username: if user.is_empty() {
             None
         } else {
-            Some(user.clone())
+            Some(user.to_string())
         },
         iss: "arangodb".to_string(),
         exp,
