@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 // Functions in here are only used in tests.
+// TODO: Find a proper place for this.
 
 use super::Graph;
 use std::sync::{Arc, RwLock};
