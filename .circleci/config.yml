@@ -224,15 +224,19 @@ workflows:
       - formatter:
           requires:
             - do_copy_workspace
-      - build:
-          requires:
-            - do_copy_workspace
       - coverage:
           requires:
             - do_copy_workspace
       - integration:
           requires:
             - do_copy_workspace
+      - build:
+          requires:
+            - do_copy_workspace
+            - lint
+            - formatter
+            - coverage
+            - integration
       #- docs:
       #    requires:
       #      - do_copy_workspace
