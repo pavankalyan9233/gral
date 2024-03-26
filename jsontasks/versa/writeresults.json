@@ -1,0 +1,9 @@
+{
+  "jobIds": [2, 3, 11],
+  "attributeNames": ["wcc", "irank", "lab"],
+  "vertexCollections": {},
+  "database": "versa-amazon",
+  "targetCollection": "RR_sync_determ",
+  "parallelism": 4,
+  "batchSize": 10000
+}

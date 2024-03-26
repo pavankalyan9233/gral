@@ -1,0 +1,30 @@
+{
+  "database": "versa-amazon",
+  "vertexCollections": [
+    "APPLIANCE",
+    "APPLICATION",
+    "DESTADDRESS",
+    "LOCATION",
+    "TENANT",
+    "URL",
+    "USER",
+    "GATEWAY"
+  ],
+  "vertexAttributes": [
+    "_id", "@collectionname"
+  ],
+  "edgeCollections": [
+    "APPLICATION_FROM_URL",
+    "URL_ACCESSES_DESTADDRESS",
+    "USER_ACCESSES_APPLICATION",
+    "USER_ACCESSES_DESTADDRESS",
+    "USER_ACCESSES_URL",
+    "USER_ACCESSESFROM_LOCATION",
+    "USER_BELONGSTO_TENANT",
+    "USER_CONNECTSTO_APPLIANCE",
+    "USER_CONNECTSTO_GATEWAY",
+    "TENANT_ON_APPLIANCE"
+  ],
+  "parallelism": 10,
+  "batchSize": 4000000
+}

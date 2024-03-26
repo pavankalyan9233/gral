@@ -1,0 +1,5 @@
+{
+  "graph_id": 1,
+  "damping_factor": 0.85,
+  "maximum_supersteps": 64
+}

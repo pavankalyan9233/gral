@@ -3,7 +3,7 @@
 use log::{info, warn};
 use std::convert::Infallible;
 use std::env::VarError;
-use std::ffi::OsString;
+
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
@@ -76,32 +76,30 @@ fn read_jwt_secrets(jwt_path: &String) -> Vec<Vec<u8>> {
     let rd = e.unwrap(); // Unwrap ReadDir struct
     let mut secrets: Vec<Vec<u8>> = Vec::new();
     let mut use_to_sign: usize = 0;
-    for de in rd {
-        if let Ok(de) = de {
-            path.push(de.file_name());
-            match File::open(&path) {
-                Err(e) => {
-                    warn!("Could not read JWT secret from file '{path:?}, error: {e:?}");
-                }
-                Ok(mut file) => {
-                    let mut buf: Vec<u8> = Vec::with_capacity(256);
-                    match file.read_to_end(&mut buf) {
-                        Err(e) => {
-                            warn!("Could not read JWT secret from file '{path:?}, error: {e:?}");
-                        }
-                        Ok(len) => {
-                            if len != 0 {
-                                if de.file_name() == OsString::from("token") {
-                                    use_to_sign = secrets.len();
-                                }
-                                secrets.push(buf);
+    for de in rd.flatten() {
+        path.push(de.file_name());
+        match File::open(&path) {
+            Err(e) => {
+                warn!("Could not read JWT secret from file '{path:?}, error: {e:?}");
+            }
+            Ok(mut file) => {
+                let mut buf: Vec<u8> = Vec::with_capacity(256);
+                match file.read_to_end(&mut buf) {
+                    Err(e) => {
+                        warn!("Could not read JWT secret from file '{path:?}, error: {e:?}");
+                    }
+                    Ok(len) => {
+                        if len != 0 {
+                            if de.file_name() == *"token" {
+                                use_to_sign = secrets.len();
                             }
+                            secrets.push(buf);
                         }
                     }
                 }
             }
-            path.pop();
         }
+        path.pop();
     }
     if use_to_sign != 0 && !secrets.is_empty() {
         secrets.swap(0, use_to_sign);

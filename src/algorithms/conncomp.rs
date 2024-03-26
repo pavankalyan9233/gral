@@ -18,14 +18,12 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
         nr_e
     );
     info!("{:?} Creating mini...", start.elapsed());
-    let mut mini: Vec<u64> = vec![];
-    mini.reserve(nr_v as usize);
+    let mut mini: Vec<u64> = Vec::with_capacity(nr_v as usize);
     for i in 0..nr_v {
         mini.push(i);
     }
     info!("{:?} Creating next...", start.elapsed());
-    let mut next: Vec<i64> = vec![];
-    next.reserve(nr_v as usize);
+    let mut next: Vec<i64> = Vec::with_capacity(nr_v as usize);
     for _ in 0..nr_v {
         next.push(-1);
     }
@@ -36,8 +34,7 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
         "{:?} Computing weakly connected components...",
         start.elapsed()
     );
-    let mut counter: u64 = 0;
-    for e in g.edges.iter() {
+    for (counter, e) in (0_u64..).zip(g.edges.iter()) {
         if counter % 10000000 == 0 {
             info!(
                 "{:?} Have currently {} connected components with {} of {} edges processed.",
@@ -47,7 +44,6 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
                 nr_e
             );
         }
-        counter += 1;
         let a = e.from.to_u64();
         let b = e.to.to_u64();
         let mut c = mini[b as usize];

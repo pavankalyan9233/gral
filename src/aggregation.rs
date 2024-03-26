@@ -10,8 +10,7 @@ pub fn aggregate_over_components(
     let start = Instant::now();
     info!("Aggregating over components...");
 
-    let mut result = vec![];
-    result.reserve(1000000); // just heuristics
+    let mut result = Vec::with_capacity(1000000); // just heuristics
 
     let graph_arc = comp.get_graph();
     let graph = graph_arc.read().unwrap();
@@ -27,8 +26,8 @@ pub fn aggregate_over_components(
     assert_eq!(comps.len(), next.len());
     assert_eq!(graph.vertex_json.len(), graph.index_to_hash.len());
 
-    for i in 0..comps.len() {
-        if comps[i] == i as u64 {
+    for (i, co) in comps.iter().enumerate() {
+        if *co == i as u64 {
             // This is a representative
             let mut j = i as i64;
             let mut c = Component {

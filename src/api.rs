@@ -186,10 +186,8 @@ fn check_graph(graph: &Graph, graph_id: u64, edges_must_be_sealed: bool) -> Resu
         if !graph.edges_sealed {
             return Err(format!("Graph edges not sealed: {}", graph_id));
         }
-    } else {
-        if graph.edges_sealed {
-            return Err(format!("Graph edges must not be sealed: {}", graph_id,));
-        }
+    } else if graph.edges_sealed {
+        return Err(format!("Graph edges must not be sealed: {}", graph_id,));
     }
     Ok(())
 }
@@ -247,24 +245,20 @@ async fn api_wcc(
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Ok(err_bad_req_process(
-            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            format!("Cannot parse JSON body of request: {}", e),
             400,
             StatusCode::BAD_REQUEST,
         ));
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
-    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
     let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
         algorithm: "WCC".to_string(),
         graph: graph_arc.clone(),
@@ -273,7 +267,7 @@ async fn api_wcc(
         shall_stop: false,
         number: None,
     }));
-    generic_comp_arc = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let (nr, components, next) = algorithms::conncomp::weakly_connected_components(&graph);
@@ -312,24 +306,20 @@ async fn api_scc(
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Ok(err_bad_req_process(
-            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            format!("Cannot parse JSON body of request: {}", e),
             400,
             StatusCode::BAD_REQUEST,
         ));
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
-    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
     let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
         algorithm: "SCC".to_string(),
         graph: graph_arc.clone(),
@@ -338,7 +328,7 @@ async fn api_scc(
         shall_stop: false,
         number: None,
     }));
-    generic_comp_arc = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         {
             // Make sure we have an edge index:
@@ -385,22 +375,19 @@ async fn api_aggregate_components(
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Ok(err_bad_req_process(
-            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            format!("Cannot parse JSON body of request: {}", e),
             400,
             StatusCode::BAD_REQUEST,
         ));
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
     // Computation ID is optional:
     let mut prev_comp: Option<Arc<RwLock<dyn Computation + Send + Sync>>> = None;
@@ -496,24 +483,20 @@ async fn api_pagerank(
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Ok(err_bad_req_process(
-            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            format!("Cannot parse JSON body of request: {}", e),
             400,
             StatusCode::BAD_REQUEST,
         ));
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
-    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
@@ -534,7 +517,7 @@ async fn api_pagerank(
         rank: vec![],
         result_position: 0,
     }));
-    generic_comp_arc = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let (rank, steps) =
@@ -575,24 +558,20 @@ async fn api_irank(
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Ok(err_bad_req_process(
-            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            format!("Cannot parse JSON body of request: {}", e),
             400,
             StatusCode::BAD_REQUEST,
         ));
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
-    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
@@ -613,7 +592,7 @@ async fn api_irank(
         rank: vec![],
         result_position: 0,
     }));
-    generic_comp_arc = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let res = algorithms::irank::i_rank(&graph, body.maximum_supersteps, body.damping_factor);
@@ -661,22 +640,19 @@ async fn api_label_propagation(
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Ok(err_bad_req_process(
-            format!("Cannot parse JSON body of request: {}", e.to_string()),
+            format!("Cannot parse JSON body of request: {}", e),
             400,
             StatusCode::BAD_REQUEST,
         ));
     }
     let body = parsed.unwrap();
 
-    let graph_arc: Arc<RwLock<Graph>>;
-    match get_and_check_graph(&graphs, body.graph_id) {
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
             return Ok(r);
         }
-        Ok(g) => {
-            graph_arc = g;
-        }
-    }
+        Ok(g) => g,
+    };
 
     {
         // Make sure we have an edge index:
@@ -684,7 +660,6 @@ async fn api_label_propagation(
         graph.index_edges(true, true);
     }
 
-    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
     let comp_arc = Arc::new(RwLock::new(LabelPropagationComputation {
         graph: graph_arc.clone(),
         sync: body.synchronous,
@@ -697,7 +672,7 @@ async fn api_label_propagation(
         result_position: 0,
         label_size_sum: 0,
     }));
-    generic_comp_arc = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     let startlabel = body.start_label_attribute.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
@@ -771,7 +746,7 @@ async fn api_write_result_back_arangodb(
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
         return Ok(err_bad_req(
-            format!("Could not parse JSON body: {}", e.to_string()),
+            format!("Could not parse JSON body: {}", e),
             StatusCode::BAD_REQUEST,
         ));
     }
@@ -781,7 +756,7 @@ async fn api_write_result_back_arangodb(
     {
         let comps = computations.lock().unwrap();
         for id in &body.job_ids {
-            let compfound = comps.list.get(&id);
+            let compfound = comps.list.get(id);
             if compfound.is_none() {
                 return Ok(err_bad_req(
                     format!("Job {} not found.", id),
@@ -894,10 +869,7 @@ async fn api_get_arangodb_graph_aql(
     let parsed: serde_json::Result<GraphAnalyticsEngineLoadDataAqlRequest> =
         serde_json::from_slice(&bytes[..]);
     if let Err(e) = parsed {
-        return Ok(err_bad_req(format!(
-            "Could not parse JSON body: {}",
-            e.to_string()
-        )));
+        return Ok(err_bad_req(format!("Could not parse JSON body: {}", e)));
     }
     let _body = parsed.unwrap();
 
@@ -943,9 +915,7 @@ async fn api_get_job(
     let comps = computations.lock().unwrap();
     let comp_arc = comps.list.get(&job_id);
     match comp_arc {
-        None => {
-            return Ok(not_found_err(format!("Could not find jobId {}", job_id)));
-        }
+        None => Ok(not_found_err(format!("Could not find jobId {}", job_id))),
         Some(comp_arc) => {
             let comp = comp_arc.read().unwrap();
             let graph_arc = comp.get_graph();
@@ -995,9 +965,7 @@ async fn api_drop_job(
     let mut comps = computations.lock().unwrap();
     let comp_arc = comps.list.get(&job_id);
     match comp_arc {
-        None => {
-            return Ok(not_found_err(format!("Could not find job {}", job_id)));
-        }
+        None => Ok(not_found_err(format!("Could not find job {}", job_id))),
         Some(comp_arc) => {
             {
                 let mut comp = comp_arc.write().unwrap();
@@ -1223,7 +1191,7 @@ async fn api_get_arangodb_graph(
             job_id: 0,
             graph_id: 0,
             error_code: 400,
-            error_message: format!("Could not parse JSON body: {}", e.to_string()),
+            error_message: format!("Could not parse JSON body: {}", e),
         };
         return Ok(warp::reply::with_status(
             serde_json::to_vec(&response).expect("Could not serialize"),
@@ -1309,7 +1277,7 @@ pub async fn handle_errors(err: Rejection) -> Result<impl warp::Reply, Infallibl
     if err.is_not_found() {
         code = StatusCode::NOT_FOUND;
         message = "NOT_FOUND".to_string();
-    } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+    } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
         // We can handle a specific error, here METHOD_NOT_ALLOWED,
         // and render it however we want
         code = StatusCode::METHOD_NOT_ALLOWED;
