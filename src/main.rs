@@ -6,15 +6,13 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use warp::{http::Response, http::StatusCode, Filter};
 
-mod metrics;
-
 use gral::api::api::{api_filter, handle_errors};
+use gral::args::args::parse_args;
+use gral::auth::auth::with_auth;
 use gral::computations::computations::Computations;
 use gral::constants;
 use gral::graphs::graphs::Graphs;
-
-use gral::args::args::parse_args;
-use gral::auth::auth::with_auth;
+use gral::metrics::metrics;
 
 #[tokio::main]
 async fn main() {
@@ -28,7 +26,7 @@ async fn main() {
     let metrics_handle = prom_builder
         .install_recorder()
         .expect("failed to install Prometheus recorder");
-    metrics::init();
+    metrics::metrics::init();
 
     let args = match parse_args() {
         Ok(v) => v,
