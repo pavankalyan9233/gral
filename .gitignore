@@ -2,6 +2,9 @@
 /target
 /tls
 
+# Utilities target only used for testing
+/utilities/target
+
 # Rust testing related
 cargo_profile/
 
