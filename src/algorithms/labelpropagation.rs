@@ -1,4 +1,4 @@
-use crate::graphs::Graph;
+use crate::graph_store::graphs::Graph;
 use log::info;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::HashMap;
@@ -306,8 +306,8 @@ pub fn labelpropagation_async(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphs::examples::make_cyclic_graph;
-    use crate::graphs::examples::make_star_graph;
+    use crate::graph_store::examples::make_cyclic_graph;
+    use crate::graph_store::examples::make_star_graph;
     use serde_json::json;
 
     #[test]

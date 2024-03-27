@@ -1,5 +1,5 @@
-use crate::aggregation::aggregate_over_components;
 use crate::algorithms;
+use crate::algorithms::aggregation::aggregate_over_components;
 use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
 use crate::args::{with_args, GralArgs};
 use crate::auth::{with_auth, Unauthorized};
@@ -7,9 +7,9 @@ use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
-use crate::graphs::{with_graphs, Graph, Graphs};
-use crate::VERSION;
+use crate::graph_store::graphs::{with_graphs, Graph, Graphs};
 
+use crate::constants;
 use bytes::Bytes;
 use graphanalyticsengine::*;
 use http::Error;
@@ -163,9 +163,9 @@ pub fn api_filter(
 fn version_json(_user: String) -> Result<Response<Vec<u8>>, Error> {
     let version_str = format!(
         "{}.{}.{}",
-        VERSION >> 16,
-        (VERSION >> 8) & 0xff,
-        VERSION & 0xff
+        constants::VERSION >> 16,
+        (constants::VERSION >> 8) & 0xff,
+        constants::VERSION & 0xff
     );
     let body = serde_json::json!({
         "version": version_str,
@@ -769,9 +769,9 @@ async fn api_write_result_back_arangodb(
 
     if result_comps.len() != body.attribute_names.len() {
         return Ok(err_bad_req(
-                format!("Number of computations ({}) must be the same as the number of attribute names ({})", 
-                        result_comps.len(), body.attribute_names.len()),
-                StatusCode::BAD_REQUEST));
+            format!("Number of computations ({}) must be the same as the number of attribute names ({})",
+                    result_comps.len(), body.attribute_names.len()),
+            StatusCode::BAD_REQUEST));
     }
 
     // Set a few sensible defaults:

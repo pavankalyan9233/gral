@@ -1,4 +1,3 @@
-use auth::with_auth;
 use byteorder::{BigEndian, WriteBytesExt};
 use log::{debug, info, warn, LevelFilter};
 use metrics_exporter_prometheus::PrometheusBuilder;
@@ -7,22 +6,13 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use warp::{http::Response, http::StatusCode, Filter};
 
-mod aggregation;
-mod algorithms;
-mod api;
-mod arangodb;
-mod args;
-mod auth;
-mod computations;
-mod graphs;
-mod metrics;
-
-use crate::api::{api_filter, handle_errors};
-use crate::args::parse_args;
-use crate::computations::Computations;
-use crate::graphs::Graphs;
-
-pub const VERSION: u32 = 0x00100;
+use gral::api::{api_filter, handle_errors};
+use gral::args::parse_args;
+use gral::auth::with_auth;
+use gral::computations::Computations;
+use gral::constants;
+use gral::graph_store::graphs::Graphs;
+use gral::metrics;
 
 #[tokio::main]
 async fn main() {
@@ -78,7 +68,7 @@ async fn main() {
                     .expect("Expected to be able to send signal!");
             }
             let mut v = Vec::new();
-            v.write_u32::<BigEndian>(VERSION).unwrap();
+            v.write_u32::<BigEndian>(constants::VERSION).unwrap();
 
             Response::builder()
                 .header("Content-Type", "x-application-gral")
@@ -87,10 +77,12 @@ async fn main() {
     let the_graphs = Arc::new(Mutex::new(Graphs::new()));
     let the_computations = Arc::new(Mutex::new(Computations::new()));
 
-    let api_metrics = warp::path!("v1" / "metrics").and(warp::get()).map(move || {
-        let out = metrics_handle.render();
-        warp::reply::with_status(out, StatusCode::OK)
-    });
+    let api_metrics = warp::path!("v1" / "statistics")
+        .and(warp::get())
+        .map(move || {
+            let out = metrics_handle.render();
+            warp::reply::with_status(out, StatusCode::OK)
+        });
 
     let apifilters = shutdown
         .with(log_incoming)

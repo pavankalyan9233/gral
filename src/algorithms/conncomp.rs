@@ -1,4 +1,4 @@
-use crate::graphs::Graph;
+use crate::graph_store::graphs::Graph;
 use log::info;
 use std::time::Instant;
 
@@ -246,7 +246,7 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphs::VertexHash;
+    use crate::graph_store::graphs::VertexHash;
     use xxhash_rust::xxh3::xxh3_64_with_seed;
 
     fn vertex_nodata(g: &mut Graph, key: &[u8]) {

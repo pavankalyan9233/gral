@@ -1,4 +1,4 @@
-use crate::graphs::Graph;
+use crate::graph_store::graphs::Graph;
 use log::info;
 
 pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, u32) {
@@ -53,8 +53,8 @@ pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graphs::examples::make_cyclic_graph;
-    use crate::graphs::examples::make_star_graph;
+    use crate::graph_store::examples::make_cyclic_graph;
+    use crate::graph_store::examples::make_star_graph;
 
     #[test]
     fn test_pagerank_cyclic() {
