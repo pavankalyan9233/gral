@@ -6,13 +6,13 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use warp::{http::Response, http::StatusCode, Filter};
 
-use gral::args::parser::parse_args;
-use gral::compute::computations::Computations;
-use gral::environment;
+use gral::api::{api_filter, handle_errors};
+use gral::args::parse_args;
+use gral::auth::with_auth;
+use gral::computations::Computations;
+use gral::constants;
 use gral::graph_store::graphs::Graphs;
-use gral::http_server::api::{api_filter, handle_errors};
-use gral::security::auth::with_auth;
-use gral::statistics::metrics;
+use gral::metrics;
 
 #[tokio::main]
 async fn main() {
@@ -68,8 +68,7 @@ async fn main() {
                     .expect("Expected to be able to send signal!");
             }
             let mut v = Vec::new();
-            v.write_u32::<BigEndian>(environment::constants::VERSION)
-                .unwrap();
+            v.write_u32::<BigEndian>(constants::VERSION).unwrap();
 
             Response::builder()
                 .header("Content-Type", "x-application-gral")

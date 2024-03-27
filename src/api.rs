@@ -1,24 +1,34 @@
 use crate::algorithms;
-use crate::compute::aggregation::aggregate_over_components;
-use crate::compute::computations::{
+use crate::algorithms::aggregation::aggregate_over_components;
+use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
+use crate::args::{with_args, GralArgs};
+use crate::auth::{with_auth, Unauthorized};
+use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
-use crate::environment::constants::VERSION;
-use crate::graph_loader::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
 use crate::graph_store::graphs::{with_graphs, Graph, Graphs};
 
-use crate::args::parser::{with_args, GralArgs};
-use crate::security::auth::{with_auth, Unauthorized};
-
-use crate::http_server::graphanalyticsengine::*;
+use crate::constants;
 use bytes::Bytes;
+use graphanalyticsengine::*;
 use http::Error;
 use log::info;
 use std::convert::Infallible;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::{http::Response, http::StatusCode, reply::WithStatus, Filter, Rejection};
+
+pub mod graphanalyticsengine {
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/arangodb.cloud.internal.graphanalytics.v1.rs"
+    ));
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/arangodb.cloud.internal.graphanalytics.v1.serde.rs"
+    ));
+}
 
 /// The following function puts together the filters for the API.
 /// To this end, it relies on the following async functions below.
@@ -153,9 +163,9 @@ pub fn api_filter(
 fn version_json(_user: String) -> Result<Response<Vec<u8>>, Error> {
     let version_str = format!(
         "{}.{}.{}",
-        VERSION >> 16,
-        (VERSION >> 8) & 0xff,
-        VERSION & 0xff
+        constants::VERSION >> 16,
+        (constants::VERSION >> 8) & 0xff,
+        constants::VERSION & 0xff
     );
     let body = serde_json::json!({
         "version": version_str,

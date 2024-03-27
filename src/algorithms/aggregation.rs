@@ -1,4 +1,4 @@
-use crate::compute::computations::{Component, ComponentsComputation, Computation};
+use crate::computations::{Component, ComponentsComputation, Computation};
 use log::info;
 use std::collections::HashMap;
 use std::time::Instant;
