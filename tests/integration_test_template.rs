@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde_json::Value;
 use tokio::runtime::Runtime;
 
-use gral::environment::constants;
+use gral::constants;
 
 #[test]
 fn the_example_integration_test() {
