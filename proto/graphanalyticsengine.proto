@@ -4,50 +4,44 @@
 // Copyright 2023 ArangoDB GmbH, Cologne, Germany
 // 
 
+/**
+ * GraphAnalyticsEngineService is the API used interact with graph analytics engines, which belongs to a deployment. Note that a GraphAnalyticsEngine has an associated deployment on AG. Every call, which can take longer to complete is asynchronous in the sense that it returns a jobId and the result can/must be retrieved separately.
+ *
+ * Here is an overview over the API, note that a GraphAnalyticsEngine has an associated deployment on AG:
+ * 
+ * The following trigger asynchronous operations, which might take longer to complete:
+ *  - Load a graph from the deployment via two AQL queries (one for vertices, one for edges) [POST]
+ *  - Load a graph via the arangodump protocol [POST]
+ *  - Various calls to start computation jobs [POST]
+ *  - Write back result of computation job to deployment [POST]
+ *
+ * Work with graphs:
+ *  - List graphs [GET]
+ *  - Get information about a particular graph [GET]
+ *  - Delete a graph [DELETE]
+ * 
+ * Work with jobs:
+ *  - List jobs [GET]
+ *  - Get status/result of one job [GET]
+ *  - Delete job [DELETE]
+ * 
+ * Maintenance:
+ *  - Get metrics [GET]
+ *  - Shut down [DELETE]
+ */
 syntax = "proto3";
 
 package arangodb.cloud.internal.graphanalytics.v1;
 
-option go_package = "github.com/arangodb-managed/apis/graphanalytics/v1";
-
-// import "common/v1/icommon.proto";
-// import "common/v1/common.proto";
-
-// import "github.com/golang/protobuf/ptypes/timestamp/timestamp.proto";
 import "google/api/annotations.proto";
 
-// GraphAnalyticsEngineService is the API used interact with graph
-// analytics engines, which belongs to a deployment. Note that a
-// GraphAnalyticsEngine has an associated deployment on AG. Every call,
-// which can take longer to complete is asynchronous in the sense that
-// it returns a jobId and the result can/must be retrieved separately.
-// All // GET calls are naturally idempotent.
-// Here is an overview over the API, note that a GraphAnalyticsEngine
-// has an associated deployment on AG:
-//
-// The following trigger asynchronous operations, which might take longer to complete:
-//  - Load a graph from the deployment via two AQL queries (one for vertices, one for edges) [POST]
-//  - Load a graph via the arangodump protocol [POST]
-//  - Start computation job [POST]
-//  - Write back result of computation job to deployment [POST]
-//
-// Work with graphs:
-//  - List graphs [GET]
-//  - Get information about a particular graph [GET]
-//  - Delete a graph [DELETE]
-//
-// Work with jobs:
-//  - List jobs [GET]
-//  - Get status/result of one job [GET]
-//  - Delete job [DELETE]
-//
-// Maintenance:
-//  - Get metrics [GET]
-//  - Shut down [DELETE]
-
 service GraphAnalyticsEngineService {
-    // Load data fetches data from the deployment and loads it into memory
-    // of the engine for later processing.
+    // This API call fetches data from the deployment and loads it into memory
+    // of the engine for later processing. One can either use a named graph
+    // or a list of vertex collections and a list of edge collections.
+    // Currently, the API call always loads all vertices and edges from these
+    // collections. However, it is possible to select which attribute data
+    // is loaded alongside the vertices and the edge topology.
     rpc GraphAnalyticsEngineLoadData(GraphAnalyticsEngineLoadDataRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
             post: "/v1/loaddata"
@@ -55,9 +49,7 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Load data fetches data from the deployment via AQL and load it into memory of the engine for later processing.
-    // Required permissions:
-    // - graphanalytics.engine.load-data on the graph analytics engine identified by the given ID.
+    // This API fetches data from the deployment via AQL and load it into memory of the engine for later processing. NOT YET IMPLEMENTED.
     rpc GraphAnalyticsEngineLoadDataAql(GraphAnalyticsEngineLoadDataAqlRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
             post: "/v1/loaddataaql"
