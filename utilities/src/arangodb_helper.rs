@@ -22,7 +22,9 @@ pub fn generate_superuser_bearer() -> String {
     let json_body = serde_json::to_string(&body).unwrap();
 
     let response = http_helper::post(arangodb_endpoint, &json_body, Some(headers));
-    println!("Response: {}", response);
-
-    return "peter".to_string();
+    if response.get("jwt").is_some() {
+        return response["jwt"].as_str().unwrap().to_string();
+    } else {
+        panic!("Failed to generate superuser bearer token");
+    }
 }

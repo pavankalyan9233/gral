@@ -18,6 +18,15 @@ pub fn build_basic_auth_header(username: &str, password: &str) -> HeaderMap {
     headers
 }
 
+pub fn build_bearer_auth_header(token: &str) -> HeaderMap {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::AUTHORIZATION,
+        reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+    );
+    headers
+}
+
 pub fn get(endpoint: &str, headers: Option<HeaderMap>) -> Value {
     return execute_request(Method::GET, endpoint, None, headers);
 }
