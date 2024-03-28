@@ -203,12 +203,9 @@ impl Graph {
 
     pub fn insert_vertex(
         &mut self,
-        i: u32,
         hash: VertexHash,
         key: Vec<u8>, // cannot be empty
         mut columns: Vec<Value>,
-        exceptional: &mut Vec<(u32, VertexHash)>,
-        exceptional_keys: &mut Vec<Vec<u8>>,
     ) {
         // First detect a collision:
         let index = VertexIndex(self.index_to_hash.len() as u64);
@@ -225,11 +222,6 @@ impl Graph {
             }
             let oi = self.hash_to_index.get_mut(&hash).unwrap();
             *oi = VertexIndex(oi.0 | 0x800000000000000);
-            exceptional.push((i, actual));
-            exceptional_keys.push(key.clone());
-            if self.store_keys {
-                self.exceptions.insert(key.clone(), actual);
-            }
         }
         // Will succeed:
         self.index_to_hash.push(actual);
@@ -399,7 +391,7 @@ impl Graph {
     pub fn add_vertex_nodata(&mut self, key: &[u8]) {
         let key = key.to_vec();
         let hash = VertexHash::new(xxh3_64_with_seed(&key, 0xdeadbeefdeadbeef));
-        self.insert_vertex(0, hash, key, vec![], &mut vec![], &mut vec![]);
+        self.insert_vertex(hash, key, vec![]);
     }
 
     pub fn add_edge_nodata(&mut self, from: &[u8], to: &[u8]) {
@@ -496,15 +488,12 @@ mod tests {
             let g_arc = Graph::new(true, 1, vec!["first column name".to_string()]);
             let mut g = g_arc.write().unwrap();
             g.insert_vertex(
-                0,
                 VertexHash(0),
                 vec![],
                 vec![
                     serde_json::Value::String("first column entry".to_string()),
                     serde_json::Value::String("second column entry".to_string()),
                 ],
-                &mut vec![],
-                &mut vec![],
             );
         }
 
@@ -523,17 +512,13 @@ mod tests {
             // add one vertex
             let hash_a = VertexHash::new(56);
             g.insert_vertex(
-                40, // what is this? we compute the vertex index at start of insert_vertex fn, so this is probably something different
                 hash_a,
                 b"V/A".to_vec(),
                 vec![
                     serde_json::Value::String("string column entry A".to_string()),
                     serde_json::Value::Number(serde_json::Number::from(645)),
                 ],
-                &mut vec![],
-                &mut vec![],
             );
-            // Q: why do we need exceptional and exceptional_key as input? We only add stuff to it inside fn.
 
             assert_eq!(g.index_to_hash, vec![hash_a]);
             assert_eq!(
@@ -554,15 +539,12 @@ mod tests {
             // add another vertex
             let hash_b = VertexHash::new(900);
             g.insert_vertex(
-                40,
                 hash_b,
                 b"V/B".to_vec(),
                 vec![
                     serde_json::Value::String("string column entry B".to_string()),
                     serde_json::Value::Number(serde_json::Number::from(33)),
                 ],
-                &mut vec![],
-                &mut vec![],
             );
 
             assert_eq!(g.index_to_hash, vec![hash_a, hash_b]);
