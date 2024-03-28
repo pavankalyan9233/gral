@@ -31,5 +31,4 @@ fn test_authentication_with_bearer_token() {
     let response = utilities::http_helper::get("http://localhost:9999/v1/graphs", Some(headers));
 
     assert_eq!(response.to_string(), "[]");
-
 }
