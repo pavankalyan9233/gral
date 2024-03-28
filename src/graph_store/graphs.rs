@@ -174,12 +174,7 @@ pub struct MemoryUsageGraph {
 }
 
 impl Graph {
-    pub fn new(
-        store_keys: bool,
-        _bits_for_hash: u8,
-        id: u64,
-        col_names: Vec<String>,
-    ) -> Arc<RwLock<Graph>> {
+    pub fn new(store_keys: bool, id: u64, col_names: Vec<String>) -> Arc<RwLock<Graph>> {
         increment_counter!("gral_mycounter_total");
         Arc::new(RwLock::new(Graph {
             graph_id: id,
@@ -498,7 +493,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn panicks_when_created_graph_has_different_number_of_columns() {
-            let g_arc = Graph::new(true, 64, 1, vec!["first column name".to_string()]);
+            let g_arc = Graph::new(true, 1, vec!["first column name".to_string()]);
             let mut g = g_arc.write().unwrap();
             g.insert_vertex(
                 0,
@@ -515,10 +510,8 @@ mod tests {
 
         #[test]
         fn inserts_vertex_into_given_graph() {
-            // Q: _bits_for_hash not used, why needed?
             let g_arc = Graph::new(
                 true,
-                64,
                 1,
                 vec![
                     "string column name".to_string(),
