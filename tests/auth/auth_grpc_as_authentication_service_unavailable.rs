@@ -1,6 +1,9 @@
 extern crate utilities;
+use serial_test::serial;
 
 #[test]
+#[serial]
+#[cfg(feature = "test_grpc_auth_unavailable")]
 fn setup() {
     // setup code here
     std::thread::spawn(|| {
@@ -12,12 +15,16 @@ fn setup() {
 }
 
 #[test]
+#[serial]
+#[cfg(feature = "test_grpc_auth_unavailable")]
 fn test_authentication_no_auth_given() {
     let response = utilities::http_helper::get("http://localhost:9999/v1/graphs", None);
     assert_eq!(response["errorCode"].as_u64().unwrap(), 401);
 }
 
 #[test]
+#[serial]
+#[cfg(feature = "test_grpc_auth_unavailable")]
 fn test_authentication_with_invalid_bearer_token() {
     let invalid_token = "invalid_token";
     let headers = utilities::http_helper::build_bearer_auth_header(&invalid_token);
@@ -27,6 +34,8 @@ fn test_authentication_with_invalid_bearer_token() {
 }
 
 #[test]
+#[serial]
+#[cfg(feature = "test_grpc_auth_unavailable")]
 fn test_authentication_with_bearer_token() {
     let token = utilities::arangodb_helper::generate_superuser_bearer();
     let headers = utilities::http_helper::build_bearer_auth_header(&token);
@@ -36,6 +45,8 @@ fn test_authentication_with_bearer_token() {
 }
 
 #[test]
+#[serial]
+#[cfg(feature = "test_grpc_auth_unavailable")]
 fn teardown() {
     // teardown code here
 }

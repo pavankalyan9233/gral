@@ -123,9 +123,12 @@ jobs:
           keys:
             - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
       - run:
-          name: Integration Tests
+          name: Integration Tests ArangoDB Auth
           command: |
             RUST_BACKTRACE=1
+            cargo test --features test_arangodb_auth -- --test-threads=1
+            cargo test --features test_grpc_auth -- --test-threads=1
+            cargo test --features test_grpc_auth_unavailable -- --test-threads=1
             cargo test --test '*'
 
   build:

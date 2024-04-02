@@ -52,7 +52,10 @@ pub fn execute_request(
     let rt = Runtime::new().unwrap();
     match rt.block_on(send_request(method, endpoint, body, headers)) {
         Ok(result) => result,
-        Err(err) => panic!("Request failed: {}", err),
+        Err(err) => {
+            println!("Request failed: {}", err);
+            panic!("Request failed: {}", err)
+        }
     }
 }
 
