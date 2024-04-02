@@ -180,21 +180,21 @@ jobs:
       #- store_test_results:
       #    path: _build/test/lib/hello_phoenix
 
-  # TODO: Documentation
-  #docs:
-  #  docker:
-  #    - image: elixir:1.15.7
-  #  working_directory: ~/app
-  #  steps:
-  #    - get_code
+  docs:
+    docker:
+      - image: pseudomuto/protoc-gen-doc
 
-  #    - run:
-  #        name: Build documentation
-  #        command: |
-  #          mix docs
+    working_directory: ~/app
+    steps:
+      - get_code
 
-  #    - store_artifacts:
-  #        path: doc/
+      - run:
+          name: Build documentation
+          command: |
+            protoc -I proto --doc_out=protodoc --doc_opt=protodoc/ourhtml.mustache,graphanalytics.html proto/graphanalyticsengine.proto
+
+      - store_artifacts:
+          path: protodoc/
 
   #build-and-push-docker-image:
   #  description: Build and push a docker image
@@ -244,6 +244,9 @@ workflows:
           requires:
             - do_copy_workspace
       - coverage:
+          requires:
+            - do_copy_workspace
+      - docs:
           requires:
             - do_copy_workspace
       #- integration:
