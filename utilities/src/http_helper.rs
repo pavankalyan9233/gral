@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose, Engine as _};
-use reqwest::{header::HeaderMap, Client, Method};
+use reqwest::blocking::Client;
+use reqwest::{header::HeaderMap, Method};
 use serde_json::Value;
-use tokio::runtime::Runtime;
 
 pub fn encode_base64(input: &str) -> String {
     general_purpose::STANDARD.encode(input.as_bytes())
@@ -49,14 +49,13 @@ pub fn execute_request(
     body: Option<&str>,
     headers: Option<HeaderMap>,
 ) -> Value {
-    let rt = Runtime::new().unwrap();
-    match rt.block_on(send_request(method, endpoint, body, headers)) {
+    match send_request(method, endpoint, body, headers) {
         Ok(result) => result,
         Err(err) => panic!("Request failed: {}", err),
     }
 }
 
-pub async fn send_request(
+pub fn send_request(
     method: Method,
     endpoint: &str,
     body: Option<&str>,
@@ -70,16 +69,11 @@ pub async fn send_request(
     }
 
     let response = match method {
-        Method::POST | Method::PUT => {
-            request_builder
-                .body(body.unwrap_or("").to_string())
-                .send()
-                .await?
-        }
-        _ => request_builder.send().await?,
+        Method::POST | Method::PUT => request_builder.body(body.unwrap_or("").to_string()).send(),
+        _ => request_builder.send(),
     };
 
-    let response_body = response.text().await?;
+    let response_body = response.unwrap().text().unwrap();
     let json: Value = serde_json::from_str(&response_body)?;
 
     Ok(json)
