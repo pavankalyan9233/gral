@@ -21,7 +21,6 @@ pub async fn run() {
         .filter_level(LevelFilter::Info)
         .parse_env("RUST_LOG")
         .init();
-    info!("Hello, this is gral!");
     let prom_builder = PrometheusBuilder::new();
     let metrics_handle = prom_builder
         .install_recorder()
