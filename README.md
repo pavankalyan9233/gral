@@ -21,6 +21,10 @@ To execute all tests, run the following command:
 $ cargo test
 ```
 Note: ArangoDB must be running for the integration tests to pass.
+An ArangoDB Cluster is expected to be reachable via Coordinator at `http://localhost:8529`.
+Also, it must be started with the same secret token as the one in the `secrets.jwt/token` file.
+
+```bash
 
 ### Unit Testing
 To execute only the unit tests, run the following command:
