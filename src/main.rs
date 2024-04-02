@@ -1,6 +1,6 @@
 use gral::server;
 
 fn main() {
-    println!("Hello, ssssss!");
+    info!("Hello, this is gral!");
     server::run();
 }
