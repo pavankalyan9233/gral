@@ -1,0 +1,20 @@
+version: '3'
+services:
+  arangodb_cluster:
+    # Currently needs to be community version as we do not build nightly enterprise builds (at least no ones I am aware of)
+    image: arangodb/arangodb-preview:devel-nightly
+    ports:
+      - 8529:8529
+    environment:
+      - ARANGO_ROOT_PASSWORD=""
+      - ARANGO_NO_AUTH=false
+    volumes:
+      - ./data:/var/lib/arangodb3
+    command: /bin/sh -c "echo 'SuperSecretThingy' > /tmp/arangodb.secret && arangodb --mode=cluster --local=true --auth.jwt-secret=/tmp/arangodb.secret"
+  auth_service:
+    image: neunhoef/auth_grpc
+    ports:
+      - 9032:9032
+    volumes:
+      - ./secrets:/secrets
+    platform: linux/amd64
