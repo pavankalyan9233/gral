@@ -45,7 +45,7 @@ jobs:
           command: |
             mkdir -p /tmp/workspace/code
             cp -r . /tmp/workspace/code
-            cp -r /tmp/workspace/secrets.jwt /tmp/workspace/secrets
+            cp -r /tmp/workspace/code/secrets.jwt /tmp/workspace/code/secrets
       - persist_to_workspace:
           root: /tmp/workspace
           paths: code
