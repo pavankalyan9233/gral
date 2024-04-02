@@ -43,11 +43,15 @@ pub fn create_example_graph(db_name: String, graph_name: String) -> bool {
     } else {
         if response.get("errorMessage").is_some() {
             let error_message = response["errorMessage"].as_str().unwrap().to_string();
-            panic!("{}",format!("Failed to create example graph: {error_message}"));
+            panic!(
+                "{}",
+                format!("Failed to create example graph: {error_message}")
+            );
         } else {
-            panic!("{}",format!(
-                "Failed to create example graph: {graph_name} in {db_name}"
-            ));
+            panic!(
+                "{}",
+                format!("Failed to create example graph: {graph_name} in {db_name}")
+            );
         }
     }
 }
