@@ -5,17 +5,17 @@
 // 
 
 /**
- * GraphAnalyticsEngineService is the API used interact with graph analytics engines, which belong to a deployment. Note that each GraphAnalyticsEngine has an associated deployment on AG, to which it has direct database access to load graphs and to write back results.
+ * GraphAnalyticsEngineService is the API used interact with graph analytics engines, which belong to a deployment. Note that each GraphAnalyticsEngine has an associated deployment on ArangoGraph, to which it has direct database access to load graphs and to write back results.
  *
- * Every call, which can take longer to complete is asynchronous in the sense that it returns a jobId and the result can/must be retrieved separately.
+ * Every call, which can take longer to complete is asynchronous in the sense that it returns a <code>jobId</code> and the result can/must be retrieved separately.
  *
- * The following trigger asynchronous operations, which might take longer to complete:
- *
- *  - Load a graph from the deployment via two AQL queries (one for vertices, one for edges) [POST]
- *  - Load a graph via the arangodump protocol [POST]
- *  - Various calls to start computation jobs [POST]
- *  - Write back result of computation job to deployment [POST]
- *
+ * The following triggers asynchronous operations, which might take longer to complete:
+ * <ul>
+ *  <li> Load a graph from the deployment via two AQL queries (one for vertices, one for edges) [POST]</li>
+ *  <li> Load a graph via the arangodump protocol [POST]</li>
+ *  <li> Various calls to start computation jobs [POST]</li>
+ *  <li> Write back result of computation job to deployment [POST]</li>
+ * </ul>
  */
 syntax = "proto3";
 

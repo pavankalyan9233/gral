@@ -15,10 +15,10 @@ docker-apidoc: Makefile
 	docker run --rm --platform linux/amd64 \
       -v ./protodoc:/out \
       -v ./proto:/protos \
-      pseudomuto/protoc-gen-doc --doc_opt=out/ourhtml.tmpl,graphanalytics.html protos/graphanalyticsengine.proto
+      pseudomuto/protoc-gen-doc --doc_opt=out/ourhtml.mustache,graphanalytics.html protos/graphanalyticsengine.proto
 
-apidoc: Makefile proto/graphanalyticsengine.proto protodoc/ourhtml.tmpl
-	protoc -I proto --doc_out=protodoc --doc_opt=protodoc/ourhtml.tmpl,graphanalytics.html proto/graphanalyticsengine.proto
+apidoc: Makefile proto/graphanalyticsengine.proto protodoc/ourhtml.mustache
+	protoc -I proto --doc_out=protodoc --doc_opt=protodoc/ourhtml.mustache,graphanalytics.html proto/graphanalyticsengine.proto
 
 clean:
 	rm -rf target tls

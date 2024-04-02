@@ -140,6 +140,31 @@
         display: table-cell;
       }
 
+      .description {
+        background-color: #dcdcdc;
+        border: 1px solid #ccc;
+        padding: 10px;
+      }
+
+      .description ul li {
+        margin-top: -10px;
+      }
+
+      .description code {
+        font-weight: bold;
+        font-size: 14px;
+      }
+
+      .description p:first-child {
+        margin-top: 0;
+      }
+
+      .description p:nth-last-child(-n+4) {
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+
+
       /* The 'M', 'E' and 'X' badges in the ToC */
       .badge {
         width: 1.6em;
@@ -173,7 +198,11 @@
       <div class="file-heading">
         <h2 id="{{.Name}}">{{.Name}}</h2><a href="#title">Top</a>
       </div>
-      {{p .Description}}
+      <h4>Basic Usage Explanation</h4>
+      <div class="description">
+          {{p .Description}}
+      </div>
+
 
       {{range .Services}}
         <h3 id="{{.FullName}}">{{.Name}}</h3>
