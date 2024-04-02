@@ -10,11 +10,12 @@ services:
       - ARANGO_NO_AUTH=false
     volumes:
       - ./data:/var/lib/arangodb3
-    command: /bin/sh -c "echo 'SuperSecretThingy' > /tmp/arangodb.secret && arangodb --mode=cluster --local=true --auth.jwt-secret=/tmp/arangodb.secret"
+      - ./secrets.jwt:/secrets
+    command: arangodb --mode=cluster --local=true --auth.jwt-secret=./secrets/token
   auth_service:
     image: neunhoef/auth_grpc
     ports:
-      - 9032:9032
+      - 9092:9092
     volumes:
-      - ./secrets:/secrets
+      - ./secrets.jwt:/secrets
     platform: linux/amd64
