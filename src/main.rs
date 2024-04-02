@@ -1,3 +1,4 @@
+use log::info;
 use gral::server;
 
 fn main() {
