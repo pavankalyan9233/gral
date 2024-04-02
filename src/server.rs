@@ -16,6 +16,7 @@ use crate::metrics;
 
 #[tokio::main]
 pub async fn run() {
+    info!("Hello, this is gral!");
     env_logger::Builder::new()
         .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Micros))
         .filter_level(LevelFilter::Info)
