@@ -140,6 +140,19 @@
         display: table-cell;
       }
 
+      .api-description {
+        padding-bottom: 10px;
+        padding-top: 10px;
+      }
+
+      .api-description-placeholder {
+        padding-bottom: 10px;
+        padding-top: 10px;
+        background-color: #fff;
+        border-left: 1px solid #fff;
+        border-right: 1px solid #fff;
+      }
+
       .description {
         background-color: #dcdcdc;
         border: 1px solid #ccc;
@@ -198,7 +211,7 @@
       <div class="file-heading">
         <h2 id="{{.Name}}">{{.Name}}</h2><a href="#title">Top</a>
       </div>
-      <h4>Basic Usage Explanation</h4>
+      <h4>Basic Usage</h4>
       <div class="description">
           {{p .Description}}
       </div>
@@ -261,7 +274,7 @@
 
         <table class="enum-table">
           <thead>
-            <tr><td>Method Name</td><td>Request Type</td><td>Response Type</td><td>Description</td></tr>
+            <tr><td>Method Name</td><td>Request Type</td><td>Response Type</td></tr>
           </thead>
           <tbody>
             {{range .Methods}}
@@ -269,11 +282,17 @@
                 <td>{{.Name}}</td>
                 <td><a href="#{{.RequestFullType}}">{{.RequestLongType}}</a>{{if .RequestStreaming}} stream{{end}}</td>
                 <td><a href="#{{.ResponseFullType}}">{{.ResponseLongType}}</a>{{if .ResponseStreaming}} stream{{end}}</td>
-                <td><p>{{.Description}}</p></td>
               </tr>
+              <tr>
+                <td class="api-description" colspan="3"><p>{{.Description}}</p></td>
+              </tr>
+            <tr>
+                <td class="api-description-placeholder" colspan="3"><p></p></td>
+            </tr>
             {{end}}
           </tbody>
         </table>
+
       {{end}}
 
       {{range .Messages}}
