@@ -1,8 +1,7 @@
 use base64::{engine::general_purpose, Engine as _};
+use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
-use reqwest::Client;
 use serde_json::Value;
-use tokio::runtime::Runtime;
 
 use gral::constants;
 
@@ -19,7 +18,6 @@ fn the_example_integration_test() {
 fn simple_arangodb_version_check() {
     // This only exists to check whether the communication to ArangoDB in CircleCI does work.
     // After we've real tests, this one can be removed.
-    let rt = Runtime::new().unwrap();
     let client = Client::new();
     let mut headers = HeaderMap::new();
     let auth = "root:".to_string();
@@ -29,14 +27,13 @@ fn simple_arangodb_version_check() {
         HeaderValue::from_str(&format!("Basic {}", post_body)).unwrap(),
     );
 
-    let future = client
+    let response = client
         .get("http://localhost:8529/_api/version")
         .headers(headers)
-        .send();
+        .send()
+        .expect("Failed to send request");
 
-    let response = rt.block_on(future).unwrap();
-    assert!(response.status().is_success());
-    let body = rt.block_on(response.text()).unwrap();
+    let body = response.text().unwrap();
     let json: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(json["server"].as_str().unwrap(), "arango");
     assert!(json["version"].as_str().unwrap().starts_with("3.12"));
