@@ -19,6 +19,10 @@ docker-apidoc: Makefile
       jq --slurp --raw-input '{"text": "\(.)", "mode": "markdown"}' < ./protodoc/setup.md | curl --data @- https://api.github.com/markdown > ./protodoc/setup.html && \
       sed -i -e '/<!--INSERTHERE-->/r protodoc/setup.html' protodoc/graphanalytics.html
 
+docker-apidoc-pdf: Makefile
+	docker run --rm --platform linux/amd64 -v "./protodoc:/workspace" pink33n/html-to-pdf --url http://localhost/graphanalytics.html --pdf /workspace/graphanalytics.pdf ; \
+	exit 0
+
 apidoc: Makefile proto/graphanalyticsengine.proto protodoc/ourhtml.mustache
 	protoc -I proto --doc_out=protodoc --doc_opt=protodoc/ourhtml.mustache,graphanalytics.html proto/graphanalyticsengine.proto && \
 	jq --slurp --raw-input '{"text": "\(.)", "mode": "markdown"}' < ./protodoc/setup.md | curl --data @- https://api.github.com/markdown > ./protodoc/setup.html && \
