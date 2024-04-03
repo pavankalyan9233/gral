@@ -114,7 +114,7 @@ jobs:
       - image: cimg/rust:1.76.0
       - image: neunhoef/auth_grpc
         command: |
-          /bin/sh -c "mkdir /secrets && echo 'SuperSecretThingy' > /secrets/token && /bin/arangodb_operator_integration --integration.authentication.v1 --integration.authentication.v1.path=/secrets --services.address=0.0.0.0:9092"
+          /bin/sh -c "mkdir /secrets && echo 'SuperSecretThingy' > /secrets/token && /bin/arangodb_operator_integration --integration.authentication.v1 --integration.authentication.v1.path=/secrets --services.address=0.0.0.0:1337"
       - image: arangodb/enterprise:3.12.0-deb
         command: |
           /bin/sh -c "echo 'SuperSecretThingy' > /tmp/arangodb.secret && arangodb --mode=cluster --local=true --auth.jwt-secret=/tmp/arangodb.secret"
