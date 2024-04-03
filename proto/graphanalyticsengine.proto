@@ -5,11 +5,11 @@
 // 
 
 /**
- * GraphAnalyticsEngineService is the API used interact with graph analytics engines, which belong to a deployment. Note that each GraphAnalyticsEngine has an associated deployment on ArangoGraph, to which it has direct database access to load graphs and to write back results.
+ * GraphAnalyticsEngineService is the API used to interact with graph analytics engines. Note that each GraphAnalyticsEngine has an associated deployment on AG to which it has direct database access to load graphs and to write back results. One database deployment can have multiple graph analytics engines (GAEs).
  *
- * Every call, which can take longer to complete is asynchronous in the sense that it returns a <code>jobId</code> and the result can/must be retrieved separately.
+ * Every call, which can take longer to complete, is asynchronous in the sense that it returns a jobId and the result can/must be retrieved separately. Please note that these results must me deleted explicitly to free the memory used, since all results are stored in RAM.
  *
- * The following triggers asynchronous operations, which might take longer to complete:
+ * The following trigger asynchronous operations, which might take longer to complete:
  * <ul>
  *  <li> Load a graph from the deployment via two AQL queries (one for vertices, one for edges) [POST]</li>
  *  <li> Load a graph via the arangodump protocol [POST]</li>
