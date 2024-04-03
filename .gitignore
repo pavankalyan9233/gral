@@ -5,6 +5,9 @@
 # Rust testing related
 cargo_profile/
 
+# Documentation
+protodoc/graphanalytics.html
+
 # IDE related
 .idea/
 
