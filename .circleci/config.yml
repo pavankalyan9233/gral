@@ -27,11 +27,11 @@ commands:
 
   install_protobuf:
     steps:
-    - run:
-        name: Install protobuf dependency
-        command: |
-          sudo apt update -y
-          sudo apt install protobuf-compiler -y
+      - run:
+          name: Install protobuf dependency
+          command: |
+            sudo apt update -y
+            sudo apt install protobuf-compiler -y
 
 jobs:
   do_copy_workspace:
@@ -98,7 +98,7 @@ jobs:
           command: |
             cargo install grcov
             rustup component add llvm-tools-preview
-            CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test
+            CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test --lib
             grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
 
       - store_artifacts:
@@ -109,40 +109,24 @@ jobs:
           paths: ["target/debug/deps"]
           # TODO Later - *notify_slack_on_fail
 
-  # TODO: Integration tests.
-  #integration:
-  #  docker:
-  #    - image: elixir:1.15.4-slim
-  #    - image: arangodb/enterprise:3.11.3
-  #      command: |
-  #        /bin/sh -c "echo 'SuperSecretThingy' > /tmp/arangodb.secret && arangodb --mode=cluster --local=true --auth.jwt-secret=/tmp/arangodb.secret"
-
-  #  working_directory: ~/app
-  #  steps:
-  #    - get_code
-  #    - restore_cache:
-  #        keys:
-  #          - v1-mix-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
-  #    - restore_cache:
-  #        keys:
-  #          - v1-integration-build-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
-
-  #    - run:
-  #        name: GraphEngine integration tests
-  #        working_directory: ~/app/apps/graph_engine
-  #        environment:
-  #          MIX_ENV: integration
-  #          ARANGODB_DATABASE: sloth
-  #        command: |
-  #          mix test
-  #    - run:
-  #        name: SlothWeb integration tests
-  #        working_directory: ~/app/apps/sloth_web
-  #        environment:
-  #          MIX_ENV: integration
-  #          ARANGODB_DATABASE: sloth
-  #        command: |
-  #          mix test
+  integration:
+    docker:
+      - image: cimg/rust:1.76.0
+      - image: arangodb/enterprise:3.12.0-deb
+        command: |
+          /bin/sh -c "echo 'SuperSecretThingy' > /tmp/arangodb.secret && arangodb --mode=cluster --local=true --auth.jwt-secret=/tmp/arangodb.secret"
+    working_directory: ~/app
+    steps:
+      - get_code
+      - install_protobuf
+      - restore_cache:
+          keys:
+            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+      - run:
+          name: Integration Tests
+          command: |
+            RUST_BACKTRACE=1
+            cargo test --test '*'
 
   build:
     docker:
@@ -158,7 +142,7 @@ jobs:
 
       - run:
           name: Run tests
-          command: cargo test
+          command: cargo test --lib
 
       - run:
           name: Build release
@@ -240,15 +224,19 @@ workflows:
       - formatter:
           requires:
             - do_copy_workspace
-      - build:
-          requires:
-            - do_copy_workspace
       - coverage:
           requires:
             - do_copy_workspace
-      #- integration:
-      #    requires:
-      #      - do_copy_workspace
+      - integration:
+          requires:
+            - do_copy_workspace
+      - build:
+          requires:
+            - do_copy_workspace
+            - lint
+            - formatter
+            - coverage
+            - integration
       #- docs:
       #    requires:
       #      - do_copy_workspace
