@@ -15,10 +15,14 @@ docker-apidoc: Makefile
 	docker run --rm --platform linux/amd64 \
       -v ./protodoc:/out \
       -v ./proto:/protos \
-      pseudomuto/protoc-gen-doc --doc_opt=out/ourhtml.mustache,graphanalytics.html protos/graphanalyticsengine.proto
+      pseudomuto/protoc-gen-doc --doc_opt=out/ourhtml.mustache,graphanalytics.html protos/graphanalyticsengine.proto && \
+      jq --slurp --raw-input '{"text": "\(.)", "mode": "markdown"}' < ./protodoc/setup.md | curl --data @- https://api.github.com/markdown > ./protodoc/setup.html && \
+      sed -i -e '/<!--INSERTHERE-->/r protodoc/setup.html' protodoc/graphanalytics.html
 
 apidoc: Makefile proto/graphanalyticsengine.proto protodoc/ourhtml.mustache
-	protoc -I proto --doc_out=protodoc --doc_opt=protodoc/ourhtml.mustache,graphanalytics.html proto/graphanalyticsengine.proto
+	protoc -I proto --doc_out=protodoc --doc_opt=protodoc/ourhtml.mustache,graphanalytics.html proto/graphanalyticsengine.proto && \
+	jq --slurp --raw-input '{"text": "\(.)", "mode": "markdown"}' < ./protodoc/setup.md | curl --data @- https://api.github.com/markdown > ./protodoc/setup.html && \
+	sed -i -e '/<!--INSERTHERE-->/r protodoc/setup.html' protodoc/graphanalytics.html
 
 clean:
 	rm -rf target tls
