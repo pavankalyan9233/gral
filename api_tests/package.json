@@ -1,0 +1,14 @@
+{
+  "engines": {
+    "node": ">=21"
+  },
+  "type": "module",
+  "dependencies": {
+    "arangojs": "^8.8.1",
+    "axios": "^1.6.8",
+    "vitest": "^1.4.0"
+  },
+  "scripts": {
+    "test": "vitest run --pool=forks"
+  }
+}
