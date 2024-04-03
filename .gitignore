@@ -8,6 +8,12 @@
 # Rust testing related
 cargo_profile/
 
+# Documentation
+protodoc/graphanalytics.html
+protodoc/graphanalytics.pdf
+protodoc/graphanalytics.html-e
+protodoc/setup.html
+
 # IDE related
 .idea/
 

@@ -7,7 +7,6 @@ repository.
 
 TO BE CONTINUED...
 
-
 ## Testing
 
 Currently, we do have unit tests and integration tests. The unit tests

@@ -172,21 +172,26 @@ jobs:
       #- store_test_results:
       #    path: _build/test/lib/hello_phoenix
 
-  # TODO: Documentation
-  #docs:
-  #  docker:
-  #    - image: elixir:1.15.7
-  #  working_directory: ~/app
-  #  steps:
-  #    - get_code
+  docs:
+    docker:
+      - image: pseudomuto/protoc-gen-doc
 
-  #    - run:
-  #        name: Build documentation
-  #        command: |
-  #          mix docs
+    working_directory: ~/app
+    steps:
+      - get_code
 
-  #    - store_artifacts:
-  #        path: doc/
+      - run:
+          name: Build documentation
+          command: |
+            apk add jq
+            apk add sed
+            apk add curl
+            protoc -I proto --doc_out=protodoc --doc_opt=protodoc/ourhtml.mustache,graphanalytics.html proto/graphanalyticsengine.proto
+            jq --slurp --raw-input '{"text": "\(.)", "mode": "markdown"}' < ./protodoc/setup.md | curl --data @- https://api.github.com/markdown > ./protodoc/setup.html && \
+            sed -i -e '/<!--INSERTHERE-->/r protodoc/setup.html' protodoc/graphanalytics.html
+
+      - store_artifacts:
+          path: protodoc/
 
   #build-and-push-docker-image:
   #  description: Build and push a docker image
@@ -245,9 +250,10 @@ workflows:
             - formatter
             - coverage
             - integration
-      #- docs:
-      #    requires:
-      #      - do_copy_workspace
+      - docs:
+          requires:
+            - do_copy_workspace
+
       #- build-and-push-docker-image:
       #    context:
       #      - slack
