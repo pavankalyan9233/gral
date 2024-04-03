@@ -32,8 +32,8 @@ service GraphAnalyticsEngineService {
     // is loaded alongside the vertices and the edge topology.
     // Each loaded graph will get a numerical ID, with which it can be used
     // in computations.
-    // This is an asynchronous call which returns immediately, use the GET
-    // graph API with the graph ID to get information on errors and the outcome
+    // This is an asynchronous job which returns the jobId immediately. Use the GET
+    // graph API with the returned graph ID to get information on errors and the outcome
     // of the loading.
     rpc GraphAnalyticsEngineLoadData(GraphAnalyticsEngineLoadDataRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
@@ -42,8 +42,8 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // This API fetches data from the deployment via AQL and load it into 
-    // memory of the engine for later processing. THIS IS NOT YET IMPLEMENTED.
+    // This API fetches data from the ArangoGraph deployment via AQL and load it into
+    // memory of the engine for later processing. <b class="highlight-bold"> (NOT IMPLEMENTED YET) </b>
     rpc GraphAnalyticsEngineLoadDataAql(GraphAnalyticsEngineLoadDataAqlRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
         option (google.api.http) = {
             post: "/v1/loaddataaql"
@@ -55,7 +55,7 @@ service GraphAnalyticsEngineService {
     // components algorithm (WCC) and store the results in-memory. The
     // computation will return a numerical job Id, with which
     // the results can later be queried or written back to the database.
-    // This is an asynchronous call which returns immediately, use the GET
+    // This is an asynchronous job which returns the jobId immediately. Use the GET
     // job API with the job Id to get information on progress, errors and
     // the outcome of the computation.
     rpc GraphAnalyticsEngineRunWcc(GraphAnalyticsEngineWccSccRequest) returns (GraphAnalyticsEngineProcessResponse) {
@@ -69,7 +69,7 @@ service GraphAnalyticsEngineService {
     // components algorithm (SCC) and store the results in-memory. The
     // computation will return a numerical job Id, with which
     // the results can later be queried or written back to the database.
-    // This is an asynchronous call which returns immediately, use the GET
+    // This is an asynchronous job which returns the jobId immediately. Use the GET
     // job API with the job Id to get information on progress, errors and
     // the outcome of the computation.
     rpc GraphAnalyticsEngineRunScc(GraphAnalyticsEngineWccSccRequest) returns (GraphAnalyticsEngineProcessResponse) {
@@ -82,10 +82,10 @@ service GraphAnalyticsEngineService {
     // Process a graph which was previously loaded and a computation which 
     // has computed connected components (weakly or strongly) by aggregating
     // some vertex data over each component found. The result will be one
-    // distribution map for each connected component, it is stored in memory.
+    // distribution map for each connected component. It is stored in memory.
     // The computation will return a numerical job Id, with which the
     // results can later be queried or written back to the database.
-    // This is an asynchronous call which returns immediately, use the
+    // This is an asynchronous job which returns the jobId immediately. Use the
     // GET job API with the job Id to get information on progress,
     // errors and the outcome of the computation.
     rpc GraphAnalyticsEngineRunCompAggregation(GraphAnalyticsEngineAggregateComponentsRequest) returns (GraphAnalyticsEngineProcessResponse) {
@@ -101,7 +101,7 @@ service GraphAnalyticsEngineService {
     // number of supersteps. See the input message documentation for details.
     // The computation will return a numerical job Id, with which the
     // results can later be queried or written back to the database.
-    // This is an asynchronous call which returns immediately, use the
+    // This is an asynchronous job which returns the jobId immediately. Use the
     // GET job API with the job Id to get information on progress,
     // errors and the outcome of the computation.
     rpc GraphAnalyticsEngineRunPageRank(GraphAnalyticsEnginePageRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
@@ -123,7 +123,7 @@ service GraphAnalyticsEngineService {
     // number of supersteps. See the input message documentation for details.
     // The computation will return a numerical job Id, with which the
     // results can later be queried or written back to the database.
-    // This is an asynchronous call which returns immediately, use the
+    // This is an asynchronous job which returns the jobId immediately. Use the
     // GET job API with the job Id to get information on progress,
     // errors and the outcome of the computation.
     rpc GraphAnalyticsEngineRunIRank(GraphAnalyticsEnginePageRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
@@ -141,8 +141,8 @@ service GraphAnalyticsEngineService {
     // maximal number of supersteps. See the input message documentation
     // for details. The computation will return a numerical job Id, with
     // which the results can later be queried or written back to the
-    // database. This is an asynchronous call which returns immediately,
-    // use the GET job API with the job Id to get information on
+    // database. This is an asynchronous job which returns the jobId immediately.
+    // Use the GET job API with the job Id to get information on
     // progress, errors and the outcome of the computation.
     rpc GraphAnalyticsEngineRunLabelPropagation(GraphAnalyticsEngineLabelPropagationRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
@@ -220,32 +220,31 @@ service GraphAnalyticsEngineService {
 
 // Request arguments for GraphAnalyticsEngineLoadData.
 message GraphAnalyticsEngineLoadDataRequest {
-    // Database to get graph from
+    // Retrieve graph from the specified database
     string database = 1;
     // Graph name, this is optional, because one can also use a list of
     // vertex and edge collections:
     string graph_name = 2;
-    // Optional list of vertex collections, must be given, if graph_name
+    // Optional list of vertex collections. Must be set, if the `graph_name`
     // is not given, or if data other than the graph topology is to be
     // loaded.
     repeated string vertex_collections = 3;
-    // List of edge collections, must be given, if graph_name
-    // is not given
+    // List of edge collections. Must be set, if `graph_name` is not given.
     repeated string vertex_attributes = 4;
-    // List of attributes to load into the column store for vertices
+    // List of attributes to load into the column store for vertices.
     repeated string vertex_attribute_types = 5;
-    // Types for the vertex attributes, values allowed:
+    // Types for the vertex attributes. These values are allowed:
     //  - "string"
     //  - "float"
     //  - "integer"
     //  - "unsigned"
     repeated string edge_collections = 6;
     // Optional numeric value for thread parallelism. This is currently used
-    // in 4 places. One is the number of async jobs launched to get data,
+    // in four places. One is the number of async jobs launched to get data,
     // another is the number of threads to be launched to synchronously
     // work on incoming data. The third is the number of threads used
-    // on each dbserver to produce data. And the fourth is the length of
-    // the prefetch queue on dbservers. Potentially, we want to allow
+    // on each DBServer to produce data. And the fourth is the length of
+    // the prefetch queue on DBServers. Potentially, we want to allow
     // more arguments to be able to fine tune this better.
     uint32 parallelism = 7;
     // Optional batch size
@@ -350,7 +349,7 @@ message GraphAnalyticsEngineLabelPropagationRequest {
 message GraphAnalyticsEngineStoreResultsRequest {
     // ID of the jobs of which results are written
     repeated uint64 job_ids = 1;
-    // attribute names to write results to
+    // Attribute names to write results to
     repeated string attribute_names = 2;
     // Database in ArangoDB to use:
     string database = 3;
@@ -450,11 +449,11 @@ message GraphAnalyticsEngineListJobsResponse {
 
 // Description of a job.
 message GraphAnalyticsEngineJob {
-    // ID of job
+    // ID of the current job
     uint64 job_id = 1;
-    // Graph of job
+    // Graph of the current job
     uint64 graph_id = 2;
-    // Total progress, guaranteed to be positive, but could be 1
+    // Total progress. Guaranteed to be positive, but could be 1
     uint32 total = 3;
     // Progress (0: no progress, equal to total: ready)
     uint32 progress = 4;
