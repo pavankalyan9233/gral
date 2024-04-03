@@ -193,6 +193,7 @@ jobs:
           command: |
             apk add jq
             apk add sed
+            apk add curl
             protoc -I proto --doc_out=protodoc --doc_opt=protodoc/ourhtml.mustache,graphanalytics.html proto/graphanalyticsengine.proto
             jq --slurp --raw-input '{"text": "\(.)", "mode": "markdown"}' < ./protodoc/setup.md | curl --data @- https://api.github.com/markdown > ./protodoc/setup.html && \
             sed -i -e '/<!--INSERTHERE-->/r protodoc/setup.html' protodoc/graphanalytics.html
