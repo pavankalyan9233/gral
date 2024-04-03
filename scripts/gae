@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Needed environment variables:
+#   ARANGO_GRAPH_TOKEN
+#   DEPLOYMENT_URL (without port component)
+# Do not forget to set the feature flag "GraphAnalytics" (without the quotes)
+# for your organization, probably before you create the deployment!
+
+if [ "$ARANGO_GRAPH_TOKEN" == "" ] ; then
+    echo "Need ARANGO_GRAPH_TOKEN from environment."
+    exit 1
+fi
+
+if [ "$DEPLOYMENT_URL" == "" ] ; then
+    echo "Need DEPLOYMENT_URL (without port) from environment."
+    exit 2
+fi
+
+function checkEngineURL () {
+    if [ "$ENGINE_URL" == "" ] ; then
+        echo "Need ENGINE_URL from environment."
+        exit 3
+    fi
+}
+
+# Subcommands:
+function help () {
+  cat <<'EOF'
+gae <subcommand> 
+
+  where <subcommand> is any of
+    - version           : show version
+    - enginetypes       : show possible engine types
+    - enginesizes       : show possible engine sizes
+    - engines           : show currently deployed engines
+    - engine <ID>       : show info about engine with ID <ID>
+    - deploy            : deploy an engine, needs a body with '-d' arguments
+          as for curl, example:
+          -d '{"type_id":"sloth-main", "size_id": "e4"}'
+    - delete <ID>       : delete the engine with ID <ID>
+    - api <API> <BODY>  : call engine, needs ENGINE_URL env variable set
+EOF
+}
+
+export BASEURL="$DEPLOYMENT_URL:8829/graph-analytics/api/graphanalytics/v1"
+export AUTH="Authorization: bearer $ARANGO_GRAPH_TOKEN"
+
+subcommand=$1
+shift
+
+case $subcommand in
+  version)
+    curl -s $BASEURL/api-version -H "$AUTH" "$@"
+    ;;
+  enginetypes)
+    curl -s $BASEURL/enginetypes -H "$AUTH" "$@"
+    ;;
+  enginesizes)
+    curl -s $BASEURL/enginesizes -H "$AUTH" "$@"
+    ;;
+  engines)
+    curl -s $BASEURL/engines -H "$AUTH" "$@"
+    ;;
+  engine)
+    id=$1
+    shift
+    curl -s $BASEURL/engines/"$id" -H "$AUTH" "$@"
+    ;;
+  deploy)
+    curl -s $BASEURL/engines -H "$AUTH" "$@"
+    ;;
+  delete)
+    id=$1
+    shift
+    curl -s $BASEURL/engines/"$id" -H "$AUTH" -X DELETE "$@"
+    ;;
+  api)
+    checkEngineURL
+    apipath="$1"
+    shift
+    curl -s "$ENGINE_URL/$apipath" -H "$AUTH" -H "Content-type: application/json" "$@"
+    ;;
+  help)
+    help
+    exit 0
+    ;;
+  *)
+    echo Unknown subcommand! See "gae help" for a list of available commands!
+    ;;
+esac
