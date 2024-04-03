@@ -4,15 +4,15 @@ import requests, time
 
 # Authentication:
 
-DATABASE = "synthea"
+DATABASE = "d"
 USERNAME = "root"
-PASSWORD = "FUcFZi5ArRz8ESGzRfN3"
+PASSWORD = "xyz"
 
 # Set URLs:
 
-DEPLOYMENT_URL = "https://64cb0b4d9e82.arangodb.cloud"
+DEPLOYMENT_URL = "https://632512532532.arangodb.cloud"
 ARANGODB_URL = DEPLOYMENT_URL + ":8529"
-ENGINE_URL = DEPLOYMENT_URL + ":8829/graph-analytics/engines/qgeqbcdmktk0adqxd9pn"
+ENGINE_URL = DEPLOYMENT_URL + ":8829/graph-analytics/engines/qgexbcxmktkxadqxd9pn"
 
 # Get auth token:
 jwttoken = requests.post(ARANGODB_URL + "/_open/auth", json = {"username": USERNAME, "password": PASSWORD}).json()["jwt"]
