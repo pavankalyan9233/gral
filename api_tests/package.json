@@ -9,6 +9,6 @@
     "vitest": "^1.4.0"
   },
   "scripts": {
-    "test": "vitest run --pool=forks"
+    "test": "vitest --config vitest.config.ts run --pool=forks"
   }
 }

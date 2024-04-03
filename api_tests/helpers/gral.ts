@@ -1,4 +1,5 @@
 import {config} from '../environment.config';
+import axios from "axios";
 
 function buildUrl(endpoint: string, path: string) {
   if (endpoint !== config.gral_instances.arangodb_auth && endpoint !== config.gral_instances.service_auth && endpoint !== config.gral_instances.service_auth_unreachable) {
@@ -19,8 +20,21 @@ function buildHeaders(jwt: string) {
   };
 }
 
+async function shutdownInstance(endpoint: string, jwt: string) {
+  return new Promise((resolve, reject) => {
+    const url = buildUrl(endpoint, '/v1/shutdown');
+    axios.delete(url, buildHeaders(jwt)).then((response) => {
+      console.log(response);
+      resolve(response);
+    }).catch((error) => {
+      console.log(error);
+      reject(error);
+    });
+  });
+}
+
 export const gral = {
-  buildUrl, buildHeaders
+  buildUrl, buildHeaders, shutdownInstance
 };
 
 module.exports = gral;
