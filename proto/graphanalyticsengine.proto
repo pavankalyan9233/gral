@@ -5,9 +5,9 @@
 // 
 
 /**
- * GraphAnalyticsEngineService is the API used to interact with graph analytics engines. Note that each GraphAnalyticsEngine has an associated deployment on AG to which it has direct database access to load graphs and to write back results. One database deployment can have multiple graph analytics engines (GAEs).
+ * GraphAnalyticsEngineService is an API for interacting with graph analytics engines. Each engine corresponds to a deployment on AG, granting direct database access for loading graphs and storing results. A single database deployment can accommodate multiple graph analytics engines (GAEs).
  *
- * Every call, which can take longer to complete, is asynchronous in the sense that it returns a jobId and the result can/must be retrieved separately. Please note that these results must me deleted explicitly to free the memory used, since all results are stored in RAM.
+ * Every call, which can take longer to complete, is asynchronous in the sense that it returns a jobId and the result can/must be retrieved separately. Please note that these results must be deleted explicitly to free the memory used, since all results are stored in RAM.
  *
  * The following trigger asynchronous operations, which might take longer to complete:
  * <ul>
