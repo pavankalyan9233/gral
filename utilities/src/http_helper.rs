@@ -51,7 +51,10 @@ pub fn execute_request(
 ) -> Value {
     match send_request(method, endpoint, body, headers) {
         Ok(result) => result,
-        Err(err) => panic!("Request failed: {}", err),
+        Err(err) => {
+            println!("Request failed: {}", err);
+            panic!("Request failed: {}", err)
+        }
     }
 }
 

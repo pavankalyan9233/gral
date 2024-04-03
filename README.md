@@ -23,6 +23,8 @@ $ cargo test
 Note: ArangoDB must be running for the integration tests to pass.
 An ArangoDB Cluster is expected to be reachable via Coordinator at `http://localhost:8529`.
 Also, it must be started with the same secret token as the one in the `secrets.jwt/token` file.
+To make life simpler, you can just use the `docker-compose.yml` file in the root directory to start an ArangoDB Cluster.
+This will also start the authentication service in a separate container.
 
 ```bash
 

@@ -28,3 +28,30 @@ pub fn generate_superuser_bearer() -> String {
         panic!("Failed to generate superuser bearer token");
     }
 }
+
+pub fn create_example_graph(db_name: String, graph_name: String) -> bool {
+    let arangodb_endpoint = format!(
+        "http://localhost:8529/_db/{db_name}/_admin/aardvark/graph-examples/create/#{graph_name}"
+    );
+    let token = generate_superuser_bearer();
+    let headers = http_helper::build_bearer_auth_header(&token);
+    let body = "".to_string();
+    let response = http_helper::post(&arangodb_endpoint, &body, Some(headers));
+    if response.get("error").is_some() {
+        let has_error = response["error"].as_bool().unwrap();
+        has_error
+    } else {
+        if response.get("errorMessage").is_some() {
+            let error_message = response["errorMessage"].as_str().unwrap().to_string();
+            panic!(
+                "{}",
+                format!("Failed to create example graph: {error_message}")
+            );
+        } else {
+            panic!(
+                "{}",
+                format!("Failed to create example graph: {graph_name} in {db_name}")
+            );
+        }
+    }
+}
