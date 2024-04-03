@@ -1,4 +1,4 @@
-# Setting up graph analytics engines GAEs on ArangoGraph
+# Setting up Graph Analytics Engines (GAEs) on ArangoGraph
 
 It is now possible to deploy GAEs (graph analytics engines) on ArangoGraph.
 Note that currently, this is behind a feature flag and has to be activated
