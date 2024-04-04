@@ -623,10 +623,126 @@ mod tests {
     }
 
     #[test]
-    fn adds_from_index() {}
+    fn adds_from_index() {
+        // TODO does not work when edges are dangling (if number of vertices in graph is not correct,
+        // because edge_index_by_from should be number of vertices + 1)
+        let g_arc = Graph::new(true, 1, vec![]);
+        let mut g = g_arc.write().unwrap();
+        // add 6 random vertices
+        g.add_vertex_nodata(b"V/A");
+        g.add_vertex_nodata(b"V/B");
+        g.add_vertex_nodata(b"V/C");
+        g.add_vertex_nodata(b"V/D");
+        g.add_vertex_nodata(b"V/E");
+        g.add_vertex_nodata(b"V/F");
+        // add edges
+        g.insert_edge(VertexIndex::new(4), VertexIndex(1));
+        g.insert_edge(VertexIndex::new(0), VertexIndex(3));
+        g.insert_edge(VertexIndex::new(0), VertexIndex(2));
+        g.insert_edge(VertexIndex::new(1), VertexIndex(6));
+
+        g.index_edges(true, false);
+
+        assert!(g.edges_indexed_from);
+
+        assert_eq!(g.edge_index_by_from, vec![0, 2, 3, 3, 3, 4, 4]);
+        assert_eq!(
+            g.edges_by_from,
+            vec![
+                VertexIndex(3),
+                VertexIndex(2),
+                VertexIndex(6),
+                VertexIndex(1)
+            ]
+        );
+
+        // out edges of 0
+        assert_eq!(
+            &g.edges_by_from[g.edge_index_by_from[0] as usize..g.edge_index_by_from[1] as usize],
+            &vec![VertexIndex(3), VertexIndex(2)]
+        );
+        // out edges of 1
+        assert_eq!(
+            &g.edges_by_from[g.edge_index_by_from[1] as usize..g.edge_index_by_from[2] as usize],
+            &vec![VertexIndex(6)]
+        );
+        // out edges of 2
+        assert_eq!(
+            &g.edges_by_from[g.edge_index_by_from[2] as usize..g.edge_index_by_from[3] as usize],
+            &vec![]
+        );
+        // out edges of 3
+        assert_eq!(
+            &g.edges_by_from[g.edge_index_by_from[3] as usize..g.edge_index_by_from[4] as usize],
+            &vec![]
+        );
+        // out edges of 4
+        assert_eq!(
+            &g.edges_by_from[g.edge_index_by_from[4] as usize..g.edge_index_by_from[5] as usize],
+            &vec![VertexIndex(1)]
+        );
+    }
 
     #[test]
-    fn adds_to_index() {}
+    fn adds_to_index() {
+        // TODO does not work when edges are dangling (if number of vertices in graph is not correct,
+        // because edge_index_by_from should be number of vertices + 1)
+        let g_arc = Graph::new(true, 1, vec![]);
+        let mut g = g_arc.write().unwrap();
+        // add 6 random vertices
+        g.add_vertex_nodata(b"V/A");
+        g.add_vertex_nodata(b"V/B");
+        g.add_vertex_nodata(b"V/C");
+        g.add_vertex_nodata(b"V/D");
+        g.add_vertex_nodata(b"V/E");
+        g.add_vertex_nodata(b"V/F");
+        // add edges
+        g.insert_edge(VertexIndex::new(1), VertexIndex(4));
+        g.insert_edge(VertexIndex::new(3), VertexIndex(0));
+        g.insert_edge(VertexIndex::new(2), VertexIndex(0));
+        g.insert_edge(VertexIndex::new(6), VertexIndex(1));
+
+        g.index_edges(false, true);
+
+        assert!(g.edges_indexed_to);
+
+        assert_eq!(g.edge_index_by_to, vec![0, 2, 3, 3, 3, 4, 4]);
+        assert_eq!(
+            g.edges_by_to,
+            vec![
+                VertexIndex(3),
+                VertexIndex(2),
+                VertexIndex(6),
+                VertexIndex(1)
+            ]
+        );
+
+        // in edges of 0
+        assert_eq!(
+            &g.edges_by_to[g.edge_index_by_to[0] as usize..g.edge_index_by_to[1] as usize],
+            &vec![VertexIndex(3), VertexIndex(2)]
+        );
+        // in edges of 1
+        assert_eq!(
+            &g.edges_by_to[g.edge_index_by_to[1] as usize..g.edge_index_by_to[2] as usize],
+            &vec![VertexIndex(6)]
+        );
+        // in edges of 2
+        assert_eq!(
+            &g.edges_by_to[g.edge_index_by_to[2] as usize..g.edge_index_by_to[3] as usize],
+            &vec![]
+        );
+        // in edges of 3
+        assert_eq!(
+            &g.edges_by_to[g.edge_index_by_to[3] as usize..g.edge_index_by_to[4] as usize],
+            &vec![]
+        );
+        // in edges of 4
+        assert_eq!(
+            &g.edges_by_to[g.edge_index_by_to[4] as usize..g.edge_index_by_to[5] as usize],
+            &vec![VertexIndex(1)]
+        );
+    }
 
     // maybe
 
