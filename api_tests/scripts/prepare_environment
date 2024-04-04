@@ -1,0 +1,24 @@
+#!/bin/bash
+
+cecho(){
+    RED="\033[0;31m"
+    GREEN="\033[0;32m"  # <-- [0 means not bold
+    YELLOW="\033[1;33m" # <-- [1 means bold
+    CYAN="\033[0;36m"
+
+    printf "${!1}${2} ${NC}\n" # <-- bash
+}
+
+killall -9 gral &> /dev/null
+mkdir -p logs
+cd ../
+cecho "CYAN" "Starting docker and gral instances..."
+cecho "CYAN" "-> Docker and gral logs will be saved in api_tests/logs folder (only for a single run)"
+
+docker compose up -d &> api_tests/logs/docker.txt
+./target/release/gral --bind-port 9999 --arangodb-endpoints http://arangodb_cluster:8529 --arangodb-jwt-secrets ./secrets.jwt &> api_tests/logs/arangodb_auth.txt &
+./target/release/gral --bind-port 1337 --auth-service http://auth_service:9092 --arangodb-endpoints http://arangodb_cluster:8529 --arangodb-jwt-secrets ./secrets.jwt &> api_tests/logs/service_auth.txt &
+./target/release/gral --bind-port 1336 --auth-service http://localhost:1234 --arangodb-endpoints http://arangodb_cluster:8529 --arangodb-jwt-secrets ./secrets.jwt &> api_tests/logs/service_auth_unreachable.txt &
+
+# TODO: Wait properly for the services to start
+sleep 1
