@@ -46,6 +46,9 @@ export BASEURL="$DEPLOYMENT_URL:8829/graph-analytics/api/graphanalytics/v1"
 if [ -z "$AUTH" ] ; then
     export AUTH="Authorization: bearer $ARANGO_GRAPH_TOKEN"
 fi
+if [ -z "$APIAUTH" ] ; then
+    export APIAUTH="$AUTH"
+fi
 
 subcommand=$1
 shift
@@ -80,7 +83,7 @@ case $subcommand in
     checkEngineURL
     apipath="$1"
     shift
-    curl -s "$ENGINE_URL/$apipath" -H "$AUTH" -H "Content-type: application/json" "$@"
+    curl -s "$ENGINE_URL/$apipath" -H "$APIAUTH" -H "Content-type: application/json" "$@"
     ;;
   help)
     help
