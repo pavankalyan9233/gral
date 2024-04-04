@@ -121,7 +121,6 @@ jobs:
           - mkdir /secrets && echo -n 'SuperSecretThingy' > /secrets/token && md5sum /secrets/token && /bin/arangodb_operator_integration --integration.authentication.v1 --integration.authentication.v1.path=/secrets --services.address=0.0.0.0:9092
       # Container for ArangoDB cluster
       - image: arangodb/enterprise:3.12.0-deb
-        name: arangodb
         command: |
           /bin/sh -c "echo -n 'SuperSecretThingy' > /tmp/arangodb.secret && md5sum /tmp/arangodb.secret && arangodb --mode=cluster --local=true --auth.jwt-secret=/tmp/arangodb.secret"
       - image: cimg/node:21.7.2
