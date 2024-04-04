@@ -111,30 +111,30 @@ jobs:
 
   integration:
     docker:
-      - image: cimg/rust:1.76.0
+      # Primary container image where all steps run.
+      - image: cimg/base:2024.02
+      # Container for the separate authentication service
       - image: neunhoef/auth_grpc
         entrypoint:
           - /bin/sh
           - -c
           - mkdir /secrets && echo -n 'SuperSecretThingy' > /secrets/token && md5sum /secrets/token && /bin/arangodb_operator_integration --integration.authentication.v1 --integration.authentication.v1.path=/secrets --services.address=0.0.0.0:9092
+      # Container for ArangoDB cluster
       - image: arangodb/enterprise:3.12.0-deb
         command: |
           /bin/sh -c "echo -n 'SuperSecretThingy' > /tmp/arangodb.secret && md5sum /tmp/arangodb.secret && arangodb --mode=cluster --local=true --auth.jwt-secret=/tmp/arangodb.secret"
     working_directory: ~/app
     steps:
-      - get_code
-      - install_protobuf
-      - restore_cache:
-          keys:
-            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+      - get_code # TODO: can be optimized to only get binary and integration test folder 'api_tests"
       - run:
           name: Integration Tests ArangoDB Auth
           command: |
-            RUST_BACKTRACE=1
-            cargo test --features test_arangodb_auth -- --test-threads=1
-            cargo test --features test_grpc_auth -- --test-threads=1
-            cargo test --features test_grpc_auth_unavailable -- --test-threads=1
-            cargo test --test '*'
+            apt-get update && apt-get install -y curl jq bash libssl-dev nodejs npm && rm -rf /var/lib/apt/lists/*
+            ./target/release/gral --bind-port 9999 --arangodb-endpoints http://arangodb_cluster:8529 &
+            ./target/release/gral --bind-port 1337 --auth-service http://auth_service:9092 --arangodb-endpoints http://arangodb_cluster:8529 &
+            ./target/release/gral --bind-port 1336 --auth-service http://localhost:1234 --arangodb-endpoints http://arangodb_cluster:8529 &
+            cd ~/app/api_tests && npm install && npm test
+            killall -9 gral
 
   build:
     docker:
@@ -240,7 +240,7 @@ workflows:
       - coverage:
           requires:
             - do_copy_workspace
-      - integration:
+      - docs:
           requires:
             - do_copy_workspace
       - build:
@@ -249,10 +249,10 @@ workflows:
             - lint
             - formatter
             - coverage
-            - integration
-      - docs:
+      - integration:
           requires:
             - do_copy_workspace
+            - build
 
       #- build-and-push-docker-image:
       #    context:
