@@ -112,7 +112,7 @@ jobs:
   integration:
     docker:
       # Primary container image where all steps run.
-      - image: cimg/base:2024.02
+      - image: cimg/node:21.7.2
       # Container for the separate authentication service
       - image: neunhoef/auth_grpc
         entrypoint:
@@ -131,8 +131,6 @@ jobs:
           command: |
             sudo apt update
             sudo apt install -y curl jq libssl-dev
-            curl -fsSL https://deb.nodesource.com/setup_21.x | sudo -E bash - &&\
-            sudo apt-get install -y nodejs npm
             mkdir -p ~/app/api_tests/logs
             ./target/release/gral --bind-port 9999 --arangodb-jwt-secrets ./secrets.jwt --arangodb-endpoints http://arangodb_cluster:8529 &> api_tests/logs/arangodb_auth.txt &
             ./target/release/gral --bind-port 1337 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://auth_service:9092 --arangodb-endpoints http://arangodb_cluster:8529 &> api_tests/logs/service_auth.txt &
