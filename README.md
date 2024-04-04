@@ -33,18 +33,8 @@ This will also start the authentication service in a separate container.
 To execute only the unit tests, run the following command:
 
 ```bash
-$ cargo test --lib
+$ cargo test
 ```
-
-### Integration Testing
-
-To execute only the integration tests, run the following command:
-
-```bash
-$ cargo test --test '*'
-```
-
-Note: ArangoDB must be running for the integration tests to pass.
 
 ### API Integration Testing (Node & TypeScript based)
 
