@@ -216,7 +216,7 @@ impl Graph {
             let mut rng = rand::thread_rng();
             loop {
                 actual = VertexHash(rng.gen::<u64>());
-                if self.hash_to_index.get_mut(&actual).is_some() {
+                if !self.hash_to_index.contains_key(&actual) {
                     break;
                 }
             }
@@ -569,8 +569,26 @@ mod tests {
         }
 
         #[test]
-        fn what_happens_if_hash_already_exists() {
-            // TODO
+        fn generates_new_vertex_hash_for_already_existing_hash() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
+
+            g.insert_vertex(VertexHash::new(32), b"V/B".to_vec(), vec![]);
+
+            assert_eq!(g.index_to_hash[0], VertexHash::new(32));
+            assert!(g.index_to_hash[1] != VertexHash::new(32));
+        }
+
+        #[test]
+        fn does_not_care_about_duplicate_vertex_key() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
+
+            g.insert_vertex(VertexHash::new(1), b"V/A".to_vec(), vec![]);
+
+            assert_eq!(g.index_to_key, vec![b"V/A", b"V/A"]);
         }
     }
 
