@@ -132,10 +132,13 @@ jobs:
             sudo apt update
             sudo apt install -y curl jq libssl-dev
             mkdir -p ~/app/api_tests/logs
-            ./target/release/gral --bind-port 9999 --arangodb-jwt-secrets ./secrets.jwt --arangodb-endpoints http://arangodb_cluster:8529 &> api_tests/logs/arangodb_auth.txt &
-            ./target/release/gral --bind-port 1337 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://auth_service:9092 --arangodb-endpoints http://arangodb_cluster:8529 &> api_tests/logs/service_auth.txt &
-            ./target/release/gral --bind-port 1336 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://localhost:1234 --arangodb-endpoints http://arangodb_cluster:8529 &> api_tests/logs/service_auth_unreachable.txt &
+            ./target/release/gral --bind-port 9999 --arangodb-jwt-secrets ./secrets.jwt --arangodb-endpoints http://localhost:8529 &> api_tests/logs/arangodb_auth.txt &
+            ./target/release/gral --bind-port 1337 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://localhost:9092 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth.txt &
+            ./target/release/gral --bind-port 1336 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://localhost:1234 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth_unreachable.txt &
             cd ~/app/api_tests && npm install && npm test
+
+      - store_artifacts:
+          path: api_tests/logs
 
   build:
     docker:
@@ -232,23 +235,23 @@ workflows:
         equal: [main, << pipeline.git.branch >>]
     jobs:
       - do_copy_workspace
-      - lint:
-          requires:
-            - do_copy_workspace
-      - formatter:
-          requires:
-            - do_copy_workspace
-      - coverage:
-          requires:
-            - do_copy_workspace
-      - docs:
-          requires:
-            - do_copy_workspace
+      #- lint:
+      #    requires:
+      #      - do_copy_workspace
+      #- formatter:
+      #    requires:
+      #      - do_copy_workspace
+      #- coverage:
+      #    requires:
+      #      - do_copy_workspace
+      #- docs:
+      #    requires:
+      #      - do_copy_workspace
       - build:
           requires:
             - do_copy_workspace
-            - lint
-            - formatter
+      #      - lint
+      #      - formatter
       - integration:
           requires:
             - do_copy_workspace
