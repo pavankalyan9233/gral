@@ -132,10 +132,12 @@ jobs:
             sudo apt update
             sudo apt install -y curl jq libssl-dev
             mkdir -p ~/app/api_tests/logs
-            ./target/release/gral --bind-port 9999 --arangodb-jwt-secrets ./secrets.jwt --arangodb-endpoints http://localhost:8529 &> api_tests/logs/arangodb_auth.txt &
-            ./target/release/gral --bind-port 1337 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://localhost:9092 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth.txt &
-            ./target/release/gral --bind-port 1336 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://localhost:1234 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth_unreachable.txt &
-            cd ~/app/api_tests && npm install && npm test
+            ./tmp/workspace/target/release/gral --bind-port 9999 --arangodb-jwt-secrets ./secrets.jwt --arangodb-endpoints http://localhost:8529 &> api_tests/logs/arangodb_auth.txt &
+            ./tmp/workspace/target/release/gral --bind-port 1337 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://localhost:9092 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth.txt &
+            ./tmp/workspace/target/release/gral --bind-port 1336 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://localhost:1234 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth_unreachable.txt &
+            sleep 1
+            cd ~/app/api_tests && npm install && npm run test_only
+            killall -9 gral
 
       - store_artifacts:
           path: api_tests/logs
@@ -166,7 +168,7 @@ jobs:
       # be cached (target/debug/build, target/debug/deps, ...).
       - save_cache:
           key: v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-          paths: ["target/debug/deps"]
+          paths: ["target/debug/deps", "target/release/deps"]
 
       - persist_to_workspace:
           root: .
