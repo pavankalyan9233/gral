@@ -13,6 +13,3 @@ export const config = {
     timeout: 10000,
   }
 };
-
-// 1.) Check how to communicate in CI via different ports from base image to the service
-// 2.) Check how to set env specific config variable locally and in CI
