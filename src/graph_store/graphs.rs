@@ -162,11 +162,6 @@ pub fn with_graphs(
     warp::any().map(move || graphs.clone())
 }
 
-struct EdgeTemp {
-    pub from: VertexIndex,
-    pub to: VertexIndex,
-}
-
 pub struct MemoryUsageGraph {
     pub bytes_total: usize,
     pub bytes_per_vertex: usize,
@@ -257,25 +252,25 @@ impl Graph {
     }
 
     pub fn index_edges(&mut self, by_from: bool, by_to: bool) {
-        let mut tmp: Vec<EdgeTemp> = vec![];
+        if (self.edges_indexed_from && by_from) && (self.edges_indexed_to && by_to) {
+            return;
+        }
+
+        let mut tmp: Vec<Edge> = vec![];
         let number_v = self.number_of_vertices() as usize;
         let number_e = self.number_of_edges() as usize;
-        if (!self.edges_indexed_from && by_from) || (!self.edges_indexed_to && by_to) {
-            tmp.reserve(number_e);
-            for e in self.edges.iter() {
-                tmp.push(EdgeTemp {
-                    from: e.from,
-                    to: e.to,
-                });
-            }
+        tmp.reserve(number_e);
+        for e in self.edges.iter() {
+            tmp.push(Edge {
+                from: e.from,
+                to: e.to,
+            });
         }
 
         if !self.edges_indexed_from && by_from {
             info!("Graph: {}: Indexing edges by from...", self.graph_id);
             // Create lookup by from:
-            tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
-                a.from.to_u64().cmp(&b.from.to_u64())
-            });
+            tmp.sort_by(|a: &Edge, b: &Edge| -> Ordering { a.from.to_u64().cmp(&b.from.to_u64()) });
             self.edge_index_by_from.clear();
             self.edge_index_by_from.reserve(number_v + 1);
             self.edges_by_from.clear();
@@ -310,9 +305,7 @@ impl Graph {
         if !self.edges_indexed_to && by_to {
             info!("Graph: {}: Indexing edges by to...", self.graph_id);
             // Create lookup by to:
-            tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
-                a.to.to_u64().cmp(&b.to.to_u64())
-            });
+            tmp.sort_by(|a: &Edge, b: &Edge| -> Ordering { a.to.to_u64().cmp(&b.to.to_u64()) });
             self.edge_index_by_to.clear();
             self.edge_index_by_to.reserve(number_v + 1);
             self.edges_by_to.clear();
