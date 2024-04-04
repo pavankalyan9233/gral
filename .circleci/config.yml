@@ -129,8 +129,8 @@ jobs:
       - run:
           name: Integration Tests ArangoDB Auth
           command: |
-            apt update
-            apt install install -y curl jq bash libssl-dev nodejs npm
+            sudo apt update
+            sudo apt install install -y curl jq bash libssl-dev nodejs npm
             ls -ltrh ~/app
             mkdir -p ~/app/api_tests/logs
             ./target/release/gral --bind-port 9999 --arangodb-jwt-secrets ./secrets.jwt --arangodb-endpoints http://arangodb_cluster:8529 &> api_tests/logs/arangodb_auth.txt &
