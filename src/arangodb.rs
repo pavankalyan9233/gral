@@ -540,21 +540,12 @@ pub async fn fetch_graph_from_arangodb(
                     let nr_vertices: u64;
                     {
                         let mut graph = graph_clone.write().unwrap();
-                        let mut exceptional: Vec<(u32, VertexHash)> = vec![];
-                        let mut exceptional_keys: Vec<Vec<u8>> = vec![];
                         for i in 0..vertex_keys.len() {
                             let k = &vertex_keys[i];
                             let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
                             let mut cols: Vec<Value> = vec![];
                             std::mem::swap(&mut cols, &mut vertex_json[i]);
-                            graph.insert_vertex(
-                                i as u32,
-                                hash,
-                                k.clone(),
-                                cols,
-                                &mut exceptional,
-                                &mut exceptional_keys,
-                            );
+                            graph.insert_vertex(hash, k.clone(), cols);
                         }
                         nr_vertices = graph.number_of_vertices();
                     }

@@ -174,12 +174,7 @@ pub struct MemoryUsageGraph {
 }
 
 impl Graph {
-    pub fn new(
-        store_keys: bool,
-        _bits_for_hash: u8,
-        id: u64,
-        col_names: Vec<String>,
-    ) -> Arc<RwLock<Graph>> {
+    pub fn new(store_keys: bool, id: u64, col_names: Vec<String>) -> Arc<RwLock<Graph>> {
         increment_counter!("gral_mycounter_total");
         Arc::new(RwLock::new(Graph {
             graph_id: id,
@@ -208,12 +203,9 @@ impl Graph {
 
     pub fn insert_vertex(
         &mut self,
-        i: u32,
         hash: VertexHash,
         key: Vec<u8>, // cannot be empty
         mut columns: Vec<Value>,
-        exceptional: &mut Vec<(u32, VertexHash)>,
-        exceptional_keys: &mut Vec<Vec<u8>>,
     ) {
         // First detect a collision:
         let index = VertexIndex(self.index_to_hash.len() as u64);
@@ -224,17 +216,12 @@ impl Graph {
             let mut rng = rand::thread_rng();
             loop {
                 actual = VertexHash(rng.gen::<u64>());
-                if self.hash_to_index.get_mut(&actual).is_some() {
+                if !self.hash_to_index.contains_key(&actual) {
                     break;
                 }
             }
             let oi = self.hash_to_index.get_mut(&hash).unwrap();
             *oi = VertexIndex(oi.0 | 0x800000000000000);
-            exceptional.push((i, actual));
-            exceptional_keys.push(key.clone());
-            if self.store_keys {
-                self.exceptions.insert(key.clone(), actual);
-            }
         }
         // Will succeed:
         self.index_to_hash.push(actual);
@@ -404,7 +391,7 @@ impl Graph {
     pub fn add_vertex_nodata(&mut self, key: &[u8]) {
         let key = key.to_vec();
         let hash = VertexHash::new(xxh3_64_with_seed(&key, 0xdeadbeefdeadbeef));
-        self.insert_vertex(0, hash, key, vec![], &mut vec![], &mut vec![]);
+        self.insert_vertex(hash, key, vec![]);
     }
 
     pub fn add_edge_nodata(&mut self, from: &[u8], to: &[u8]) {
@@ -486,4 +473,139 @@ impl Graph {
             bytes_per_edge: if nre == 0 { 0 } else { total_e / nre },
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod inserts_vertex {
+        use super::*;
+
+        #[test]
+        #[should_panic]
+        fn panicks_when_created_graph_has_different_number_of_columns() {
+            let g_arc = Graph::new(true, 1, vec!["first column name".to_string()]);
+            let mut g = g_arc.write().unwrap();
+            g.insert_vertex(
+                VertexHash(0),
+                vec![],
+                vec![
+                    serde_json::Value::String("first column entry".to_string()),
+                    serde_json::Value::String("second column entry".to_string()),
+                ],
+            );
+        }
+
+        #[test]
+        fn inserts_vertex_into_given_graph() {
+            let g_arc = Graph::new(
+                true,
+                1,
+                vec![
+                    "string column name".to_string(),
+                    "number column name".to_string(),
+                ],
+            );
+            let mut g = g_arc.write().unwrap();
+
+            // add one vertex
+            let hash_a = VertexHash::new(56);
+            g.insert_vertex(
+                hash_a,
+                b"V/A".to_vec(),
+                vec![
+                    serde_json::Value::String("string column entry A".to_string()),
+                    serde_json::Value::Number(serde_json::Number::from(645)),
+                ],
+            );
+
+            assert_eq!(g.index_to_hash, vec![hash_a]);
+            assert_eq!(
+                g.hash_to_index,
+                HashMap::from([(hash_a, VertexIndex::new(0))])
+            );
+            assert_eq!(g.index_to_key, vec![b"V/A"]); // only if graph was created with true
+            assert_eq!(
+                g.vertex_json,
+                vec![
+                    vec![serde_json::Value::String(
+                        "string column entry A".to_string()
+                    )],
+                    vec![serde_json::Value::Number(serde_json::Number::from(645))]
+                ]
+            );
+
+            // add another vertex
+            let hash_b = VertexHash::new(900);
+            g.insert_vertex(
+                hash_b,
+                b"V/B".to_vec(),
+                vec![
+                    serde_json::Value::String("string column entry B".to_string()),
+                    serde_json::Value::Number(serde_json::Number::from(33)),
+                ],
+            );
+
+            assert_eq!(g.index_to_hash, vec![hash_a, hash_b]);
+            assert_eq!(
+                g.hash_to_index,
+                HashMap::from([(hash_a, VertexIndex::new(0)), (hash_b, VertexIndex::new(1))])
+            );
+            assert_eq!(g.index_to_key, vec![b"V/A", b"V/B"]);
+            assert_eq!(
+                g.vertex_json,
+                vec![
+                    vec![
+                        serde_json::Value::String("string column entry A".to_string()),
+                        serde_json::Value::String("string column entry B".to_string())
+                    ],
+                    vec![
+                        serde_json::Value::Number(serde_json::Number::from(645)),
+                        serde_json::Value::Number(serde_json::Number::from(33)),
+                    ]
+                ]
+            );
+        }
+
+        #[test]
+        fn generates_new_vertex_hash_for_already_existing_hash() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
+
+            g.insert_vertex(VertexHash::new(32), b"V/B".to_vec(), vec![]);
+
+            assert_eq!(g.index_to_hash[0], VertexHash::new(32));
+            assert!(g.index_to_hash[1] != VertexHash::new(32));
+        }
+
+        #[test]
+        fn does_not_care_about_duplicate_vertex_key() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
+
+            g.insert_vertex(VertexHash::new(1), b"V/A".to_vec(), vec![]);
+
+            assert_eq!(g.index_to_key, vec![b"V/A", b"V/A"]);
+        }
+    }
+
+    #[test]
+    fn inserts_edge_into_given_graph() {}
+
+    #[test]
+    fn adds_from_index() {}
+
+    #[test]
+    fn adds_to_index() {}
+
+    // maybe
+
+    #[test]
+    fn adds_graph_to_graphs_list() {}
+
+    #[test]
+    fn drops_graph_from_list() {}
 }
