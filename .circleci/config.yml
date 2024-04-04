@@ -118,7 +118,7 @@ jobs:
         entrypoint:
           - /bin/sh
           - -c
-          - mkdir /secrets && echo -n 'SuperSecretThingy' > /secrets/token && md5sum /secrets/token && /bin/arangodb_operator_integration --integration.authentication.v1 --integration.authentication.v1.path=/secrets --services.address=0.0.0.0:9092
+          - mkdir /secrets && echo -n 'SuperSecretThingy' > /secrets/token && md5sum /secrets/token && /bin/arangodb_operator_integration --integration.authentication.v1 --integration.authentication.v1.path=/secrets --services.address=localhost:9092
       # Container for ArangoDB cluster
       - image: arangodb/enterprise:3.12.0-deb
         command: |
@@ -146,7 +146,7 @@ jobs:
 
       - save_cache:
           key: v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}
-          paths: ["target/debug/deps", "target/release/deps"]
+          paths: ["~/app/api_tests/node_modules"]
 
       - store_artifacts:
           path: api_tests/logs
