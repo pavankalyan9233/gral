@@ -43,7 +43,9 @@ EOF
 }
 
 export BASEURL="$DEPLOYMENT_URL:8829/graph-analytics/api/graphanalytics/v1"
-export AUTH="Authorization: bearer $ARANGO_GRAPH_TOKEN"
+if [ -z "$AUTH" ] ; then
+    export AUTH="Authorization: bearer $ARANGO_GRAPH_TOKEN"
+fi
 
 subcommand=$1
 shift
