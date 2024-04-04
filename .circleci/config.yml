@@ -250,7 +250,6 @@ workflows:
             - do_copy_workspace
             - lint
             - formatter
-            - coverage
       - integration:
           requires:
             - do_copy_workspace
