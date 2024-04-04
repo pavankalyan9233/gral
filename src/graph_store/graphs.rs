@@ -487,3 +487,132 @@ impl Graph {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod inserts_vertex {
+        use super::*;
+
+        #[test]
+        #[should_panic]
+        fn panicks_when_created_graph_has_different_number_of_columns() {
+            let g_arc = Graph::new(true, 64, 1, vec!["first column name".to_string()]);
+            let mut g = g_arc.write().unwrap();
+            g.insert_vertex(
+                0,
+                VertexHash(0),
+                vec![],
+                vec![
+                    serde_json::Value::String("first column entry".to_string()),
+                    serde_json::Value::String("second column entry".to_string()),
+                ],
+                &mut vec![],
+                &mut vec![],
+            );
+        }
+
+        #[test]
+        fn inserts_vertex_into_given_graph() {
+            // Q: _bits_for_hash not used, why needed?
+            let g_arc = Graph::new(
+                true,
+                64,
+                1,
+                vec![
+                    "string column name".to_string(),
+                    "number column name".to_string(),
+                ],
+            );
+            let mut g = g_arc.write().unwrap();
+
+            // add one vertex
+            let hash_a = VertexHash::new(56);
+            g.insert_vertex(
+                40, // what is this? we compute the vertex index at start of insert_vertex fn, so this is probably something different
+                hash_a,
+                b"V/A".to_vec(),
+                vec![
+                    serde_json::Value::String("string column entry A".to_string()),
+                    serde_json::Value::Number(serde_json::Number::from(645)),
+                ],
+                &mut vec![],
+                &mut vec![],
+            );
+            // Q: why do we need exceptional and exceptional_key as input? We only add stuff to it inside fn.
+
+            assert_eq!(g.index_to_hash, vec![hash_a]);
+            assert_eq!(
+                g.hash_to_index,
+                HashMap::from([(hash_a, VertexIndex::new(0))])
+            );
+            assert_eq!(g.index_to_key, vec![b"V/A"]); // only if graph was created with true
+            assert_eq!(
+                g.vertex_json,
+                vec![
+                    vec![serde_json::Value::String(
+                        "string column entry A".to_string()
+                    )],
+                    vec![serde_json::Value::Number(serde_json::Number::from(645))]
+                ]
+            );
+
+            // add another vertex
+            let hash_b = VertexHash::new(900);
+            g.insert_vertex(
+                40,
+                hash_b,
+                b"V/B".to_vec(),
+                vec![
+                    serde_json::Value::String("string column entry B".to_string()),
+                    serde_json::Value::Number(serde_json::Number::from(33)),
+                ],
+                &mut vec![],
+                &mut vec![],
+            );
+
+            assert_eq!(g.index_to_hash, vec![hash_a, hash_b]);
+            assert_eq!(
+                g.hash_to_index,
+                HashMap::from([(hash_a, VertexIndex::new(0)), (hash_b, VertexIndex::new(1))])
+            );
+            assert_eq!(g.index_to_key, vec![b"V/A", b"V/B"]);
+            assert_eq!(
+                g.vertex_json,
+                vec![
+                    vec![
+                        serde_json::Value::String("string column entry A".to_string()),
+                        serde_json::Value::String("string column entry B".to_string())
+                    ],
+                    vec![
+                        serde_json::Value::Number(serde_json::Number::from(645)),
+                        serde_json::Value::Number(serde_json::Number::from(33)),
+                    ]
+                ]
+            );
+        }
+
+        #[test]
+        fn what_happens_if_hash_already_exists() {
+            // TODO
+        }
+    }
+
+    #[test]
+    fn inserts_edge_into_given_graph() {}
+
+    #[test]
+    fn adds_from_index() {}
+
+    #[test]
+    fn adds_to_index() {}
+
+    // maybe
+
+    #[test]
+    fn adds_graph_to_graphs_list() {}
+
+    #[test]
+    fn drops_graph_from_list() {}
+}
