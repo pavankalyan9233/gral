@@ -7,9 +7,9 @@ export function setup() {
 }
 
 export async function teardown() {
-  console.log("Shutting down the Integration Test Framework...");
-  console.log("TODO: Shutting down all valid gral instances...");
+  console.warn("TODO: Shutting down all valid gral instances... <known_bug>");
   return;
+
   const gral_valid_auth_endpoints = [
     config.gral_instances.arangodb_auth, config.gral_instances.service_auth
   ];

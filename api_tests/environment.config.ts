@@ -1,6 +1,6 @@
 export const config = {
   gral_instances: {
-    arangodb_auth: "http://localhost:9092",
+    arangodb_auth: "http://localhost:9999",
     service_auth: "http://localhost:1337",
     service_auth_unreachable: "http://localhost:1336",
   },
