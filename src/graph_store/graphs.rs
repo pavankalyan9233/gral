@@ -53,7 +53,7 @@ impl VertexIndex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Edge {
     pub from: VertexIndex, // index of vertex
     pub to: VertexIndex,   // index of vertex
@@ -206,7 +206,7 @@ impl Graph {
         hash: VertexHash,
         key: Vec<u8>, // cannot be empty
         mut columns: Vec<Value>,
-    ) {
+    ) -> VertexIndex {
         // First detect a collision:
         let index = VertexIndex(self.index_to_hash.len() as u64);
         let mut actual = hash;
@@ -237,6 +237,7 @@ impl Graph {
             self.vertex_json[j].push(v);
         }
         self.vertex_id_size_sum += key.len();
+        index
     }
 
     pub fn number_of_vertices(&self) -> u64 {
@@ -511,7 +512,7 @@ mod tests {
 
             // add one vertex
             let hash_a = VertexHash::new(56);
-            g.insert_vertex(
+            let index_a = g.insert_vertex(
                 hash_a,
                 b"V/A".to_vec(),
                 vec![
@@ -521,10 +522,7 @@ mod tests {
             );
 
             assert_eq!(g.index_to_hash, vec![hash_a]);
-            assert_eq!(
-                g.hash_to_index,
-                HashMap::from([(hash_a, VertexIndex::new(0))])
-            );
+            assert_eq!(g.hash_to_index, HashMap::from([(hash_a, index_a)]));
             assert_eq!(g.index_to_key, vec![b"V/A"]); // only if graph was created with true
             assert_eq!(
                 g.vertex_json,
@@ -538,7 +536,7 @@ mod tests {
 
             // add another vertex
             let hash_b = VertexHash::new(900);
-            g.insert_vertex(
+            let index_b = g.insert_vertex(
                 hash_b,
                 b"V/B".to_vec(),
                 vec![
@@ -550,7 +548,7 @@ mod tests {
             assert_eq!(g.index_to_hash, vec![hash_a, hash_b]);
             assert_eq!(
                 g.hash_to_index,
-                HashMap::from([(hash_a, VertexIndex::new(0)), (hash_b, VertexIndex::new(1))])
+                HashMap::from([(hash_a, index_a), (hash_b, index_b)])
             );
             assert_eq!(g.index_to_key, vec![b"V/A", b"V/B"]);
             assert_eq!(
@@ -592,8 +590,37 @@ mod tests {
         }
     }
 
-    #[test]
-    fn inserts_edge_into_given_graph() {}
+    mod inserts_edge {
+        use super::*;
+
+        #[test]
+        fn inserts_dangling_edge_into_given_graph() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+
+            g.insert_edge(VertexIndex::new(1), VertexIndex(2));
+
+            assert_eq!(
+                g.edges,
+                vec![Edge {
+                    from: VertexIndex::new(1),
+                    to: VertexIndex::new(2)
+                }]
+            );
+        }
+
+        #[test]
+        fn inserts_edge_between_two_existing_vertices_into_given_graph() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            let from = g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
+            let to = g.insert_vertex(VertexHash::new(90), b"V/B".to_vec(), vec![]);
+
+            g.insert_edge(from, to);
+
+            assert_eq!(g.edges, vec![Edge { from, to }]);
+        }
+    }
 
     #[test]
     fn adds_from_index() {}
