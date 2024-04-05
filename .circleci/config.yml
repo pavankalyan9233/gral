@@ -58,7 +58,7 @@ jobs:
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Clippy
@@ -75,7 +75,7 @@ jobs:
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Format check
@@ -150,6 +150,28 @@ jobs:
 
       - store_artifacts:
           path: api_tests/logs
+          
+  unittests:
+    docker:
+      - image: cimg/rust:1.76.0
+    working_directory: ~/app
+    steps:
+      - get_code
+      - install_protobuf
+
+      - restore_cache:
+          keys:
+            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+
+      - run:
+          name: Run tests
+          command: cargo test
+
+      # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
+      # be cached (target/debug/build, target/debug/deps, ...).
+      - save_cache:
+          key: v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          paths: ["target/debug/deps"]
 
   build:
     docker:
@@ -161,11 +183,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-
-      - run:
-          name: Run tests
-          command: cargo test
+            - v1-cargo-release-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Build release
@@ -176,13 +194,13 @@ jobs:
       # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
       # be cached (target/debug/build, target/debug/deps, ...).
       - save_cache:
-          key: v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-          paths: ["target/debug/deps", "target/release/deps"]
+          key: v1-cargo-release-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          paths: ["target/release/deps"]
 
       - persist_to_workspace:
           root: .
           paths:
-            - target
+            - target/release/gral
       # TODO: Store test results?
       #- store_test_results:
       #    path: _build/test/lib/hello_phoenix
@@ -259,6 +277,11 @@ workflows:
           requires:
             - do_copy_workspace
       - build:
+          requires:
+            - do_copy_workspace
+            - lint
+            - formatter
+      - unittests:
           requires:
             - do_copy_workspace
             - lint
