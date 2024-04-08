@@ -4,6 +4,7 @@ const path = require('path');
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 const axios = require('axios');
+const readline = require('readline');
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -81,7 +82,12 @@ class GraphImporter {
     while (true) {
       if (!done) {
         while (l.length < batchSize) {
-          let d = maker(counter);
+          let d;
+          if (Array.isArray(maker)) {
+            d = maker;
+          } else {
+            d = maker(counter);
+          }
           if (d === null || d === false) {
             done = true;
             break;
@@ -94,7 +100,7 @@ class GraphImporter {
             documentCount += 1;
           }
           counter += 1;
-          if (documentCount >= limit) {
+          if (documentCount >= limit || Array.isArray(maker)) {
             done = true;
           }
         }
@@ -156,21 +162,41 @@ class GraphImporter {
     }
   };
 
-  async insertEdges() {
-    const filePath = path.join(__dirname, '..', 'data', this.graphName, `${this.graphName}.e`);
-    
+  async processEdgeFile(filePath, batchSize = 10000) {
+    const fileStream = fs.createReadStream(filePath);
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity, // Recognize all line breaks
+    });
 
+    let counter = 0;
+    let docs = [];
+    let futures = [];
+
+    for await (const line of rl) {
+      // Assuming each line contains two numeric values separated by a space
+      const [fromSource, toSource] = line.split(' ').map(Number);
+      docs.push({
+        _from: `${this.graphName}_v/${fromSource}`,
+        _to: `${this.graphName}_v/${toSource}`,
+      });
+
+      if (docs.length >= batchSize) {
+        futures.push(this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
+          docs, docs.length, batchSize));
+        docs = [];
+      }
+    }
+
+    // wait for all futures
+    await Promise.all(futures);
+    console.log(`-> Inserted ${counter*batchSize} edges into collection ${this.graphName}_e`);
+  }
+
+  async insertEdges() {
     console.log(`Will now insert edges into collection ${this.graphName}_e. This will take a while...`)
-    await this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
-      function (i) {
-        const line = fs.readFileSync(filePath, 'utf8').split('\n')[i];
-        const [from, to] = line.split(' ');
-        return {
-          _from: `${this.graphName}_v/${from}`,
-          _to: `${this.graphName}_v/${to}`,
-        };
-      },
-      lineCount, 10000);
+    const filePath = path.join(__dirname, '..', 'data', this.graphName, `${this.graphName}.e`);
+    await this.processEdgeFile(filePath, 10000);
   }
 
   async insertVertices() {

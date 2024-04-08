@@ -61,6 +61,8 @@ async fn authorize_via_service(token: String, url: String) -> WebResult<String> 
         .connect()
         .await;
     match channel {
+        // Embed retry loop and write results to log file, store them in LOGS folder
+        // around the caller of: authorize_via_service (1000 calls, every 0,1sec approx.)
         Err(e) => Err(warp::reject::custom(Unauthorized {
             msg: format!("Cannot reach authentication service: {}", e),
         })),

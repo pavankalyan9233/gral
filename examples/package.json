@@ -8,7 +8,8 @@
     "yargs": "^16.2.0"
   },
   "devDependencies": {
-    "axios": "^1.6.8"
+    "axios": "^1.6.8",
+    "p-queue": "^8.0.1"
   },
   "scripts": {
     "start": "node main --help",
