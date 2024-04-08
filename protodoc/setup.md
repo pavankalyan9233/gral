@@ -16,7 +16,7 @@ following that you have stored these in two environment variables like so:
 
 ```bash
 export AG_API_KEY_ID="gxhq0zjxpgrosoldeapc"
-export AG_API_KEY_SERCRET="1c5fe99b-4597-fa84-871d-5e9cb5915e45"
+export AG_API_KEY_SECRET="1c5fe99b-4597-fa84-871d-5e9cb5915e45"
 ```
 
 (values are faked). Then you can use the `oasisctl` command (download
