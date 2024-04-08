@@ -1,3 +1,4 @@
 #!/bin/bash
 
 killall -9 gral &> /dev/null
+docker compose down &> api_tests/logs/docker_shutdown.txt
