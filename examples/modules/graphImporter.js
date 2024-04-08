@@ -22,8 +22,10 @@ export class GraphImporter {
     this.databaseName = arangoConfig.databaseName;
     this.db = new Database({
       url: this.arangoEndpoint,
+      databaseName: this.databaseName,
       auth: {username: this.arangoUser, password: this.arangoPassword},
     });
+
   }
 
   localDataExists() {
@@ -219,7 +221,7 @@ export class GraphImporter {
     console.log(`-> Inserted ${lineCount} vertices into collection ${this.graphName}_v`);
   }
 
-  async createGraph() {
+  async createGraph(edgeDefinitions, options) {
     const graph = this.db.graph(this.graphName);
     let exists = await graph.exists();
 
@@ -230,16 +232,16 @@ export class GraphImporter {
     }
 
     if (!exists) {
-      await graph.create();
       const edgeCollectionName = `${this.graphName}_e`;
       const vertexCollectionName = `${this.graphName}_v`;
-      await this.db.edgeCollection(edgeCollectionName).create();
-      await this.db.collection(vertexCollectionName).create();
-      await graph.addEdgeDefinition({
+      const edgeDefinitions =[{
         collection: edgeCollectionName,
         from: [vertexCollectionName],
         to: [vertexCollectionName],
-      });
+      }];
+
+      await graph.create(edgeDefinitions, {});
+
       console.log(`Graph ${this.graphName} created with edge collection ${edgeCollectionName} and vertex collection ${vertexCollectionName}`);
     } else {
       throw new Error(`Graph ${this.graphName} already exists`);

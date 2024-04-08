@@ -5,10 +5,8 @@
   "main": "main.js",
   "type": "module",
   "dependencies": {
-    "arangojs": "^6.0.0",
-    "yargs": "^16.2.0"
-  },
-  "devDependencies": {
+    "arangojs": "^8.1.1",
+    "yargs": "^16.2.0",
     "axios": "^1.6.8",
     "p-queue": "^8.0.1"
   },
