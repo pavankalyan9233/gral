@@ -1,16 +1,18 @@
-const {Database, aql} = require('arangojs');
-const fs = require('fs');
-const path = require('path');
-const util = require('util');
-const exec = util.promisify(require('child_process').exec);
-const axios = require('axios');
-const readline = require('readline');
+import { Database, aql } from 'arangojs';
+import fs from 'fs';
+import path from 'path';
+import { promisify } from 'util';
+import { exec as execSync } from 'child_process';
+const exec = promisify(execSync);
+import axios from 'axios';
+import readline from 'readline';
+import PQueue from "p-queue";
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-class GraphImporter {
+export class GraphImporter {
   constructor(arangoConfig, graphName, dropGraph = false) {
     this.arangoEndpoint = arangoConfig.endpoint;
     this.arangoUser = arangoConfig.username;
@@ -171,7 +173,11 @@ class GraphImporter {
 
     let counter = 0;
     let docs = [];
-    let futures = [];
+    const queue = new PQueue({concurrency: 16});
+
+    queue.on('active', () => {
+      console.log(`Working on edges. Queue Size: ${queue.size} - Still Pending: ${queue.pending}`);
+    });
 
     for await (const line of rl) {
       // Assuming each line contains two numeric values separated by a space
@@ -182,34 +188,27 @@ class GraphImporter {
       });
 
       if (docs.length >= batchSize) {
-        futures.push(this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
+        queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
           docs, docs.length, batchSize));
         docs = [];
       }
     }
 
     // wait for all futures
-    await Promise.all(futures);
-    console.log(`-> Inserted ${counter*batchSize} edges into collection ${this.graphName}_e`);
+    await queue.onIdle();
+    console.log('12. All work is done');
+    console.log(`-> Inserted ${counter * batchSize} edges into collection ${this.graphName}_e`);
   }
 
   async insertEdges() {
     console.log(`Will now insert edges into collection ${this.graphName}_e. This will take a while...`)
-    const filePath = path.join(__dirname, '..', 'data', this.graphName, `${this.graphName}.e`);
+    const filePath = new URL(`../data/${this.graphName}/${this.graphName}.e`, import.meta.url).pathname;
     await this.processEdgeFile(filePath, 10000);
   }
 
   async insertVertices() {
-    const filePath = path.join(__dirname, '..', 'data', this.graphName, `${this.graphName}.v`);
+    const filePath = new URL(`../data/${this.graphName}/${this.graphName}.v`, import.meta.url).pathname;
     const lineCount = await this.countLinesUsingWc(filePath);
-
-    //const query = `
-    //  FOR i IN 1..${lineCount}
-    //  INSERT {_key: TO_STRING(i)} INTO @@vertexCollection
-    //`;
-    //await this.db.query(query, {
-    //  "@vertexCollection": this.graphName + '_v'
-    //});
 
     console.log(`Will now insert vertices into collection ${this.graphName}_v. This will take a while...`)
     await this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
@@ -247,5 +246,3 @@ class GraphImporter {
     }
   }
 }
-
-module.exports = GraphImporter;

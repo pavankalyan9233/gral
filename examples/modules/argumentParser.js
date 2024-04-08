@@ -1,6 +1,9 @@
+import { hideBin } from 'yargs/helpers';
+import { config } from '../config/environment.js';
+import { createRequire } from 'module';
+import * as environment from "../config/environment.js";
+const require = createRequire(import.meta.url);
 const yargs = require('yargs/yargs');
-const {hideBin} = require('yargs/helpers');
-const environment = require('../config/environment');
 
 function parseArgs() {
   const argv = yargs(hideBin(process.argv))
@@ -46,6 +49,4 @@ function parseArgs() {
   return argv;
 }
 
-module.exports = {
-  parseArgs
-};
+export { parseArgs };

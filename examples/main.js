@@ -1,8 +1,8 @@
-const parseArgs = require('./modules/argumentParser');
-const GraphImporter = require("./modules/graphImporter");
+import {parseArgs} from './modules/argumentParser.js';
+import {GraphImporter} from './modules/graphImporter.js';
 
 
-const argv = parseArgs.parseArgs();
+const argv = parseArgs();
 
 const main = async () => {
   const graphName = argv.graphName;
@@ -16,7 +16,7 @@ const main = async () => {
 
   let graphImporter = new GraphImporter(arangoConfig, graphName, argv.dropGraph);
   await graphImporter.createGraph();
-  //await graphImporter.insertVertices();
+  await graphImporter.insertVertices();
   await graphImporter.insertEdges();
 }
 main().then(r => console.log('Everything is done')).catch(e => console.error(e));

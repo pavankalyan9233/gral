@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Tool to upload LDBC graph data to ArangoDB and run graph analytics queries",
   "main": "main.js",
+  "type": "module",
   "dependencies": {
     "arangojs": "^6.0.0",
     "yargs": "^16.2.0"

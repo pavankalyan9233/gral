@@ -1,4 +1,4 @@
-const config = {
+export const config = {
   gral_instances: {
     arangodb_auth: "http://localhost:9999",
     service_auth: "http://localhost:1337",
@@ -12,8 +12,4 @@ const config = {
   test_configuration: {
     timeout: 10000,
   }
-};
-
-module.exports = {
-  config
 };
