@@ -1,12 +1,14 @@
-import { Database, aql } from 'arangojs';
+import {Database, aql} from 'arangojs';
 import fs from 'fs';
 import path from 'path';
-import { promisify } from 'util';
-import { exec as execSync } from 'child_process';
+import {promisify} from 'util';
+import {exec as execSync} from 'child_process';
+
 const exec = promisify(execSync);
 import axios from 'axios';
 import readline from 'readline';
 import PQueue from "p-queue";
+import * as https from "https";
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -115,6 +117,9 @@ export class GraphImporter {
           `${this.arangoEndpoint}/_db/${encodeURIComponent(db)}/_api/document/${encodeURIComponent(coll)}`,
           JSON.stringify(l),
           {
+            httpsAgent: new https.Agent({
+              rejectUnauthorized: false
+            }),
             headers: {
               "x-arango-async": "store"
             },
@@ -131,6 +136,9 @@ export class GraphImporter {
       while (i < jobs.length) {
         try {
           let r = await axios.put(`${this.arangoEndpoint}/_db/${encodeURIComponent(db)}/_api/job/${jobs[i]}`, null, {
+            httpsAgent: new https.Agent({
+              rejectUnauthorized: false
+            }),
             auth: {
               username: this.arangoUser,
               password: this.arangoPassword,
@@ -234,7 +242,7 @@ export class GraphImporter {
     if (!exists) {
       const edgeCollectionName = `${this.graphName}_e`;
       const vertexCollectionName = `${this.graphName}_v`;
-      const edgeDefinitions =[{
+      const edgeDefinitions = [{
         collection: edgeCollectionName,
         from: [vertexCollectionName],
         to: [vertexCollectionName],

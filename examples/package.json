@@ -11,8 +11,9 @@
     "p-queue": "^8.0.1"
   },
   "scripts": {
-    "start": "node main --help",
-    "twitter": "node main --graphName twitter_mpi",
+    "help": "node main.js --help",
+    "twitter": "node main.js --graphName twitter_mpi",
+    "wikiTalk": "node main.js --graphName wiki-Talk",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
