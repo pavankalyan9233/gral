@@ -14,9 +14,17 @@ const main = async () => {
     databaseName: argv.databaseName
   };
 
+  const skipVertices = argv.skipVertices;
+  const skipEdges = argv.skipEdges;
+
   let graphImporter = new GraphImporter(arangoConfig, graphName, argv.dropGraph);
   await graphImporter.createGraph();
-  await graphImporter.insertVertices();
-  await graphImporter.insertEdges();
+
+  if (!skipVertices) {
+    await graphImporter.insertVertices();
+  }
+  if (!skipEdges) {
+    await graphImporter.insertEdges();
+  }
 }
 main().then(r => console.log('Everything is done')).catch(e => console.error(e));

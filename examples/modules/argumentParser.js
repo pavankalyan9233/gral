@@ -1,7 +1,8 @@
-import { hideBin } from 'yargs/helpers';
-import { config } from '../config/environment.js';
-import { createRequire } from 'module';
+import {hideBin} from 'yargs/helpers';
+import {config} from '../config/environment.js';
+import {createRequire} from 'module';
 import * as environment from "../config/environment.js";
+
 const require = createRequire(import.meta.url);
 const yargs = require('yargs/yargs');
 
@@ -43,10 +44,22 @@ function parseArgs() {
       description: 'Drop the graph before creating it',
       default: false, // Default value if not provided
     })
+    .options('skipVertices', {
+      alias: 'sv',
+      type: 'boolean',
+      description: 'Skip vertices insertion',
+      default: false, // Default value if not provided
+    })
+    .options('skipEdges', {
+      alias: 'se',
+      type: 'boolean',
+      description: 'Skip edges insertion',
+      default: false, // Default value if not provided
+    })
     .help()
     .argv;
 
   return argv;
 }
 
-export { parseArgs };
+export {parseArgs};
