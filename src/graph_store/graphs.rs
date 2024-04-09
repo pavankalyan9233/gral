@@ -53,7 +53,7 @@ impl VertexIndex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Edge {
     pub from: VertexIndex, // index of vertex
     pub to: VertexIndex,   // index of vertex
@@ -98,10 +98,10 @@ pub struct Graph {
     pub edges_by_from: Vec<VertexIndex>,
 
     // Maps indices of vertices to offsets in edge index by to:
-    pub edge_index_by_to: Vec<u64>,
+    edge_index_by_to: Vec<u64>,
 
     // Edge index by to:
-    pub edges_by_to: Vec<VertexIndex>,
+    edges_by_to: Vec<VertexIndex>,
 
     // store keys?
     pub store_keys: bool,
@@ -162,11 +162,6 @@ pub fn with_graphs(
     warp::any().map(move || graphs.clone())
 }
 
-struct EdgeTemp {
-    pub from: VertexIndex,
-    pub to: VertexIndex,
-}
-
 pub struct MemoryUsageGraph {
     pub bytes_total: usize,
     pub bytes_per_vertex: usize,
@@ -206,7 +201,7 @@ impl Graph {
         hash: VertexHash,
         key: Vec<u8>, // cannot be empty
         mut columns: Vec<Value>,
-    ) {
+    ) -> VertexIndex {
         // First detect a collision:
         let index = VertexIndex(self.index_to_hash.len() as u64);
         let mut actual = hash;
@@ -237,6 +232,7 @@ impl Graph {
             self.vertex_json[j].push(v);
         }
         self.vertex_id_size_sum += key.len();
+        index
     }
 
     pub fn number_of_vertices(&self) -> u64 {
@@ -256,25 +252,25 @@ impl Graph {
     }
 
     pub fn index_edges(&mut self, by_from: bool, by_to: bool) {
-        let mut tmp: Vec<EdgeTemp> = vec![];
+        if (self.edges_indexed_from && by_from) && (self.edges_indexed_to && by_to) {
+            return;
+        }
+
+        let mut tmp: Vec<Edge> = vec![];
         let number_v = self.number_of_vertices() as usize;
         let number_e = self.number_of_edges() as usize;
-        if (!self.edges_indexed_from && by_from) || (!self.edges_indexed_to && by_to) {
-            tmp.reserve(number_e);
-            for e in self.edges.iter() {
-                tmp.push(EdgeTemp {
-                    from: e.from,
-                    to: e.to,
-                });
-            }
+        tmp.reserve(number_e);
+        for e in self.edges.iter() {
+            tmp.push(Edge {
+                from: e.from,
+                to: e.to,
+            });
         }
 
         if !self.edges_indexed_from && by_from {
             info!("Graph: {}: Indexing edges by from...", self.graph_id);
             // Create lookup by from:
-            tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
-                a.from.to_u64().cmp(&b.from.to_u64())
-            });
+            tmp.sort_by(|a: &Edge, b: &Edge| -> Ordering { a.from.to_u64().cmp(&b.from.to_u64()) });
             self.edge_index_by_from.clear();
             self.edge_index_by_from.reserve(number_v + 1);
             self.edges_by_from.clear();
@@ -309,9 +305,7 @@ impl Graph {
         if !self.edges_indexed_to && by_to {
             info!("Graph: {}: Indexing edges by to...", self.graph_id);
             // Create lookup by to:
-            tmp.sort_by(|a: &EdgeTemp, b: &EdgeTemp| -> Ordering {
-                a.to.to_u64().cmp(&b.to.to_u64())
-            });
+            tmp.sort_by(|a: &Edge, b: &Edge| -> Ordering { a.to.to_u64().cmp(&b.to.to_u64()) });
             self.edge_index_by_to.clear();
             self.edge_index_by_to.reserve(number_v + 1);
             self.edges_by_to.clear();
@@ -400,6 +394,34 @@ impl Graph {
         let t = self.index_from_vertex_key(to);
         assert!(t.is_some());
         self.insert_edge(f.unwrap(), t.unwrap());
+    }
+
+    pub fn out_vertices(&self, source: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
+        assert!(self.edges_indexed_from);
+        self.edges_by_from[self.edge_index_by_from[source.to_u64() as usize] as usize
+            ..self.edge_index_by_from[source.to_u64() as usize + 1] as usize]
+            .iter()
+    }
+
+    pub fn out_vertex_count(&self, source: VertexIndex) -> u64 {
+        assert!(self.edges_indexed_from);
+        let first_edge = self.edge_index_by_from[source.to_u64() as usize];
+        let last_edge = self.edge_index_by_from[source.to_u64() as usize + 1];
+        last_edge - first_edge
+    }
+
+    pub fn in_vertices(&self, sink: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
+        assert!(self.edges_indexed_to);
+        self.edges_by_to[self.edge_index_by_to[sink.to_u64() as usize] as usize
+            ..self.edge_index_by_to[sink.to_u64() as usize + 1] as usize]
+            .iter()
+    }
+
+    pub fn in_vertex_count(&self, sink: VertexIndex) -> u64 {
+        assert!(self.edges_indexed_to);
+        let first_edge = self.edge_index_by_to[sink.to_u64() as usize];
+        let last_edge = self.edge_index_by_to[sink.to_u64() as usize + 1];
+        last_edge - first_edge
     }
 
     pub fn dump(&self) {
@@ -511,7 +533,7 @@ mod tests {
 
             // add one vertex
             let hash_a = VertexHash::new(56);
-            g.insert_vertex(
+            let index_a = g.insert_vertex(
                 hash_a,
                 b"V/A".to_vec(),
                 vec![
@@ -521,10 +543,7 @@ mod tests {
             );
 
             assert_eq!(g.index_to_hash, vec![hash_a]);
-            assert_eq!(
-                g.hash_to_index,
-                HashMap::from([(hash_a, VertexIndex::new(0))])
-            );
+            assert_eq!(g.hash_to_index, HashMap::from([(hash_a, index_a)]));
             assert_eq!(g.index_to_key, vec![b"V/A"]); // only if graph was created with true
             assert_eq!(
                 g.vertex_json,
@@ -538,7 +557,7 @@ mod tests {
 
             // add another vertex
             let hash_b = VertexHash::new(900);
-            g.insert_vertex(
+            let index_b = g.insert_vertex(
                 hash_b,
                 b"V/B".to_vec(),
                 vec![
@@ -550,7 +569,7 @@ mod tests {
             assert_eq!(g.index_to_hash, vec![hash_a, hash_b]);
             assert_eq!(
                 g.hash_to_index,
-                HashMap::from([(hash_a, VertexIndex::new(0)), (hash_b, VertexIndex::new(1))])
+                HashMap::from([(hash_a, index_a), (hash_b, index_b)])
             );
             assert_eq!(g.index_to_key, vec![b"V/A", b"V/B"]);
             assert_eq!(
@@ -592,14 +611,238 @@ mod tests {
         }
     }
 
-    #[test]
-    fn inserts_edge_into_given_graph() {}
+    mod inserts_edge {
+        use super::*;
 
-    #[test]
-    fn adds_from_index() {}
+        #[test]
+        fn inserts_dangling_edge_into_given_graph() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
 
-    #[test]
-    fn adds_to_index() {}
+            g.insert_edge(VertexIndex::new(1), VertexIndex(2));
+
+            assert_eq!(
+                g.edges,
+                vec![Edge {
+                    from: VertexIndex::new(1),
+                    to: VertexIndex::new(2)
+                }]
+            );
+        }
+
+        #[test]
+        fn inserts_edge_between_two_existing_vertices_into_given_graph() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            let from = g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
+            let to = g.insert_vertex(VertexHash::new(90), b"V/B".to_vec(), vec![]);
+
+            g.insert_edge(from, to);
+
+            assert_eq!(g.edges, vec![Edge { from, to }]);
+        }
+    }
+
+    mod from_index {
+        use super::*;
+
+        #[test]
+        fn adds_from_index_and_retrieves_out_vertices_via_function() {
+            // TODO does not work when edges are dangling (if number of vertices in graph is not correct,
+            // because edge_index_by_from should be number of vertices + 1)
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            // add 6 random vertices
+            g.add_vertex_nodata(b"V/A");
+            g.add_vertex_nodata(b"V/B");
+            g.add_vertex_nodata(b"V/C");
+            g.add_vertex_nodata(b"V/D");
+            g.add_vertex_nodata(b"V/E");
+            g.add_vertex_nodata(b"V/F");
+            // add edges
+            g.insert_edge(VertexIndex::new(4), VertexIndex(1));
+            g.insert_edge(VertexIndex::new(0), VertexIndex(3));
+            g.insert_edge(VertexIndex::new(0), VertexIndex(2));
+            g.insert_edge(VertexIndex::new(1), VertexIndex(6));
+
+            g.index_edges(true, false);
+
+            assert!(g.edges_indexed_from);
+
+            assert_eq!(
+                g.out_vertices(VertexIndex(0)).collect::<Vec<_>>(),
+                vec![&VertexIndex(3), &VertexIndex(2)]
+            );
+            assert_eq!(
+                g.out_vertices(VertexIndex(1)).collect::<Vec<_>>(),
+                vec![&VertexIndex(6)]
+            );
+            assert_eq!(g.out_vertices(VertexIndex(2)).count(), 0);
+            assert_eq!(g.out_vertices(VertexIndex(3)).count(), 0);
+            assert_eq!(
+                g.out_vertices(VertexIndex(4)).collect::<Vec<_>>(),
+                vec![&VertexIndex(1)]
+            );
+        }
+
+        #[test]
+        fn adds_from_index_and_retrieves_out_vertices_via_direct_access() {
+            // TODO this test should be deleted
+            // after conncomp algorithms is rewritten to not need direct access
+            // (then from index properties in graph can be made private)
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            // add 6 random vertices
+            g.add_vertex_nodata(b"V/A");
+            g.add_vertex_nodata(b"V/B");
+            g.add_vertex_nodata(b"V/C");
+            g.add_vertex_nodata(b"V/D");
+            g.add_vertex_nodata(b"V/E");
+            g.add_vertex_nodata(b"V/F");
+            // add edges
+            g.insert_edge(VertexIndex::new(4), VertexIndex(1));
+            g.insert_edge(VertexIndex::new(0), VertexIndex(3));
+            g.insert_edge(VertexIndex::new(0), VertexIndex(2));
+            g.insert_edge(VertexIndex::new(1), VertexIndex(6));
+
+            g.index_edges(true, false);
+
+            assert!(g.edges_indexed_from);
+
+            assert_eq!(g.edge_index_by_from, vec![0, 2, 3, 3, 3, 4, 4]);
+            assert_eq!(
+                g.edges_by_from,
+                vec![
+                    VertexIndex(3),
+                    VertexIndex(2),
+                    VertexIndex(6),
+                    VertexIndex(1)
+                ]
+            );
+
+            // out edges of 0
+            assert_eq!(
+                &g.edges_by_from
+                    [g.edge_index_by_from[0] as usize..g.edge_index_by_from[1] as usize],
+                &vec![VertexIndex(3), VertexIndex(2)]
+            );
+            // out edges of 1
+            assert_eq!(
+                &g.edges_by_from
+                    [g.edge_index_by_from[1] as usize..g.edge_index_by_from[2] as usize],
+                &vec![VertexIndex(6)]
+            );
+            // out edges of 2
+            assert_eq!(
+                &g.edges_by_from
+                    [g.edge_index_by_from[2] as usize..g.edge_index_by_from[3] as usize],
+                &vec![]
+            );
+            // out edges of 3
+            assert_eq!(
+                &g.edges_by_from
+                    [g.edge_index_by_from[3] as usize..g.edge_index_by_from[4] as usize],
+                &vec![]
+            );
+            // out edges of 4
+            assert_eq!(
+                &g.edges_by_from
+                    [g.edge_index_by_from[4] as usize..g.edge_index_by_from[5] as usize],
+                &vec![VertexIndex(1)]
+            );
+        }
+
+        #[test]
+        #[should_panic]
+        fn requesting_out_vertices_in_not_properly_indexed_graph_panicks() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            g.add_vertex_nodata(b"V/A");
+            g.insert_edge(VertexIndex::new(0), VertexIndex(0));
+
+            g.out_vertices(VertexIndex(0)).count();
+        }
+
+        #[test]
+        fn counts_outgoing_vertices() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            g.add_vertex_nodata(b"V/A");
+            g.add_vertex_nodata(b"V/A");
+            g.insert_edge(VertexIndex::new(0), VertexIndex(0));
+            g.insert_edge(VertexIndex::new(0), VertexIndex(1));
+            g.index_edges(true, false);
+
+            assert_eq!(g.out_vertex_count(VertexIndex(0)), 2);
+        }
+    }
+
+    mod to_index {
+        use super::*;
+
+        #[test]
+        fn adds_to_index() {
+            // TODO does not work when edges are dangling (if number of vertices in graph is not correct,
+            // because edge_index_by_from should be number of vertices + 1)
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            // add 6 random vertices
+            g.add_vertex_nodata(b"V/A");
+            g.add_vertex_nodata(b"V/B");
+            g.add_vertex_nodata(b"V/C");
+            g.add_vertex_nodata(b"V/D");
+            g.add_vertex_nodata(b"V/E");
+            g.add_vertex_nodata(b"V/F");
+            // add edges
+            g.insert_edge(VertexIndex::new(1), VertexIndex(4));
+            g.insert_edge(VertexIndex::new(3), VertexIndex(0));
+            g.insert_edge(VertexIndex::new(2), VertexIndex(0));
+            g.insert_edge(VertexIndex::new(6), VertexIndex(1));
+
+            g.index_edges(false, true);
+
+            assert!(g.edges_indexed_to);
+
+            assert_eq!(
+                g.in_vertices(VertexIndex(0)).collect::<Vec<_>>(),
+                vec![&VertexIndex(3), &VertexIndex(2)]
+            );
+            assert_eq!(
+                g.in_vertices(VertexIndex(1)).collect::<Vec<_>>(),
+                vec![&VertexIndex(6)]
+            );
+            assert_eq!(g.in_vertices(VertexIndex(2)).count(), 0);
+            assert_eq!(g.in_vertices(VertexIndex(3)).count(), 0);
+            assert_eq!(
+                g.in_vertices(VertexIndex(4)).collect::<Vec<_>>(),
+                vec![&VertexIndex(1)]
+            );
+        }
+
+        #[test]
+        #[should_panic]
+        fn requesting_in_vertices_in_not_properly_indexed_graph_panicks() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            g.add_vertex_nodata(b"V/A");
+            g.insert_edge(VertexIndex::new(0), VertexIndex(0));
+
+            g.in_vertices(VertexIndex(0)).count();
+        }
+
+        #[test]
+        fn counts_incoming_vertices() {
+            let g_arc = Graph::new(true, 1, vec![]);
+            let mut g = g_arc.write().unwrap();
+            g.add_vertex_nodata(b"V/A");
+            g.add_vertex_nodata(b"V/A");
+            g.insert_edge(VertexIndex::new(0), VertexIndex(0));
+            g.insert_edge(VertexIndex::new(1), VertexIndex(0));
+            g.index_edges(false, true);
+
+            assert_eq!(g.in_vertex_count(VertexIndex(0)), 2);
+        }
+    }
 
     // maybe
 
