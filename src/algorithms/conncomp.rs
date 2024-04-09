@@ -1,4 +1,4 @@
-use crate::graph_store::graphs::Graph;
+use crate::graph_store::graph::Graph;
 use log::info;
 use std::time::Instant;
 

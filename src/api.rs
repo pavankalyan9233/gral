@@ -7,7 +7,8 @@ use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
-use crate::graph_store::graphs::{with_graphs, Graph, Graphs};
+use crate::graph_store::graph::Graph;
+use crate::graph_store::graphs::{with_graphs, Graphs};
 
 use crate::constants;
 use bytes::Bytes;

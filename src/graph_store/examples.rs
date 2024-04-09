@@ -2,7 +2,7 @@
 // Functions in here are only used in tests.
 // TODO: Find a proper place for this.
 
-use super::graphs::Graph;
+use super::graph::Graph;
 use std::sync::{Arc, RwLock};
 
 pub fn make_cyclic_graph(n: u32) -> Arc<RwLock<Graph>> {

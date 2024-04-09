@@ -6,7 +6,7 @@ use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 
-use crate::graph_store::graphs::Graph;
+use crate::graph_store::graph::Graph;
 
 pub trait Computation {
     fn is_ready(&self) -> bool;
