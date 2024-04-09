@@ -1209,17 +1209,16 @@ async fn api_get_arangodb_graph(
     }
 
     let graph = Graph::new(true, 0, body.vertex_attributes.clone());
-    let graph_clone = graph.clone(); // for background thread
 
     // And store it amongst the graphs:
     let mut graphs = graphs.lock().unwrap();
-    let graph_id = graphs.register(graph_clone.clone());
+    let graph_id = graphs.register(graph.clone());
 
     info!("Have created graph with id {}!", graph_id);
 
     // Now create a job object:
     let comp_arc = Arc::new(RwLock::new(LoadComputation {
-        graph: graph_clone.clone(),
+        graph: graph.clone(),
         shall_stop: false,
         total: 2, // will eventually be overwritten in background thread
         progress: 0,
@@ -1240,7 +1239,7 @@ async fn api_get_arangodb_graph(
             .unwrap()
             .block_on(async {
                 let res =
-                    fetch_graph_from_arangodb(user, body, args, graph_clone, comp_arc.clone())
+                    fetch_graph_from_arangodb(user, body, args, graph.clone(), comp_arc.clone())
                         .await;
                 let mut comp = comp_arc.write().unwrap();
                 match res {
