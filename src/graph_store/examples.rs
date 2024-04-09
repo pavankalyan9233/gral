@@ -6,7 +6,7 @@ use super::graph::Graph;
 use std::sync::{Arc, RwLock};
 
 pub fn make_cyclic_graph(n: u32) -> Arc<RwLock<Graph>> {
-    let g_arc = Graph::new(true, 1, vec![]);
+    let g_arc = Graph::new(true, vec![]);
     {
         let mut g = g_arc.write().unwrap();
         for i in 0..n {
@@ -26,7 +26,7 @@ pub fn make_cyclic_graph(n: u32) -> Arc<RwLock<Graph>> {
 }
 
 pub fn make_star_graph(n: u32) -> Arc<RwLock<Graph>> {
-    let g_arc = Graph::new(true, 1, vec![]);
+    let g_arc = Graph::new(true, vec![]);
     {
         let mut g = g_arc.write().unwrap();
         for i in 0..n {

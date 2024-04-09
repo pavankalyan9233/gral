@@ -1208,7 +1208,7 @@ async fn api_get_arangodb_graph(
         body.parallelism = 5;
     }
 
-    let graph = Graph::new(true, 0, body.vertex_attributes.clone());
+    let graph = Graph::new(true, body.vertex_attributes.clone());
 
     // And store it amongst the graphs:
     let mut graphs = graphs.lock().unwrap();

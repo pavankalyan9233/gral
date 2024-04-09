@@ -54,7 +54,7 @@ mod tests {
     #[test]
     fn starts_with_graph_id_1() {
         let mut graphs = Graphs::new();
-        let new_graph = Graph::new(false, 343, vec![]);
+        let new_graph = Graph::new(false, vec![]);
 
         assert_eq!(graphs.register(new_graph.clone()), 1);
     }
@@ -62,7 +62,7 @@ mod tests {
     #[test]
     fn registers_graph_in_graphs_list() {
         let mut graphs = Graphs::new();
-        let new_graph = Graph::new(false, 343, vec![]);
+        let new_graph = Graph::new(false, vec![]);
 
         let graph_id = graphs.register(new_graph.clone());
 
@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn updates_graph_id_during_its_registration() {
         let mut graphs = Graphs::new();
-        let new_graph = Graph::new(false, 343, vec![]);
+        let new_graph = Graph::new(false, vec![]);
 
         let graph_id = graphs.register(new_graph.clone());
 
@@ -83,8 +83,8 @@ mod tests {
     fn removes_graph_from_list() {
         let mut graphs = Graphs {
             list: HashMap::from([
-                (1, Graph::new(false, 1, vec![])),
-                (2, Graph::new(false, 2, vec![])),
+                (1, Graph::new(false, vec![])),
+                (2, Graph::new(false, vec![])),
             ]),
             next_id: 3,
         };

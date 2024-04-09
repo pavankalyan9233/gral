@@ -124,10 +124,10 @@ pub struct MemoryUsageGraph {
 }
 
 impl Graph {
-    pub fn new(store_keys: bool, id: u64, col_names: Vec<String>) -> Arc<RwLock<Graph>> {
+    pub fn new(store_keys: bool, col_names: Vec<String>) -> Arc<RwLock<Graph>> {
         increment_counter!("gral_mycounter_total");
         Arc::new(RwLock::new(Graph {
-            graph_id: id,
+            graph_id: 0,
             index_to_hash: vec![],
             hash_to_index: HashMap::new(),
             exceptions: HashMap::new(),
@@ -462,7 +462,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn panicks_when_created_graph_has_different_number_of_columns() {
-            let g_arc = Graph::new(true, 1, vec!["first column name".to_string()]);
+            let g_arc = Graph::new(true, vec!["first column name".to_string()]);
             let mut g = g_arc.write().unwrap();
             g.insert_vertex(
                 VertexHash(0),
@@ -478,7 +478,6 @@ mod tests {
         fn inserts_vertex_into_given_graph() {
             let g_arc = Graph::new(
                 true,
-                1,
                 vec![
                     "string column name".to_string(),
                     "number column name".to_string(),
@@ -544,7 +543,7 @@ mod tests {
 
         #[test]
         fn generates_new_vertex_hash_for_already_existing_hash() {
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
 
@@ -556,7 +555,7 @@ mod tests {
 
         #[test]
         fn does_not_care_about_duplicate_vertex_key() {
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
 
@@ -571,7 +570,7 @@ mod tests {
 
         #[test]
         fn inserts_dangling_edge_into_given_graph() {
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
 
             g.insert_edge(VertexIndex::new(1), VertexIndex(2));
@@ -587,7 +586,7 @@ mod tests {
 
         #[test]
         fn inserts_edge_between_two_existing_vertices_into_given_graph() {
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             let from = g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
             let to = g.insert_vertex(VertexHash::new(90), b"V/B".to_vec(), vec![]);
@@ -605,7 +604,7 @@ mod tests {
         fn adds_from_index_and_retrieves_out_vertices_via_function() {
             // TODO does not work when edges are dangling (if number of vertices in graph is not correct,
             // because edge_index_by_from should be number of vertices + 1)
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             // add 6 random vertices
             g.add_vertex_nodata(b"V/A");
@@ -645,7 +644,7 @@ mod tests {
             // TODO this test should be deleted
             // after conncomp algorithms is rewritten to not need direct access
             // (then from index properties in graph can be made private)
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             // add 6 random vertices
             g.add_vertex_nodata(b"V/A");
@@ -710,7 +709,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn requesting_out_vertices_in_not_properly_indexed_graph_panicks() {
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             g.add_vertex_nodata(b"V/A");
             g.insert_edge(VertexIndex::new(0), VertexIndex(0));
@@ -720,7 +719,7 @@ mod tests {
 
         #[test]
         fn counts_outgoing_vertices() {
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             g.add_vertex_nodata(b"V/A");
             g.add_vertex_nodata(b"V/A");
@@ -739,7 +738,7 @@ mod tests {
         fn adds_to_index() {
             // TODO does not work when edges are dangling (if number of vertices in graph is not correct,
             // because edge_index_by_from should be number of vertices + 1)
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             // add 6 random vertices
             g.add_vertex_nodata(b"V/A");
@@ -777,7 +776,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn requesting_in_vertices_in_not_properly_indexed_graph_panicks() {
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             g.add_vertex_nodata(b"V/A");
             g.insert_edge(VertexIndex::new(0), VertexIndex(0));
@@ -787,7 +786,7 @@ mod tests {
 
         #[test]
         fn counts_incoming_vertices() {
-            let g_arc = Graph::new(true, 1, vec![]);
+            let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             g.add_vertex_nodata(b"V/A");
             g.add_vertex_nodata(b"V/A");
