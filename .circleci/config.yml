@@ -131,6 +131,10 @@ jobs:
           keys:
             - v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}
 
+      # In the upcoming run section, three gral instances are being started, each using a different type of authentication
+      # First is using ArangoDB as the authentication endpoint
+      # Second is using the authentication service as the authentication endpoint
+      # Third is using an unreachable authentication service as the authentication endpoint
       - run:
           name: Integration Tests ArangoDB Auth
           command: |
