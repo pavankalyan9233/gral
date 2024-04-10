@@ -162,6 +162,7 @@ async fn authorize(
                     }
                     retry -= 1;
                     info!("Retrying authentication for another {} times", retry);
+                    info!("The error is {:?}", e);
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 }
             }
