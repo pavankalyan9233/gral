@@ -1,4 +1,4 @@
-use crate::graph_store::graphs::{Graph, VertexIndex};
+use crate::graph_store::graph::{Graph, VertexIndex};
 use log::info;
 
 pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, u32) {
