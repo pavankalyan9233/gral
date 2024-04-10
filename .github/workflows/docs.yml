@@ -20,7 +20,7 @@ jobs:
           options: -v ${{ github.workspace }}/protodoc:/protodoc -v ${{ github.workspace }}/proto:/proto
           run: |
             mkdir -p /protodoc/out
-            protoc -I proto --doc_out=protodoc/out --doc_opt=protodoc/ourhtml.mustache,index.html proto/graphanalyticsengine.proto
+            protoc -I proto --doc_out=protodoc/out --doc_opt=protodoc/githubpages.mustache,index.html proto/graphanalyticsengine.proto
 
       - name: Push generated documentation to another repository
         id: push_directory
