@@ -2,8 +2,10 @@ import {gral} from "./gral";
 import {config} from "../environment.config.ts";
 import {arangodb} from "./arangodb";
 
-export function setup() {
-  console.log("Starting the Integration Test Framework...");
+export async function setup() {
+  console.log("Starting the Integration Test Framework... Waiting for all services to be ready...");
+  // we'll try to wait up to 10s for arangodb to be ready
+  await arangodb.getArangoJWT(10);
 }
 
 export async function teardown() {

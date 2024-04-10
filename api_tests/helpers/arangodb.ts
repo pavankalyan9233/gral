@@ -9,13 +9,25 @@ function buildArangoDBUrl(path: string) {
 
 }
 
-async function getArangoJWT() {
-  const response = await axios.post(buildArangoDBUrl('/_open/auth'), {
-    username: config.arangodb.username,
-    password: config.arangodb.password
-  });
+async function getArangoJWT(maxRetries: number) {
+  let retries = 0;
 
-  return response.data['jwt'];
+  while (retries < maxRetries) {
+    try {
+      const response = await axios.post(buildArangoDBUrl('/_open/auth'), {
+        username: config.arangodb.username,
+        password: config.arangodb.password
+      });
+      return response.data['jwt'];
+    } catch (error) {
+      retries++;
+      console.log('ArangoDB not ready, retrying...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (retries === maxRetries) {
+        throw new Error(`Failed to get JWT after ${maxRetries} attempts.`);
+      }
+    }
+  }
 }
 
 export const arangodb = {
