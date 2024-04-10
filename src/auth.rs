@@ -2,7 +2,6 @@
 use hmac::{Hmac, Mac};
 use jwt::header::HeaderType;
 use jwt::{AlgorithmType, Header, SignWithKey, Token, VerifyWithKey};
-use log::{error, info};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::{Arc, Mutex};
