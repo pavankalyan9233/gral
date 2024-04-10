@@ -147,6 +147,9 @@ async fn authorize(
 
         let mut retry = 1000;
         loop {
+            info!("Authenticating via service: {}", url);
+            info!("Token: {}", token.clone());
+
             match authorize_via_service(token.clone(), url.clone()).await {
                 Ok(user) => {
                     info!("Authenticated user: {}", user);
