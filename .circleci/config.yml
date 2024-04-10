@@ -139,10 +139,11 @@ jobs:
           name: Integration Tests ArangoDB Auth
           command: |
             mkdir -p ~/app/api_tests/logs
+            sleep 5
             /tmp/workspace/target/release/gral --bind-port 9999 --arangodb-jwt-secrets ./secrets.jwt --arangodb-endpoints http://localhost:8529 &> api_tests/logs/arangodb_auth.txt &
             /tmp/workspace/target/release/gral --bind-port 1337 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://authservice:9092 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth.txt &
             /tmp/workspace/target/release/gral --bind-port 1336 --arangodb-jwt-secrets ./secrets.jwt --auth-service http://localhost:1234 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth_unreachable.txt &
-            sleep 6
+            sleep 3
             cd ~/app/api_tests && npm install && npm run test_only
             sudo pkill -9 gral
 
