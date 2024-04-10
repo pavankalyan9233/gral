@@ -11,19 +11,17 @@ const main = async () => {
     endpoint: argv.arangoEndpoint,
     username: argv.arangoUser,
     password: argv.arangoPassword,
-    databaseName: argv.databaseName
+    databaseName: argv.databaseName,
+    ca: argv.ca
   };
-
-  const skipVertices = argv.skipVertices;
-  const skipEdges = argv.skipEdges;
 
   let graphImporter = new GraphImporter(arangoConfig, graphName, argv.dropGraph);
   await graphImporter.createGraph();
 
-  if (!skipVertices) {
+  if (!argv.skipVertices) {
     await graphImporter.insertVertices();
   }
-  if (!skipEdges) {
+  if (!argv.skipEdges) {
     await graphImporter.insertEdges();
   }
 }

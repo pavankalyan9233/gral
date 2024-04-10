@@ -23,15 +23,23 @@ export class GraphImporter {
     this.arangoEndpoint = arangoConfig.endpoint;
     this.arangoUser = arangoConfig.username;
     this.arangoPassword = arangoConfig.password;
+    this.databaseName = arangoConfig.databaseName;
     this.graphName = graphName;
     this.dropGraph = dropGraph;
-    this.databaseName = arangoConfig.databaseName;
-    this.db = new Database({
-      url: this.arangoEndpoint,
-      databaseName: this.databaseName,
-      auth: {username: this.arangoUser, password: this.arangoPassword},
-    });
 
+    let agentOptions = {};
+    if (arangoConfig.ca) {
+      // This is specifically here to support ArangoGraph connections
+      agentOptions.ca = Buffer.from(arangoConfig.ca, "base64");
+    }
+
+    this.db = new Database({
+      databaseName: this.databaseName,
+      url: this.arangoEndpoint,
+      auth: {username: this.arangoUser, password: this.arangoPassword},
+      agentOptions: agentOptions
+    });
+    this.db.useBasicAuth(this.arangoUser, this.arangoPassword);
   }
 
   localDataExists() {
