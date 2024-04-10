@@ -1,16 +1,16 @@
-use byteorder::{BigEndian, WriteBytesExt};
+use http::Error;
 use log::{debug, info, warn, LevelFilter};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
-use warp::{http::Response, http::StatusCode, Filter};
+use warp::{http::StatusCode, reply::WithStatus, Filter};
 
+use crate::api::graphanalyticsengine::GraphAnalyticsEngineShutdownResponse;
 use crate::api::{api_filter, handle_errors};
 use crate::args::parse_args;
 use crate::auth::with_auth;
 use crate::computations::Computations;
-use crate::constants;
 use crate::graph_store::graphs::Graphs;
 use crate::metrics;
 
@@ -59,7 +59,7 @@ pub async fn run() {
     let shutdown = warp::path!("v1" / "shutdown")
         .and(warp::delete())
         .and(with_auth(the_args.clone()))
-        .map(move |_user| {
+        .map(move |_user| -> Result<WithStatus<Vec<u8>>, Error> {
             let mut tx = tx_clone.lock().unwrap();
             if tx.is_some() {
                 let tx = tx.take();
@@ -67,12 +67,15 @@ pub async fn run() {
                     .send(())
                     .expect("Expected to be able to send signal!");
             }
-            let mut v = Vec::new();
-            v.write_u32::<BigEndian>(constants::VERSION).unwrap();
-
-            Response::builder()
-                .header("Content-Type", "x-application-gral")
-                .body(v)
+            let response = GraphAnalyticsEngineShutdownResponse {
+                error: false,
+                error_code: 0,
+                error_message: "".to_string(),
+            };
+            Ok(warp::reply::with_status(
+                serde_json::to_vec(&response).expect("Should be serializable"),
+                StatusCode::OK,
+            ))
         });
     let the_graphs = Arc::new(Mutex::new(Graphs::new()));
     let the_computations = Arc::new(Mutex::new(Computations::new()));

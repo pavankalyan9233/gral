@@ -152,7 +152,7 @@ jobs:
 
       - store_artifacts:
           path: api_tests/logs
-          
+
   unittests:
     docker:
       - image: cimg/rust:1.76.0
@@ -189,7 +189,6 @@ jobs:
 
       - run:
           name: Build release
-          # TODO: Is this everything we need right now? Or any additional flags required here?
           command: |
             cargo build --release
 

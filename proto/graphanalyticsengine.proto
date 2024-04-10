@@ -199,7 +199,7 @@ service GraphAnalyticsEngineService {
     // Delete a specific job.
     rpc GraphAnalyticsEngineDeleteJob(GraphAnalyticsEngineJobId) returns (GraphAnalyticsEngineDeleteJobResponse) {
         option (google.api.http) = {
-            delete: "/v1/{job_id}"
+            delete: "/v1/jobs/{job_id}"
         };
     }
 
