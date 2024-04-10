@@ -144,7 +144,7 @@ async fn authorize(
     if !auth_service.is_empty() {
         // Use service to authenticate JWT token:
         let url = "http://".to_string() + &auth_service;
-        return authorize_via_service(token.clone(), url.clone()).await;
+        return authorize_via_service(token, url).await;
     }
 
     // Finally, try all secrets to verify signature:
