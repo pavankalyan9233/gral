@@ -143,7 +143,20 @@ async fn authorize(
     if !auth_service.is_empty() {
         // Use service to authenticate JWT token:
         let url = "http://".to_string() + &auth_service;
-        return authorize_via_service(token, url).await;
+
+        let mut retry = 1000;
+        loop {
+            match authorize_via_service(token.clone(), url.clone()).await {
+                Ok(user) => return Ok(user),
+                Err(e) => {
+                    if retry == 0 {
+                        return Err(e);
+                    }
+                    retry -= 1;
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            }
+        }
     }
 
     // Finally, try all secrets to verify signature:
