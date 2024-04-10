@@ -2,6 +2,7 @@
 use hmac::{Hmac, Mac};
 use jwt::header::HeaderType;
 use jwt::{AlgorithmType, Header, SignWithKey, Token, VerifyWithKey};
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::sync::{Arc, Mutex};
@@ -147,12 +148,17 @@ async fn authorize(
         let mut retry = 1000;
         loop {
             match authorize_via_service(token.clone(), url.clone()).await {
-                Ok(user) => return Ok(user),
+                Ok(user) => {
+                    info!("Authenticated user: {}", user);
+                    return Ok(user);
+                }
                 Err(e) => {
                     if retry == 0 {
+                        error!("Failed to authenticate: {:?}", e);
                         return Err(e);
                     }
                     retry -= 1;
+                    info!("Retrying authentication for another {} times", retry);
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 }
             }
