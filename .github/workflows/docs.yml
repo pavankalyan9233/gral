@@ -18,7 +18,9 @@ jobs:
           image: pseudomuto/protoc-gen-doc
           options: -v ${{ github.workspace }}/protodoc:/protodoc -v ${{ github.workspace }}/proto:/proto
           run: |
-            protoc -I proto --doc_out=protodoc --doc_opt=protodoc/ourhtml.mustache,index.html proto/graphanalyticsengine.proto
+            mkdir -p /protodoc/out
+            protoc -I proto --doc_out=protodoc/out --doc_opt=protodoc/ourhtml.mustache,index.html proto/graphanalyticsengine.proto
+
       - name: Push generated documentation to another repository
         id: push_directory
         uses: cpina/github-action-push-to-another-repository@v1.7.2
