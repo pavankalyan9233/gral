@@ -1,4 +1,4 @@
-use crate::graph_store::graphs::Graph;
+use crate::graph_store::graph::{Graph, VertexIndex};
 use log::info;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::HashMap;
@@ -57,13 +57,10 @@ pub fn labelpropagation_sync(
         // directed edges in both directions!
         for v in 0..nr {
             let mut counts = HashMap::<&String, u64>::with_capacity(101);
-            let first_edge = g.edge_index_by_from[v] as usize;
-            let last_edge = g.edge_index_by_from[v + 1] as usize;
-            let edge_nr = last_edge - first_edge;
-            if edge_nr > 0 {
-                for wi in first_edge..last_edge {
-                    let w = g.edges_by_from[wi].to_u64() as usize;
-                    let lab = labels[w];
+            let vi = VertexIndex::new(v as u64);
+            if g.out_vertex_count(vi) > 0 {
+                g.out_vertices(vi).for_each(|sink| {
+                    let lab = labels[sink.to_u64() as usize];
                     let count = counts.get_mut(lab);
                     match count {
                         Some(countref) => {
@@ -73,16 +70,12 @@ pub fn labelpropagation_sync(
                             counts.insert(lab, 1);
                         }
                     }
-                }
-            };
+                });
+            }
             // Now incoming edges:
-            let first_edge = g.edge_index_by_to[v] as usize;
-            let last_edge = g.edge_index_by_to[v + 1] as usize;
-            let edge_nr = last_edge - first_edge;
-            if edge_nr > 0 {
-                for wi in first_edge..last_edge {
-                    let w = g.edges_by_to[wi].to_u64() as usize;
-                    let lab = labels[w];
+            if g.in_vertex_count(vi) > 0 {
+                g.in_vertices(vi).for_each(|source| {
+                    let lab = labels[source.to_u64() as usize];
                     let count = counts.get_mut(lab);
                     match count {
                         Some(countref) => {
@@ -92,7 +85,7 @@ pub fn labelpropagation_sync(
                             counts.insert(lab, 1);
                         }
                     }
-                }
+                });
             }
             let mut choice: &String = labels[v]; // default to old label!
             if random_tiebreak {
@@ -199,13 +192,10 @@ pub fn labelpropagation_async(
         order.shuffle(&mut rng);
         for v in order.iter() {
             let mut counts = HashMap::<&String, u64>::with_capacity(101);
-            let first_edge = g.edge_index_by_from[*v] as usize;
-            let last_edge = g.edge_index_by_from[v + 1] as usize;
-            let edge_nr = last_edge - first_edge;
-            if edge_nr > 0 {
-                for wi in first_edge..last_edge {
-                    let w = g.edges_by_from[wi].to_u64() as usize;
-                    let lab = labels[w];
+            let vi = VertexIndex::new(*v as u64);
+            if g.out_vertex_count(vi) > 0 {
+                g.out_vertices(vi).for_each(|sink| {
+                    let lab = labels[sink.to_u64() as usize];
                     let count = counts.get_mut(lab);
                     match count {
                         Some(countref) => {
@@ -215,16 +205,12 @@ pub fn labelpropagation_async(
                             counts.insert(lab, 1);
                         }
                     }
-                }
+                });
             };
             // Now incoming edges:
-            let first_edge = g.edge_index_by_to[*v] as usize;
-            let last_edge = g.edge_index_by_to[v + 1] as usize;
-            let edge_nr = last_edge - first_edge;
-            if edge_nr > 0 {
-                for wi in first_edge..last_edge {
-                    let w = g.edges_by_to[wi].to_u64() as usize;
-                    let lab = labels[w];
+            if g.in_vertex_count(vi) > 0 {
+                g.in_vertices(vi).for_each(|source| {
+                    let lab = labels[source.to_u64() as usize];
                     let count = counts.get_mut(lab);
                     match count {
                         Some(countref) => {
@@ -234,7 +220,7 @@ pub fn labelpropagation_async(
                             counts.insert(lab, 1);
                         }
                     }
-                }
+                });
             }
             let mut choice: &String = labels[*v];
             if random_tiebreak {

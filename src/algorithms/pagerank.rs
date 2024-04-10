@@ -1,4 +1,4 @@
-use crate::graph_store::graphs::Graph;
+use crate::graph_store::graph::{Graph, VertexIndex};
 use log::info;
 
 pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, u32) {
@@ -15,15 +15,13 @@ pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, 
         // Go through all vertices and send rank away:
         let mut sink_sum: f64 = 0.0;
         for (v, rankv) in rank.iter().enumerate() {
-            let first_edge = g.edge_index_by_from[v] as usize;
-            let last_edge = g.edge_index_by_from[v + 1] as usize;
-            let edge_nr = last_edge - first_edge;
-            if edge_nr > 0 {
-                let tosend = damping_factor * rankv / edge_nr as f64;
-                for wi in first_edge..last_edge {
-                    let w = g.edges_by_from[wi].to_u64() as usize;
-                    new_rank[w] += tosend;
-                }
+            let vi = VertexIndex::new(v as u64);
+            let edge_count = g.out_vertex_count(vi);
+            if edge_count > 0 {
+                let tosend = damping_factor * rankv / edge_count as f64;
+                g.out_vertices(vi).for_each(|sink| {
+                    new_rank[sink.to_u64() as usize] += tosend;
+                });
             } else {
                 sink_sum += rankv * damping_factor;
             }

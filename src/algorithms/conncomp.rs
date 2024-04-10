@@ -1,4 +1,4 @@
-use crate::graph_store::graphs::Graph;
+use crate::graph_store::graph::Graph;
 use log::info;
 use std::time::Instant;
 
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_wcc_simple() {
-        let g_arc = Graph::new(true, 1, vec![]);
+        let g_arc = Graph::new(true, vec![]);
         let mut g = g_arc.write().unwrap();
         g.add_vertex_nodata(b"V/A");
         g.add_vertex_nodata(b"V/B");
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_scc_simple() {
-        let g_arc = Graph::new(true, 1, vec![]);
+        let g_arc = Graph::new(true, vec![]);
         let mut g = g_arc.write().unwrap();
         g.add_vertex_nodata(b"V/A");
         g.add_vertex_nodata(b"V/B");
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_scc_simple2() {
-        let g_arc = Graph::new(true, 1, vec![]);
+        let g_arc = Graph::new(true, vec![]);
         let mut g = g_arc.write().unwrap();
         g.add_vertex_nodata(b"V/A");
         g.add_vertex_nodata(b"V/B");
