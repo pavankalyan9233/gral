@@ -34,6 +34,17 @@ pub struct Edge {
     pub from: VertexIndex, // index of vertex
     pub to: VertexIndex,   // index of vertex
 }
+impl Edge {
+    pub fn create(from: VertexIndex, to: VertexIndex) -> Edge {
+        Edge { from, to }
+    }
+    pub fn from(&self) -> VertexIndex {
+        self.from
+    }
+    pub fn to(&self) -> VertexIndex {
+        self.to
+    }
+}
 
 #[derive(Debug)]
 pub struct Graph {
