@@ -197,17 +197,17 @@ impl Graph {
         self.insert_edge(f.unwrap(), t.unwrap());
     }
 
-    pub fn out_vertices(&self, source: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
+    pub fn out_neighbours(&self, source: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
         self.from_index.as_ref().expect("Out vertices cannot be calculated without a from index, which seems to be missing.")
 	    .neighbours(source)
     }
 
-    pub fn out_vertex_count(&self, source: VertexIndex) -> u64 {
+    pub fn out_neighbour_count(&self, source: VertexIndex) -> u64 {
         self.from_index.as_ref().expect("Out vertex count cannot be calculated without a from index, which seems to be missing.")
 	    .neighbour_count(source)
     }
 
-    pub fn in_vertices(&self, sink: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
+    pub fn in_neighbours(&self, sink: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
         self.to_index
             .as_ref()
             .expect(
@@ -216,7 +216,7 @@ impl Graph {
             .neighbours(sink)
     }
 
-    pub fn in_vertex_count(&self, sink: VertexIndex) -> u64 {
+    pub fn in_neighbour_count(&self, sink: VertexIndex) -> u64 {
         self.to_index.as_ref().expect("In vertex count cannot be calculated without a to index, which seems to be missing.")
 	    .neighbour_count(sink)
     }
@@ -437,17 +437,17 @@ mod tests {
             assert!(g.from_index.is_some());
 
             assert_eq!(
-                g.out_vertices(VertexIndex::new(0)).collect::<Vec<_>>(),
+                g.out_neighbours(VertexIndex::new(0)).collect::<Vec<_>>(),
                 vec![&VertexIndex::new(3), &VertexIndex::new(2)]
             );
             assert_eq!(
-                g.out_vertices(VertexIndex::new(1)).collect::<Vec<_>>(),
+                g.out_neighbours(VertexIndex::new(1)).collect::<Vec<_>>(),
                 vec![&VertexIndex::new(6)]
             );
-            assert_eq!(g.out_vertices(VertexIndex::new(2)).count(), 0);
-            assert_eq!(g.out_vertices(VertexIndex::new(3)).count(), 0);
+            assert_eq!(g.out_neighbours(VertexIndex::new(2)).count(), 0);
+            assert_eq!(g.out_neighbours(VertexIndex::new(3)).count(), 0);
             assert_eq!(
-                g.out_vertices(VertexIndex::new(4)).collect::<Vec<_>>(),
+                g.out_neighbours(VertexIndex::new(4)).collect::<Vec<_>>(),
                 vec![&VertexIndex::new(1)]
             );
         }
@@ -460,7 +460,7 @@ mod tests {
             g.insert_empty_vertex(b"V/A");
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
 
-            g.out_vertices(VertexIndex::new(0)).count();
+            g.out_neighbours(VertexIndex::new(0)).count();
         }
 
         #[test]
@@ -473,7 +473,7 @@ mod tests {
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(1));
             g.index_edges(true, false);
 
-            assert_eq!(g.out_vertex_count(VertexIndex::new(0)), 2);
+            assert_eq!(g.out_neighbour_count(VertexIndex::new(0)), 2);
         }
     }
 
@@ -504,17 +504,17 @@ mod tests {
             assert!(g.to_index.is_some());
 
             assert_eq!(
-                g.in_vertices(VertexIndex::new(0)).collect::<Vec<_>>(),
+                g.in_neighbours(VertexIndex::new(0)).collect::<Vec<_>>(),
                 vec![&VertexIndex::new(3), &VertexIndex::new(2)]
             );
             assert_eq!(
-                g.in_vertices(VertexIndex::new(1)).collect::<Vec<_>>(),
+                g.in_neighbours(VertexIndex::new(1)).collect::<Vec<_>>(),
                 vec![&VertexIndex::new(6)]
             );
-            assert_eq!(g.in_vertices(VertexIndex::new(2)).count(), 0);
-            assert_eq!(g.in_vertices(VertexIndex::new(3)).count(), 0);
+            assert_eq!(g.in_neighbours(VertexIndex::new(2)).count(), 0);
+            assert_eq!(g.in_neighbours(VertexIndex::new(3)).count(), 0);
             assert_eq!(
-                g.in_vertices(VertexIndex::new(4)).collect::<Vec<_>>(),
+                g.in_neighbours(VertexIndex::new(4)).collect::<Vec<_>>(),
                 vec![&VertexIndex::new(1)]
             );
         }
@@ -527,7 +527,7 @@ mod tests {
             g.insert_empty_vertex(b"V/A");
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
 
-            g.in_vertices(VertexIndex::new(0)).count();
+            g.in_neighbours(VertexIndex::new(0)).count();
         }
 
         #[test]
@@ -540,7 +540,7 @@ mod tests {
             g.insert_edge(VertexIndex::new(1), VertexIndex::new(0));
             g.index_edges(false, true);
 
-            assert_eq!(g.in_vertex_count(VertexIndex::new(0)), 2);
+            assert_eq!(g.in_neighbour_count(VertexIndex::new(0)), 2);
         }
     }
 }
