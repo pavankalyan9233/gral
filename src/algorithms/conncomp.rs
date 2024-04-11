@@ -251,11 +251,11 @@ mod tests {
     fn test_wcc_simple() {
         let g_arc = Graph::new(true, vec![]);
         let mut g = g_arc.write().unwrap();
-        g.add_vertex_nodata(b"V/A");
-        g.add_vertex_nodata(b"V/B");
-        g.add_vertex_nodata(b"V/C");
+        g.insert_empty_vertex(b"V/A");
+        g.insert_empty_vertex(b"V/B");
+        g.insert_empty_vertex(b"V/C");
         g.seal_vertices();
-        g.add_edge_nodata(b"V/A", b"V/B");
+        g.insert_edge_between_vertices(b"V/A", b"V/B");
         g.seal_edges();
         let (numb, comp, next) = weakly_connected_components(&g);
         assert_eq!(numb, 2);
@@ -273,11 +273,11 @@ mod tests {
     fn test_scc_simple() {
         let g_arc = Graph::new(true, vec![]);
         let mut g = g_arc.write().unwrap();
-        g.add_vertex_nodata(b"V/A");
-        g.add_vertex_nodata(b"V/B");
-        g.add_vertex_nodata(b"V/C");
+        g.insert_empty_vertex(b"V/A");
+        g.insert_empty_vertex(b"V/B");
+        g.insert_empty_vertex(b"V/C");
         g.seal_vertices();
-        g.add_edge_nodata(b"V/A", b"V/B");
+        g.insert_edge_between_vertices(b"V/A", b"V/B");
         g.seal_edges();
         g.index_edges(true, false);
         let (numb, comp, next) = strongly_connected_components(&g);
@@ -293,12 +293,12 @@ mod tests {
     fn test_scc_simple2() {
         let g_arc = Graph::new(true, vec![]);
         let mut g = g_arc.write().unwrap();
-        g.add_vertex_nodata(b"V/A");
-        g.add_vertex_nodata(b"V/B");
-        g.add_vertex_nodata(b"V/C");
+        g.insert_empty_vertex(b"V/A");
+        g.insert_empty_vertex(b"V/B");
+        g.insert_empty_vertex(b"V/C");
         g.seal_vertices();
-        g.add_edge_nodata(b"V/A", b"V/B");
-        g.add_edge_nodata(b"V/B", b"V/A");
+        g.insert_edge_between_vertices(b"V/A", b"V/B");
+        g.insert_edge_between_vertices(b"V/B", b"V/A");
         g.seal_edges();
         g.index_edges(true, false);
         let (numb, comp, next) = strongly_connected_components(&g);

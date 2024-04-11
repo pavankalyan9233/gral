@@ -5,7 +5,7 @@ use crate::args::GralArgs;
 use crate::auth::create_jwt_token;
 use crate::computations::{Computation, LoadComputation, StoreComputation};
 use crate::graph_store::graph::Graph;
-use crate::graph_store::vertex_key_index::{VertexHash, VertexIndex};
+use crate::graph_store::vertex_key_index::VertexIndex;
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
@@ -17,7 +17,6 @@ use std::thread::JoinHandle;
 use std::time::SystemTime;
 use tokio::task::JoinSet;
 use warp::http::StatusCode;
-use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ShardLocation {

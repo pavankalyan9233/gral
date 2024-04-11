@@ -4,9 +4,8 @@ use serde_json::Value;
 use std::cmp::Ordering;
 use std::mem::size_of;
 use std::sync::{Arc, RwLock};
-use xxhash_rust::xxh3::xxh3_64_with_seed;
 
-use crate::graph_store::vertex_key_index::{VertexHash, VertexIndex, VertexKeyIndex};
+use crate::graph_store::vertex_key_index::{VertexIndex, VertexKeyIndex};
 
 // Got this function from stack overflow:
 //  https://stackoverflow.com/questions/76454260/rust-serde-get-runtime-heap-size-of-vecserde-jsonvalue
@@ -121,7 +120,7 @@ impl Graph {
     }
 
     pub fn index_from_vertex_key(&self, k: &[u8]) -> Option<VertexIndex> {
-        self.vertex_key_index.index_from_vertex_key(k)
+        self.vertex_key_index.get(k)
     }
 
     pub fn insert_vertex(
@@ -260,11 +259,11 @@ impl Graph {
         self.edges.push(Edge { from, to });
     }
 
-    pub fn add_vertex_nodata(&mut self, key: &[u8]) {
+    pub fn insert_empty_vertex(&mut self, key: &[u8]) {
         self.insert_vertex(key.to_vec(), vec![]);
     }
 
-    pub fn add_edge_nodata(&mut self, from: &[u8], to: &[u8]) {
+    pub fn insert_edge_between_vertices(&mut self, from: &[u8], to: &[u8]) {
         let f = self.index_from_vertex_key(from);
         assert!(f.is_some());
         let t = self.index_from_vertex_key(to);
@@ -372,7 +371,6 @@ mod tests {
 
     mod inserts_vertex {
         use super::*;
-        use std::collections::HashMap;
 
         #[test]
         #[should_panic]
@@ -400,7 +398,7 @@ mod tests {
             let mut g = g_arc.write().unwrap();
 
             // add one vertex
-            let index_a = g.insert_vertex(
+            g.insert_vertex(
                 b"V/A".to_vec(),
                 vec![
                     serde_json::Value::String("string column entry A".to_string()),
@@ -421,7 +419,7 @@ mod tests {
             );
 
             // add another vertex
-            let index_b = g.insert_vertex(
+            g.insert_vertex(
                 b"V/B".to_vec(),
                 vec![
                     serde_json::Value::String("string column entry B".to_string()),
@@ -500,12 +498,12 @@ mod tests {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             // add 6 random vertices
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/B");
-            g.add_vertex_nodata(b"V/C");
-            g.add_vertex_nodata(b"V/D");
-            g.add_vertex_nodata(b"V/E");
-            g.add_vertex_nodata(b"V/F");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/B");
+            g.insert_empty_vertex(b"V/C");
+            g.insert_empty_vertex(b"V/D");
+            g.insert_empty_vertex(b"V/E");
+            g.insert_empty_vertex(b"V/F");
             // add edges
             g.insert_edge(VertexIndex::new(4), VertexIndex::new(1));
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(3));
@@ -540,12 +538,12 @@ mod tests {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             // add 6 random vertices
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/B");
-            g.add_vertex_nodata(b"V/C");
-            g.add_vertex_nodata(b"V/D");
-            g.add_vertex_nodata(b"V/E");
-            g.add_vertex_nodata(b"V/F");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/B");
+            g.insert_empty_vertex(b"V/C");
+            g.insert_empty_vertex(b"V/D");
+            g.insert_empty_vertex(b"V/E");
+            g.insert_empty_vertex(b"V/F");
             // add edges
             g.insert_edge(VertexIndex::new(4), VertexIndex::new(1));
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(3));
@@ -604,7 +602,7 @@ mod tests {
         fn requesting_out_vertices_in_not_properly_indexed_graph_panicks() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            g.add_vertex_nodata(b"V/A");
+            g.insert_empty_vertex(b"V/A");
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
 
             g.out_vertices(VertexIndex::new(0)).count();
@@ -614,8 +612,8 @@ mod tests {
         fn counts_outgoing_vertices() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/A");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/A");
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(1));
             g.index_edges(true, false);
@@ -634,12 +632,12 @@ mod tests {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             // add 6 random vertices
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/B");
-            g.add_vertex_nodata(b"V/C");
-            g.add_vertex_nodata(b"V/D");
-            g.add_vertex_nodata(b"V/E");
-            g.add_vertex_nodata(b"V/F");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/B");
+            g.insert_empty_vertex(b"V/C");
+            g.insert_empty_vertex(b"V/D");
+            g.insert_empty_vertex(b"V/E");
+            g.insert_empty_vertex(b"V/F");
             // add edges
             g.insert_edge(VertexIndex::new(1), VertexIndex::new(4));
             g.insert_edge(VertexIndex::new(3), VertexIndex::new(0));
@@ -671,7 +669,7 @@ mod tests {
         fn requesting_in_vertices_in_not_properly_indexed_graph_panicks() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            g.add_vertex_nodata(b"V/A");
+            g.insert_empty_vertex(b"V/A");
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
 
             g.in_vertices(VertexIndex::new(0)).count();
@@ -681,8 +679,8 @@ mod tests {
         fn counts_incoming_vertices() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/A");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/A");
             g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
             g.insert_edge(VertexIndex::new(1), VertexIndex::new(0));
             g.index_edges(false, true);

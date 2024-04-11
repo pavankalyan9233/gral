@@ -118,22 +118,18 @@ impl VertexKeyIndex {
         self.index_to_hash.len()
     }
 
-    // TODO rename: pub fn get(key: &[u8]) -> VertexIndex;
-    pub fn index_from_vertex_key(&self, k: &[u8]) -> Option<VertexIndex> {
+    pub fn get(&self, k: &[u8]) -> Option<VertexIndex> {
         let hash = (self.hasher)(k);
         match self.hash_to_index.get(&hash) {
             None => None,
             Some(index) => {
                 if index.has_collision() {
                     match self.exceptions.get(k) {
-                        Some(h) => match self.hash_to_index.get(h) {
-                            None => None,
-                            Some(exceptional_index) => Some(exceptional_index.clone()),
-                        },
+                        Some(h) => self.hash_to_index.get(h).copied(),
                         None => Some(index.pure()),
                     }
                 } else {
-                    Some(index.clone())
+                    Some(*index)
                 }
             }
         }
@@ -143,7 +139,7 @@ impl VertexKeyIndex {
         let size_hash = size_of::<VertexHash>();
         let size_index = size_of::<VertexIndex>();
 
-        return self.count()
+        self.count()
             * (
                 // index_to_hash:
                 size_hash
@@ -151,7 +147,7 @@ impl VertexKeyIndex {
 		    + size_hash + size_index
             )
 	    // Heuristics for the (hopefully few) exceptions:
-            + self.exceptions.len() * (48 + size_hash);
+            + self.exceptions.len() * (48 + size_hash)
     }
 }
 
@@ -172,7 +168,7 @@ mod test {
 
         let id = index.add(b"V/A");
 
-        assert_eq!(index.index_from_vertex_key(b"V/A"), Some(id));
+        assert_eq!(index.get(b"V/A"), Some(id));
         assert_eq!(
             index,
             VertexKeyIndex {
@@ -188,7 +184,7 @@ mod test {
     fn gives_none_for_non_existing_key_retrieval() {
         let index = VertexKeyIndex::new();
 
-        assert_eq!(index.index_from_vertex_key(b"V/B"), None);
+        assert_eq!(index.get(b"V/B"), None);
     }
 
     // TODO
@@ -205,11 +201,8 @@ mod test {
             let some_index_value = index.add(b"V/A");
             let colliding_index_value = index.add(b"V/B");
 
-            assert_eq!(index.index_from_vertex_key(b"V/A"), Some(some_index_value));
-            assert_eq!(
-                index.index_from_vertex_key(b"V/B"),
-                Some(colliding_index_value)
-            );
+            assert_eq!(index.get(b"V/A"), Some(some_index_value));
+            assert_eq!(index.get(b"V/B"), Some(colliding_index_value));
             assert_eq!(index.exceptions.len(), 1);
         }
 
@@ -223,10 +216,7 @@ mod test {
             index.add(b"V/A");
             let colliding_index_value = index.add(b"V/A");
 
-            assert_eq!(
-                index.index_from_vertex_key(b"V/A"),
-                Some(colliding_index_value)
-            );
+            assert_eq!(index.get(b"V/A"), Some(colliding_index_value));
             assert_eq!(index.exceptions.len(), 1);
             assert_eq!(index.index_to_hash.len(), 2);
         }
