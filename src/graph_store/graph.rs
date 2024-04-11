@@ -63,14 +63,14 @@ pub struct Graph {
     pub graph_id: u64,
 
     // List of hashes by index:
-    pub index_to_hash: Vec<VertexHash>,
+    index_to_hash: Vec<VertexHash>,
 
     // key is the hash of the vertex, value is the index, high bit
     // indicates a collision
-    pub hash_to_index: HashMap<VertexHash, VertexIndex>,
+    hash_to_index: HashMap<VertexHash, VertexIndex>,
 
     // key is the key of the vertex, value is the exceptional hash
-    pub exceptions: HashMap<Vec<u8>, VertexHash>,
+    exceptions: HashMap<Vec<u8>, VertexHash>,
 
     // Maps indices of vertices to their names, not necessarily used:
     pub index_to_key: Vec<Vec<u8>>,
@@ -302,7 +302,7 @@ impl Graph {
         );
     }
 
-    pub fn hash_from_vertex_key(&self, k: &[u8]) -> Option<VertexHash> {
+    fn hash_from_vertex_key(&self, k: &[u8]) -> Option<VertexHash> {
         let hash = VertexHash(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
         let index = self.hash_to_index.get(&hash);
         match index {
