@@ -543,10 +543,9 @@ pub async fn fetch_graph_from_arangodb(
                         let mut graph = graph_clone.write().unwrap();
                         for i in 0..vertex_keys.len() {
                             let k = &vertex_keys[i];
-                            let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
                             let mut cols: Vec<Value> = vec![];
                             std::mem::swap(&mut cols, &mut vertex_json[i]);
-                            graph.insert_vertex(hash, k.clone(), cols);
+                            graph.insert_vertex(k.clone(), cols);
                         }
                         nr_vertices = graph.number_of_vertices();
                     }
