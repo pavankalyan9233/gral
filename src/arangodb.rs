@@ -4,7 +4,8 @@ use crate::api::graphanalyticsengine::{
 use crate::args::GralArgs;
 use crate::auth::create_jwt_token;
 use crate::computations::{Computation, LoadComputation, StoreComputation};
-use crate::graph_store::graph::{Graph, VertexHash, VertexIndex};
+use crate::graph_store::graph::Graph;
+use crate::graph_store::vertex_key_index::{VertexHash, VertexIndex};
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
