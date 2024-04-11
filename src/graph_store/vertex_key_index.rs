@@ -22,10 +22,27 @@ impl VertexIndex {
     pub fn to_u64(self) -> u64 {
         self.0
     }
+    pub fn mark_collision(&mut self) {
+        *self = VertexIndex(self.0 | MSB64);
+    }
+    pub fn has_collision(&self) -> bool {
+        self.0 & MSB64 == MSB64
+    }
+    pub fn pure(&self) -> VertexIndex {
+        // without collision mark
+        VertexIndex(self.0 & !MSB64)
+    }
 }
+
+fn xxh3_hash(key: &[u8]) -> VertexHash {
+    VertexHash::new(xxh3_64_with_seed(key, 0xdeadbeefdeadbeef))
+}
+const MSB64: u64 = 1u64 << 63;
 
 #[derive(PartialEq)]
 pub struct VertexKeyIndex {
+    hasher: fn(&[u8]) -> VertexHash,
+
     // List of hashes by index:
     index_to_hash: Vec<VertexHash>,
 
@@ -46,13 +63,19 @@ impl fmt::Debug for VertexKeyIndex {
     }
 }
 
-impl VertexKeyIndex {
-    pub fn new() -> Self {
+impl Default for VertexKeyIndex {
+    fn default() -> Self {
         Self {
+            hasher: xxh3_hash,
             index_to_hash: vec![],
             hash_to_index: HashMap::new(),
             exceptions: HashMap::new(),
         }
+    }
+}
+impl VertexKeyIndex {
+    pub fn new() -> Self {
+        Self::default()
     }
     pub fn from(
         index_to_hash: Vec<VertexHash>,
@@ -60,15 +83,17 @@ impl VertexKeyIndex {
         exceptions: HashMap<Vec<u8>, VertexHash>,
     ) -> Self {
         Self {
+            hasher: xxh3_hash,
             index_to_hash,
             hash_to_index,
             exceptions,
         }
     }
 
-    pub fn add(&mut self, hash: VertexHash) -> VertexIndex {
+    pub fn add(&mut self, key: &[u8]) -> VertexIndex {
         // First detect a collision:
         let index = VertexIndex(self.index_to_hash.len() as u64);
+        let hash = (self.hasher)(key);
         let mut actual = hash;
         if self.hash_to_index.contains_key(&hash) {
             // This is a collision, we create a random alternative
@@ -81,9 +106,9 @@ impl VertexKeyIndex {
                 }
             }
             let oi = self.hash_to_index.get_mut(&hash).unwrap();
-            *oi = VertexIndex(oi.0 | 0x800000000000000);
+            oi.mark_collision();
+            self.exceptions.insert(key.to_vec(), actual);
         }
-        // Will succeed:
         self.index_to_hash.push(actual);
         self.hash_to_index.insert(actual, index);
         index
@@ -95,12 +120,21 @@ impl VertexKeyIndex {
 
     // TODO rename: pub fn get(key: &[u8]) -> VertexIndex;
     pub fn index_from_vertex_key(&self, k: &[u8]) -> Option<VertexIndex> {
-        let hash: Option<VertexHash> = self.hash_from_vertex_key(k);
-        match hash {
+        let hash = (self.hasher)(k);
+        match self.hash_to_index.get(&hash) {
             None => None,
-            Some(vh) => {
-                let index = self.hash_to_index.get(&vh);
-                index.copied()
+            Some(index) => {
+                if index.has_collision() {
+                    match self.exceptions.get(k) {
+                        Some(h) => match self.hash_to_index.get(h) {
+                            None => None,
+                            Some(exceptional_index) => Some(exceptional_index.clone()),
+                        },
+                        None => Some(index.pure()),
+                    }
+                } else {
+                    Some(index.clone())
+                }
             }
         }
     }
@@ -119,50 +153,82 @@ impl VertexKeyIndex {
 	    // Heuristics for the (hopefully few) exceptions:
             + self.exceptions.len() * (48 + size_hash);
     }
-
-    fn hash_from_vertex_key(&self, k: &[u8]) -> Option<VertexHash> {
-        let hash = VertexHash(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
-        let index = self.hash_to_index.get(&hash);
-        match index {
-            None => None,
-            Some(index) => {
-                if index.0 & 0x80000000_00000000 != 0 {
-                    // collision!
-                    let except = self.exceptions.get(k);
-                    match except {
-                        Some(h) => Some(*h),
-                        None => Some(hash),
-                    }
-                } else {
-                    Some(hash)
-                }
-            }
-        }
-    }
 }
-
 
 #[cfg(test)]
 mod test {
     use super::*;
 
+    fn length_hash(key: &[u8]) -> VertexHash {
+        VertexHash::new(key.len() as u64)
+    }
+
     #[test]
-        fn generates_new_vertex_hash_for_already_existing_hash() {
-            // let g_arc = Graph::new(true, vec![]);
-            // let mut g = g_arc.write().unwrap();
-            // g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
+    fn adds_and_retrieves_hash() {
+        let mut index = VertexKeyIndex {
+            hasher: length_hash,
+            ..Default::default()
+        };
 
-            // g.insert_vertex(VertexHash::new(32), b"V/B".to_vec(), vec![]);
+        let id = index.add(b"V/A");
 
-            // assert_eq!(
-            //     g.vertex_key_index,
-            //     VertexKeyIndex::from(
-            //         vec![hash_a, hash_b],
-            //         HashMap::from([(hash_a, index_a), (hash_b, index_b)]),
-            //         HashMap::new()
-            //     )
-            // );
-            // assert_eq!(g.index_to_hash[0], VertexHash::new(32));
-            // assert!(g.index_to_hash[1] != VertexHash::new(32));
+        assert_eq!(index.index_from_vertex_key(b"V/A"), Some(id));
+        assert_eq!(
+            index,
+            VertexKeyIndex {
+                index_to_hash: vec![length_hash(b"V/A")],
+                hash_to_index: HashMap::from([(length_hash(b"V/A"), VertexIndex::new(0))]),
+                hasher: length_hash,
+                ..Default::default()
+            }
+        );
+    }
+
+    #[test]
+    fn gives_none_for_non_existing_key_retrieval() {
+        let index = VertexKeyIndex::new();
+
+        assert_eq!(index.index_from_vertex_key(b"V/B"), None);
+    }
+
+    // TODO
+    mod hash_collisions {
+        use super::*;
+
+        #[test]
+        fn handles_hash_collisions() {
+            let mut index = VertexKeyIndex {
+                hasher: length_hash,
+                ..Default::default()
+            };
+
+            let some_index_value = index.add(b"V/A");
+            let colliding_index_value = index.add(b"V/B");
+
+            assert_eq!(index.index_from_vertex_key(b"V/A"), Some(some_index_value));
+            assert_eq!(
+                index.index_from_vertex_key(b"V/B"),
+                Some(colliding_index_value)
+            );
+            assert_eq!(index.exceptions.len(), 1);
+        }
+
+        #[test]
+        fn retrieves_only_last_entry_from_collision_with_same_key() {
+            let mut index = VertexKeyIndex {
+                hasher: length_hash,
+                ..Default::default()
+            };
+
+            index.add(b"V/A");
+            let colliding_index_value = index.add(b"V/A");
+
+            assert_eq!(
+                index.index_from_vertex_key(b"V/A"),
+                Some(colliding_index_value)
+            );
+            assert_eq!(index.exceptions.len(), 1);
+            assert_eq!(index.index_to_hash.len(), 2);
         }
     }
+}

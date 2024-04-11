@@ -130,7 +130,7 @@ impl Graph {
         key: Vec<u8>, // cannot be empty
         mut columns: Vec<Value>,
     ) -> VertexIndex {
-        let index = self.vertex_key_index.add(hash);
+        let index = self.vertex_key_index.add(&key);
         if self.store_keys {
             self.index_to_key.push(key.clone());
         }
