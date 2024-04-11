@@ -1,10 +1,10 @@
 use log::info;
 use metrics::increment_counter;
 use serde_json::Value;
-use std::cmp::Ordering;
 use std::mem::size_of;
 use std::sync::{Arc, RwLock};
 
+use crate::graph_store::neighbour_index::NeighbourIndex;
 use crate::graph_store::vertex_key_index::{VertexIndex, VertexKeyIndex};
 
 // Got this function from stack overflow:
@@ -29,7 +29,7 @@ fn sizeof_val(v: &serde_json::Value) -> usize {
         }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Edge {
     pub from: VertexIndex, // index of vertex
     pub to: VertexIndex,   // index of vertex
@@ -55,6 +55,8 @@ pub struct Graph {
 
     // Maps indices of vertices to their names, not necessarily used:
     pub index_to_key: Vec<Vec<u8>>,
+    // store keys?
+    pub store_keys: bool,
 
     // JSON data for vertices. This is essentially a column store, on
     // loading a graph, we are given a list of attributes and we store,
@@ -70,28 +72,12 @@ pub struct Graph {
     // Edges as from/to tuples:
     pub edges: Vec<Edge>,
 
-    // Maps indices of vertices to offsets in edges by from:
-    pub edge_index_by_from: Vec<u64>,
-
-    // Edge index by from:
-    pub edges_by_from: Vec<VertexIndex>,
-
-    // Maps indices of vertices to offsets in edge index by to:
-    edge_index_by_to: Vec<u64>,
-
-    // Edge index by to:
-    edges_by_to: Vec<VertexIndex>,
-
-    // store keys?
-    pub store_keys: bool,
+    pub from_index: Option<NeighbourIndex>,
+    to_index: Option<NeighbourIndex>,
 
     // sealed?
     pub vertices_sealed: bool,
     pub edges_sealed: bool,
-
-    // Flag, if edges are already indexed:
-    pub edges_indexed_from: bool,
-    pub edges_indexed_to: bool,
 
     // For memory size computations:
     pub vertex_id_size_sum: usize,
@@ -116,15 +102,11 @@ impl Graph {
             vertex_column_names: col_names,
             vertex_column_types: vec![],
             edges: vec![],
-            edges_by_from: vec![],
-            edge_index_by_from: vec![],
-            edges_by_to: vec![],
-            edge_index_by_to: vec![],
+            from_index: None,
+            to_index: None,
             store_keys,
             vertices_sealed: false,
             edges_sealed: false,
-            edges_indexed_from: false,
-            edges_indexed_to: false,
             vertex_id_size_sum: 0,
             vertex_json_size_sum: 0,
         }))
@@ -171,88 +153,21 @@ impl Graph {
     }
 
     pub fn index_edges(&mut self, by_from: bool, by_to: bool) {
-        if (self.edges_indexed_from && by_from) && (self.edges_indexed_to && by_to) {
+        if (self.from_index.is_some() && by_from) && (self.to_index.is_some() && by_to) {
             return;
         }
 
-        let mut tmp: Vec<Edge> = vec![];
+        let mut tmp: Vec<Edge> = self.edges.to_vec();
         let number_v = self.number_of_vertices() as usize;
-        let number_e = self.number_of_edges() as usize;
-        tmp.reserve(number_e);
-        for e in self.edges.iter() {
-            tmp.push(Edge {
-                from: e.from,
-                to: e.to,
-            });
-        }
 
-        if !self.edges_indexed_from && by_from {
+        if self.from_index.is_none() && by_from {
             info!("Graph: {}: Indexing edges by from...", self.graph_id);
-            // Create lookup by from:
-            tmp.sort_by(|a: &Edge, b: &Edge| -> Ordering { a.from.to_u64().cmp(&b.from.to_u64()) });
-            self.edge_index_by_from.clear();
-            self.edge_index_by_from.reserve(number_v + 1);
-            self.edges_by_from.clear();
-            self.edges_by_from.reserve(number_e);
-            let mut cur_from = VertexIndex::new(0);
-            let mut pos: u64 = 0; // position in self.edges_by_from where
-                                  // we currently write
-            self.edge_index_by_from.push(0);
-            // loop invariant: the start offset for cur_from has already been
-            // written into edge_index_by_from.
-            // loop invariant: pos == edges_by_from.len()
-            for e in tmp.iter() {
-                if e.from != cur_from {
-                    loop {
-                        cur_from = VertexIndex::new(cur_from.to_u64() + 1);
-                        self.edge_index_by_from.push(pos);
-                        if cur_from == e.from {
-                            break;
-                        }
-                    }
-                }
-                self.edges_by_from.push(e.to);
-                pos += 1;
-            }
-            while cur_from.to_u64() < number_v as u64 {
-                cur_from = VertexIndex::new(cur_from.to_u64() + 1);
-                self.edge_index_by_from.push(pos);
-            }
-            self.edges_indexed_from = true;
+            self.from_index = Some(NeighbourIndex::create_from(&mut tmp, number_v));
         }
 
-        if !self.edges_indexed_to && by_to {
+        if self.to_index.is_none() && by_to {
             info!("Graph: {}: Indexing edges by to...", self.graph_id);
-            // Create lookup by to:
-            tmp.sort_by(|a: &Edge, b: &Edge| -> Ordering { a.to.to_u64().cmp(&b.to.to_u64()) });
-            self.edge_index_by_to.clear();
-            self.edge_index_by_to.reserve(number_v + 1);
-            self.edges_by_to.clear();
-            self.edges_by_to.reserve(number_e);
-            let mut cur_to = VertexIndex::new(0);
-            let mut pos = 0; // position in self.edges_by_to where we currently write
-            self.edge_index_by_to.push(0);
-            // loop invariant: the start offset for cur_to has already been
-            // written into edge_index_by_to.
-            // loop invariant: pos == edges_by_to.len()
-            for e in tmp.iter() {
-                if e.to != cur_to {
-                    loop {
-                        cur_to = VertexIndex::new(cur_to.to_u64() + 1);
-                        self.edge_index_by_to.push(pos);
-                        if cur_to == e.to {
-                            break;
-                        }
-                    }
-                }
-                self.edges_by_to.push(e.from);
-                pos += 1;
-            }
-            while cur_to.to_u64() < number_v as u64 {
-                cur_to = VertexIndex::new(cur_to.to_u64() + 1);
-                self.edge_index_by_to.push(pos);
-            }
-            self.edges_indexed_to = true;
+            self.to_index = Some(NeighbourIndex::create_to(&mut tmp, number_v));
         }
     }
 
@@ -283,31 +198,27 @@ impl Graph {
     }
 
     pub fn out_vertices(&self, source: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
-        assert!(self.edges_indexed_from);
-        self.edges_by_from[self.edge_index_by_from[source.to_u64() as usize] as usize
-            ..self.edge_index_by_from[source.to_u64() as usize + 1] as usize]
-            .iter()
+        self.from_index.as_ref().expect("Out vertices cannot be calculated without a from index, which seems to be missing.")
+	    .neighbours(source)
     }
 
     pub fn out_vertex_count(&self, source: VertexIndex) -> u64 {
-        assert!(self.edges_indexed_from);
-        let first_edge = self.edge_index_by_from[source.to_u64() as usize];
-        let last_edge = self.edge_index_by_from[source.to_u64() as usize + 1];
-        last_edge - first_edge
+        self.from_index.as_ref().expect("Out vertex count cannot be calculated without a from index, which seems to be missing.")
+	    .neighbour_count(source)
     }
 
     pub fn in_vertices(&self, sink: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
-        assert!(self.edges_indexed_to);
-        self.edges_by_to[self.edge_index_by_to[sink.to_u64() as usize] as usize
-            ..self.edge_index_by_to[sink.to_u64() as usize + 1] as usize]
-            .iter()
+        self.to_index
+            .as_ref()
+            .expect(
+                "In vertices cannot be calculated without a to index, which seems to be missing.",
+            )
+            .neighbours(sink)
     }
 
     pub fn in_vertex_count(&self, sink: VertexIndex) -> u64 {
-        assert!(self.edges_indexed_to);
-        let first_edge = self.edge_index_by_to[sink.to_u64() as usize];
-        let last_edge = self.edge_index_by_to[sink.to_u64() as usize + 1];
-        last_edge - first_edge
+        self.to_index.as_ref().expect("In vertex count cannot be calculated without a to index, which seems to be missing.")
+	    .neighbour_count(sink)
     }
 
     pub fn dump(&self) {
@@ -359,12 +270,12 @@ impl Graph {
             );
 
         // Edge index, if present:
-        if self.edges_indexed_from {
+        if self.from_index.is_some() {
             // edge_index_by_to and edge_by_to:
             total_v += nrv * size_of::<u64>();
             total_e += nre * size_index;
         }
-        if self.edges_indexed_to {
+        if self.to_index.is_some() {
             total_v += nrv * size_of::<u64>();
             total_e += nre * size_index;
         }
@@ -523,7 +434,7 @@ mod tests {
 
             g.index_edges(true, false);
 
-            assert!(g.edges_indexed_from);
+            assert!(g.from_index.is_some());
 
             assert_eq!(
                 g.out_vertices(VertexIndex::new(0)).collect::<Vec<_>>(),
@@ -538,73 +449,6 @@ mod tests {
             assert_eq!(
                 g.out_vertices(VertexIndex::new(4)).collect::<Vec<_>>(),
                 vec![&VertexIndex::new(1)]
-            );
-        }
-
-        #[test]
-        fn adds_from_index_and_retrieves_out_vertices_via_direct_access() {
-            // TODO this test should be deleted
-            // after conncomp algorithms is rewritten to not need direct access
-            // (then from index properties in graph can be made private)
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
-            // add 6 random vertices
-            g.insert_empty_vertex(b"V/A");
-            g.insert_empty_vertex(b"V/B");
-            g.insert_empty_vertex(b"V/C");
-            g.insert_empty_vertex(b"V/D");
-            g.insert_empty_vertex(b"V/E");
-            g.insert_empty_vertex(b"V/F");
-            // add edges
-            g.insert_edge(VertexIndex::new(4), VertexIndex::new(1));
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(3));
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(2));
-            g.insert_edge(VertexIndex::new(1), VertexIndex::new(6));
-
-            g.index_edges(true, false);
-
-            assert!(g.edges_indexed_from);
-
-            assert_eq!(g.edge_index_by_from, vec![0, 2, 3, 3, 3, 4, 4]);
-            assert_eq!(
-                g.edges_by_from,
-                vec![
-                    VertexIndex::new(3),
-                    VertexIndex::new(2),
-                    VertexIndex::new(6),
-                    VertexIndex::new(1)
-                ]
-            );
-
-            // out edges of 0
-            assert_eq!(
-                &g.edges_by_from
-                    [g.edge_index_by_from[0] as usize..g.edge_index_by_from[1] as usize],
-                &vec![VertexIndex::new(3), VertexIndex::new(2)]
-            );
-            // out edges of 1
-            assert_eq!(
-                &g.edges_by_from
-                    [g.edge_index_by_from[1] as usize..g.edge_index_by_from[2] as usize],
-                &vec![VertexIndex::new(6)]
-            );
-            // out edges of 2
-            assert_eq!(
-                &g.edges_by_from
-                    [g.edge_index_by_from[2] as usize..g.edge_index_by_from[3] as usize],
-                &vec![]
-            );
-            // out edges of 3
-            assert_eq!(
-                &g.edges_by_from
-                    [g.edge_index_by_from[3] as usize..g.edge_index_by_from[4] as usize],
-                &vec![]
-            );
-            // out edges of 4
-            assert_eq!(
-                &g.edges_by_from
-                    [g.edge_index_by_from[4] as usize..g.edge_index_by_from[5] as usize],
-                &vec![VertexIndex::new(1)]
             );
         }
 
@@ -657,7 +501,7 @@ mod tests {
 
             g.index_edges(false, true);
 
-            assert!(g.edges_indexed_to);
+            assert!(g.to_index.is_some());
 
             assert_eq!(
                 g.in_vertices(VertexIndex::new(0)).collect::<Vec<_>>(),
