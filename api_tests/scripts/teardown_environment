@@ -1,0 +1,14 @@
+#!/bin/bash
+
+cecho(){
+    RED="\033[0;31m"
+    GREEN="\033[0;32m"  # <-- [0 means not bold
+    YELLOW="\033[1;33m" # <-- [1 means bold
+    CYAN="\033[0;36m"
+
+    printf "${!1}${2} ${NC}\n" # <-- bash
+}
+
+cecho "CYAN" "Killing gral instances and shutting down docker containers..."
+killall -9 gral &> /dev/null
+docker compose down &> logs/docker_shutdown.txt

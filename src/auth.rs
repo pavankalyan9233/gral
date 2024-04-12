@@ -143,6 +143,13 @@ async fn authorize(
     if !auth_service.is_empty() {
         // Use service to authenticate JWT token:
         let url = "http://".to_string() + &auth_service;
+
+        if auth_service.starts_with("http") {
+            return Err(reject::custom(Unauthorized {
+                msg: format!("Bad URL format: {}", url),
+            }));
+        }
+
         return authorize_via_service(token, url).await;
     }
 

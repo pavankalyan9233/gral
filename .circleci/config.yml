@@ -58,7 +58,7 @@ jobs:
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Clippy
@@ -75,7 +75,7 @@ jobs:
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Format check
@@ -98,7 +98,7 @@ jobs:
           command: |
             cargo install grcov
             rustup component add llvm-tools-preview
-            CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test --lib
+            CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='cargo-test-%p-%m.profraw' cargo test
             grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html
 
       - store_artifacts:
@@ -111,30 +111,69 @@ jobs:
 
   integration:
     docker:
-      - image: cimg/rust:1.76.0
+      # Primary container image where all steps run.
+      - image: cimg/node:21.7.2
+      # Container for the separate authentication service
       - image: neunhoef/auth_grpc
+        name: authservice
         entrypoint:
           - /bin/sh
           - -c
           - mkdir /secrets && echo -n 'SuperSecretThingy' > /secrets/token && md5sum /secrets/token && /bin/arangodb_operator_integration --integration.authentication.v1 --integration.authentication.v1.path=/secrets --services.address=0.0.0.0:9092
+      # Container for ArangoDB cluster
       - image: arangodb/enterprise:3.12.0-deb
         command: |
           /bin/sh -c "echo -n 'SuperSecretThingy' > /tmp/arangodb.secret && md5sum /tmp/arangodb.secret && arangodb --mode=cluster --local=true --auth.jwt-secret=/tmp/arangodb.secret"
     working_directory: ~/app
     steps:
-      - get_code
-      - install_protobuf
+      - get_code # TODO: can be optimized to only get binary and integration test folder 'api_tests"
       - restore_cache:
           keys:
-            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}
+
+      # In the upcoming run section, three gral instances are being started, each using a different type of authentication
+      # First is using ArangoDB as the authentication endpoint
+      # Second is using the authentication service as the authentication endpoint
+      # Third is using an unreachable authentication service as the authentication endpoint
       - run:
           name: Integration Tests ArangoDB Auth
           command: |
-            RUST_BACKTRACE=1
-            cargo test --features test_arangodb_auth -- --test-threads=1
-            cargo test --features test_grpc_auth -- --test-threads=1
-            cargo test --features test_grpc_auth_unavailable -- --test-threads=1
-            cargo test --test '*'
+            mkdir -p ~/app/api_tests/logs
+            /tmp/workspace/target/release/gral --bind-port 9999 --arangodb-jwt-secrets ./secrets.jwt --arangodb-endpoints http://localhost:8529 &> api_tests/logs/arangodb_auth.txt &
+            /tmp/workspace/target/release/gral --bind-port 1337 --arangodb-jwt-secrets ./secrets.jwt --auth-service authservice:9092 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth.txt &
+            /tmp/workspace/target/release/gral --bind-port 1336 --arangodb-jwt-secrets ./secrets.jwt --auth-service localhost:1234 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth_unreachable.txt &
+            sleep 1
+            cd ~/app/api_tests && npm install && npm run test
+            sudo pkill -9 gral
+
+      - save_cache:
+          key: v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}
+          paths: ["~/app/api_tests/node_modules"]
+
+      - store_artifacts:
+          path: api_tests/logs
+
+  unittests:
+    docker:
+      - image: cimg/rust:1.76.0
+    working_directory: ~/app
+    steps:
+      - get_code
+      - install_protobuf
+
+      - restore_cache:
+          keys:
+            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+
+      - run:
+          name: Run tests
+          command: cargo test
+
+      # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
+      # be cached (target/debug/build, target/debug/deps, ...).
+      - save_cache:
+          key: v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          paths: ["target/debug/deps"]
 
   build:
     docker:
@@ -146,11 +185,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-
-      - run:
-          name: Run tests
-          command: cargo test --lib
+            - v1-cargo-release-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Build release
@@ -160,8 +195,16 @@ jobs:
       # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
       # be cached (target/debug/build, target/debug/deps, ...).
       - save_cache:
-          key: v1-cargo-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-          paths: ["target/debug/deps"]
+          key: v1-cargo-release-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          paths: ["target/release/deps"]
+
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target/release/gral
+      # TODO: Store test results?
+      #- store_test_results:
+      #    path: _build/test/lib/hello_phoenix
 
   docs:
     docker:
@@ -231,7 +274,7 @@ workflows:
       - coverage:
           requires:
             - do_copy_workspace
-      - integration:
+      - docs:
           requires:
             - do_copy_workspace
       - build:
@@ -239,11 +282,15 @@ workflows:
             - do_copy_workspace
             - lint
             - formatter
-            - coverage
-            - integration
-      - docs:
+      - unittests:
           requires:
             - do_copy_workspace
+            - lint
+            - formatter
+      - integration:
+          requires:
+            - do_copy_workspace
+            - build
 
       #- build-and-push-docker-image:
       #    context:
