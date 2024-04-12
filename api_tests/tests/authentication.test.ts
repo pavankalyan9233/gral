@@ -20,13 +20,12 @@ describe('Authentication tests', () => {
       expect(jwt).not.toBe('');
     });
 
-    test('GET /v1/graphs ', () => {
+    test('GET /v1/graphs ', async () => {
       for (let endpoint of gral_valid_auth_endpoints) {
         let url = gral.buildUrl(endpoint, '/v1/graphs');
-        axios.get(url, gral.buildHeaders(jwt)).then((response) => {
-          expect(response.status).toBe(200);
-          expect(response.data).toBeInstanceOf(Array);
-        });
+        const response = await axios.get(url, gral.buildHeaders(jwt));
+        expect(response.status).toBe(200);
+        expect(response.data).toBeInstanceOf(Array);
       }
     });
   });
@@ -34,10 +33,10 @@ describe('Authentication tests', () => {
   describe('With an invalid JWT token', () => {
     let jwt: String = 'invalid';
 
-    test('GET /v1/graphs ', () => {
+    test('GET /v1/graphs ', async () => {
       for (let endpoint of [...gral_valid_auth_endpoints, ...gral_invalid_auth_endpoints]) {
         let url = gral.buildUrl(endpoint, '/v1/graphs');
-        axios.get(url, gral.buildHeaders(jwt)).catch((error) => {
+        await axios.get(url, gral.buildHeaders(jwt)).catch((error) => {
           expect(error.response.status).toBe(401);
         });
       }
