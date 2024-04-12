@@ -9,7 +9,7 @@ function buildArangoDBUrl(path: string) {
 
 }
 
-async function getArangoJWT(maxRetries: number) {
+async function getArangoJWT(maxRetries: number = 1) {
   let retries = 0;
 
   while (retries < maxRetries) {

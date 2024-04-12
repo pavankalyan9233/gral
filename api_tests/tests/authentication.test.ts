@@ -12,6 +12,8 @@ describe('Authentication tests', () => {
 
     beforeAll(async () => {
       jwt = await arangodb.getArangoJWT();
+      expect(jwt).not.toBe('');
+      expect(jwt).not.toBeUndefined();
     }, config.test_configuration.timeout);
 
     test('JWT token should be generated via call to ArangoDB itself', () => {
