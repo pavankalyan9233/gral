@@ -18,6 +18,12 @@ Or alternatively, without the use of `npm`, run:
 node main.js --help
 ```
 
+Example importing the graph `wiki-Talk`, drop if exists, with 500 max queue size (edges) and 50 concurrent connections:
+
+```bash
+node main.js --graphName wiki-Talk -d true --mqs 500 --con 50
+```
+
 ## Important Data Usage Info
 
 This directory contains example datasets for testing and benchmarking GAE.
