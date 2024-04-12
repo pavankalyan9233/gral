@@ -6,8 +6,8 @@ import axios from 'axios';
 
 const gral_valid_auth_endpoints = [config.gral_instances.arangodb_auth, config.gral_instances.service_auth];
 const gral_invalid_auth_endpoints = [config.gral_instances.service_auth_unreachable];
-describe('Authentication tests', () => {
-  describe('With valid JWT token', () => {
+describe.concurrent('Authentication tests', () => {
+  describe.concurrent('With valid JWT token', () => {
     let jwt: String;
 
     beforeAll(async () => {
@@ -30,7 +30,7 @@ describe('Authentication tests', () => {
     });
   });
 
-  describe('With an invalid JWT token', () => {
+  describe.concurrent('With an invalid JWT token', () => {
     let jwt: String = 'invalid';
 
     test('GET /v1/graphs ', async () => {

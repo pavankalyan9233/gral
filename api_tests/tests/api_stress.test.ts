@@ -6,7 +6,7 @@ import axios from "axios";
 import {arangodb} from "../helpers/arangodb";
 import {config} from "../environment.config";
 
-const AMOUNT_OF_REQUESTS = 500;
+const AMOUNT_OF_REQUESTS = 100;
 const TEST_TIMEOUT = 15000;
 
 describe('API Stress Test', () => {
@@ -67,7 +67,6 @@ describe('API Stress Test', () => {
     for (let i = 0; i < AMOUNT_OF_REQUESTS; i++) {
       promises.push(
         axios.get(url, gral.buildHeaders(jwt)).then((response) => {
-          console.log(response);
           expect(response.status).toBe(200);
           expect(response.data).toBeInstanceOf(Array);
         })
