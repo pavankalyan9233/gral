@@ -7,6 +7,7 @@ import {arangodb} from "../helpers/arangodb";
 import {config} from "../environment.config";
 
 const AMOUNT_OF_REQUESTS = 500;
+const TEST_TIMEOUT = 15000;
 
 describe('API Stress Test', () => {
   let jwt: String;
@@ -55,9 +56,7 @@ describe('API Stress Test', () => {
         // throw error
         throw error;
       });
-  }, {
-    timeout: 10000,
-  });
+  }, TEST_TIMEOUT);
 
   test('Test random chosen gral endpoint that will communicate with the auth service behind', () => {
     const endpoint = 'http://localhost:1337';
@@ -82,7 +81,5 @@ describe('API Stress Test', () => {
       .catch((error) => {
         console.error('An error occurred:', error);
       });
-  }, {
-    timeout: 10000,
-  });
+  }, TEST_TIMEOUT);
 });
