@@ -15,7 +15,12 @@ const main = async () => {
     ca: argv.ca
   };
 
-  let graphImporter = new GraphImporter(arangoConfig, graphName, argv.dropGraph);
+  const importOptions = {
+    concurrency: argv.concurrency,
+    maxQueueSize: argv.maxQueueSize,
+  };
+  
+  let graphImporter = new GraphImporter(arangoConfig, graphName, argv.dropGraph, importOptions);
   await graphImporter.createGraph();
 
   if (!argv.skipVertices) {

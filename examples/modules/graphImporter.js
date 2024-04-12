@@ -11,21 +11,20 @@ import PQueue from "p-queue";
 import * as https from "https";
 import * as environment from "../config/environment.js";
 
-const CONCURRENCY = environment.config.import_configuration.concurrency;
-const MAX_QUEUE_SIZE = environment.config.import_configuration.max_queue_size;
-
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export class GraphImporter {
-  constructor(arangoConfig, graphName, dropGraph = false) {
+  constructor(arangoConfig, graphName, dropGraph = false, importOptions) {
     this.arangoEndpoint = arangoConfig.endpoint;
     this.arangoUser = arangoConfig.username;
     this.arangoPassword = arangoConfig.password;
     this.databaseName = arangoConfig.databaseName;
     this.graphName = graphName;
     this.dropGraph = dropGraph;
+    this.concurrency = importOptions.concurrency;
+    this.max_queue_size = importOptions.maxQueueSize;
 
     let agentOptions = {};
     if (arangoConfig.ca) {
@@ -195,7 +194,7 @@ export class GraphImporter {
 
     let counter = 0;
     let docs = [];
-    const queue = new PQueue({concurrency: CONCURRENCY});
+    const queue = new PQueue({concurrency: this.concurrency});
 
     queue.on('active', () => {
       console.log(`Working on edges. Queue Size: ${queue.size} - Still Pending: ${queue.pending}`);
@@ -212,7 +211,7 @@ export class GraphImporter {
       if (docs.length >= batchSize) {
 
         while (true) {
-          if (queue.size < MAX_QUEUE_SIZE) {
+          if (queue.size < this.max_queue_size) {
             break;
           } else {
             console.log("=> Queue rate limiting. Reached 1k elements. Sleeping 5 seconds.")

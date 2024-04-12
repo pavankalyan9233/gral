@@ -62,6 +62,18 @@ function parseArgs() {
       description: 'CA Certificate as string',
       default: null,
     })
+    .options('concurrency', {
+      alias: 'con',
+      type: 'number',
+      description: 'Number of concurrent operations',
+      default: environment.config.import_configuration.concurrency,
+    })
+    .options('maxQueueSize', {
+      alias: 'mqs',
+      type: 'number',
+      description: 'Maximum queue size',
+      default: environment.config.import_configuration.max_queue_size
+    })
     .help()
     .argv;
 
