@@ -11,33 +11,40 @@ TO BE CONTINUED...
 
 Currently, we do have unit tests and integration tests. The unit tests
 are implemented in the same file as the code they test. The integration
-tests are implemented in separate files in the `tests` directory.
+tests are implemented in separate files in the `api_tests` directory.
 
-### All Tests
-To execute all tests, run the following command:
+### Unit Tests
+
+To execute only the unit tests, run the following command:
 
 ```bash
 $ cargo test
 ```
-Note: ArangoDB must be running for the integration tests to pass.
-An ArangoDB Cluster is expected to be reachable via Coordinator at `http://localhost:8529`.
-Also, it must be started with the same secret token as the one in the `secrets.jwt/token` file.
-To make life simpler, you can just use the `docker-compose.yml` file in the root directory to start an ArangoDB Cluster.
-This will also start the authentication service in a separate container.
 
-```bash
+### Integration Tests
 
-### Unit Testing
-To execute only the unit tests, run the following command:
-
-```bash
-$ cargo test --lib
-```
-
-### Integration Testing
 To execute only the integration tests, run the following command:
 
 ```bash
-$ cargo test --test '*'
+$ cd api_tests
+$ npm install
+$ npm test
 ```
-Note: ArangoDB must be running for the integration tests to pass.
+
+`npm install` only needs to be executed once.
+
+`npm test` will start multiple gral instances as binaries. Also it will use  docker-compose.yml
+to start a docker container with an ArangoDB Cluster and the additional authentication service.  
+
+#### Prerequisites
+
+Applications you need on your machine to run the integration tests:
+* Docker
+* Node
+* NPM
+
+> Please read [package.json](api_tests%2Fpackage.json) for more version details.
+  There you find the required node version to be available on your system.
+  At the time of writing this README, the required node version is `>= 21`.
+  The required npm version is `>= 10.5.1`
+

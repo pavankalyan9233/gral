@@ -1,0 +1,21 @@
+{
+  "engines": {
+    "node": ">=21"
+  },
+  "type": "module",
+  "dependencies": {
+    "arangojs": "^8.8.1",
+    "axios": "^1.6.8",
+    "vitest": "^1.4.0"
+  },
+  "scripts": {
+    "test_full": "./scripts/prepare_environment && vitest --config vitest.config.ts run --pool=forks && ./scripts/teardown_environment",
+    "test": "vitest --config vitest.config.ts run --pool=forks",
+    "prepare_env": "./scripts/prepare_environment",
+    "teardown_env": "./scripts/teardown_environment"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "^1.10.6",
+    "@grpc/proto-loader": "^0.7.12"
+  }
+}
