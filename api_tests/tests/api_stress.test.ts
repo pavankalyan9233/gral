@@ -6,10 +6,15 @@ import axios from "axios";
 import {arangodb} from "../helpers/arangodb";
 import {config} from "../environment.config";
 
-const AMOUNT_OF_REQUESTS = 100;
-const TEST_TIMEOUT = 15000;
+const AMOUNT_OF_REQUESTS = 1000;
+const TEST_TIMEOUT = 10000;
 
-describe('API Stress Test', () => {
+// Currently this Suite is skipped by default.
+// Reason: It is not recommended to run this test in a CI/CD pipeline right now.
+// I've struggled to find a way to select proper constants for the test to run in a reasonable time.
+// I still want to keep this file as it has been helpful in the past to test the service under high load.
+// Additionally, this test file demonstrates how to use GRPC to communicate with the service in JavaScript.
+describe.skip('API Stress Test', () => {
   let jwt: String;
 
   beforeAll(async () => {
