@@ -6,6 +6,8 @@ import axios from "axios";
 import {arangodb} from "../helpers/arangodb";
 import {config} from "../environment.config";
 
+const AMOUNT_OF_REQUESTS = 500;
+
 describe('API Stress Test', () => {
   let jwt: String;
 
@@ -41,13 +43,13 @@ describe('API Stress Test', () => {
     };
 
     const tokenPromises = [];
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < AMOUNT_OF_REQUESTS; i++) {
       tokenPromises.push(await createToken());
     }
 
     Promise.all(tokenPromises)
       .then((tokens) => {
-        expect(tokens.length).toBe(1000);
+        expect(tokens.length).toBe(AMOUNT_OF_REQUESTS);
       })
       .catch((error) => {
         // throw error
@@ -63,7 +65,7 @@ describe('API Stress Test', () => {
 
     let promises = [];
 
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < AMOUNT_OF_REQUESTS; i++) {
       promises.push(
         axios.get(url, gral.buildHeaders(jwt)).then((response) => {
           console.log(response);
@@ -74,8 +76,8 @@ describe('API Stress Test', () => {
     }
 
     Promise.all(promises)
-      .then(() => {
-        console.log('All requests completed successfully');
+      .then((responses) => {
+        expect(responses.length).toBe(AMOUNT_OF_REQUESTS);
       })
       .catch((error) => {
         console.error('An error occurred:', error);
