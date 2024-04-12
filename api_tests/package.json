@@ -9,9 +9,13 @@
     "vitest": "^1.4.0"
   },
   "scripts": {
-    "test": "./scripts/prepare_environment && vitest --config vitest.config.ts run --pool=forks && ./scripts/teardown_environment",
-    "test_only": "vitest --config vitest.config.ts run --pool=forks",
+    "test_full": "./scripts/prepare_environment && vitest --config vitest.config.ts run --pool=forks && ./scripts/teardown_environment",
+    "test": "vitest --config vitest.config.ts run --pool=forks",
     "prepare_env": "./scripts/prepare_environment",
     "teardown_env": "./scripts/teardown_environment"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "^1.10.6",
+    "@grpc/proto-loader": "^0.7.12"
   }
 }
