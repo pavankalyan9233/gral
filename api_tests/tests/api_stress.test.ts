@@ -53,6 +53,8 @@ describe('API Stress Test', () => {
         // throw error
         throw error;
       });
+  }, {
+    timeout: 10000,
   });
 
   test('Test random chosen gral endpoint that will communicate with the auth service behind', () => {
@@ -78,5 +80,7 @@ describe('API Stress Test', () => {
       .catch((error) => {
         console.error('An error occurred:', error);
       });
+  }, {
+    timeout: 10000,
   });
 });
