@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Check if graphName argument is provided
+if [ $# -ne 1 ]; then
+    echo "Error: Exactly one argument required."
+    exit 1
+fi
+
+graphName=$1
+script="scripts/download-graphalytics-data-sets-r2.sh"
+
+# Find the line with the echo command for the given graphName
+line=$(grep -F "echo $graphName" $script)
+
+# Check if line was found
+if [ -z "$line" ]; then
+    echo "Error: No line found for graphName: $graphName"
+    exit 1
+fi
+
+# Create the directory if it doesn't exist
+mkdir -p "data/$graphName"
+
+# Extract the wget command from the line
+wget_command=$(echo $line | awk -F'&&' '{print $2}')
+
+# Change directory to the correct location
+cd "data/$graphName"
+
+# Execute the wget command
+eval $wget_command
+
+# Extract the tar archive
+tar_command=$(echo $line | awk -F'&&' '{print $3}')
+eval $tar_command
