@@ -29,7 +29,8 @@ node main.js --graphName wiki-Talk -d true --mqs 500 --con 50
 Currently, the vertices insert does not have any parameters. The import for edges (edge amount usually is way bigger
 than vertices), can be configured. On my test machine I've used the following parameters:
 Queue size and concurrent connections: `--mqs 200 --con 20` for the `twitter_mpi` dataset.
-On Hardware with 192GiB RAM and CPU: AMD Ryzen 9 7950X3D 16-Core Processor
+On Hardware with 192GiB RAM and CPU: AMD Ryzen 9 7950X3D 16-Core Processor. This seems to run stable. Using a bigger
+queue and connections lead to very slow import after a while.
 
 ## Important Data Usage Info
 
