@@ -43,14 +43,11 @@ const MSB64: u64 = 1u64 << 63;
 pub struct VertexKeyIndex {
     hasher: fn(&[u8]) -> VertexHash,
 
-    // List of hashes by index:
     index_to_hash: Vec<VertexHash>,
 
-    // key is the hash of the vertex, value is the index, high bit
-    // indicates a collision
+    // high bit indicates a collision
     hash_to_index: HashMap<VertexHash, VertexIndex>,
 
-    // key is the key of the vertex, value is the exceptional hash
     exceptions: HashMap<Vec<u8>, VertexHash>,
 }
 impl fmt::Debug for VertexKeyIndex {
@@ -187,7 +184,6 @@ mod test {
         assert_eq!(index.get(b"V/B"), None);
     }
 
-    // TODO
     mod hash_collisions {
         use super::*;
 
