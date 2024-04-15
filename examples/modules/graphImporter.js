@@ -11,6 +11,10 @@ import PQueue from "p-queue";
 import * as https from "https";
 import * as environment from "../config/environment.js";
 
+// Parameter for the queue update log messages
+let printMessages = true; // Flag to control printing messages
+const intervalTime = 2000; // 5 seconds in milliseconds
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -25,6 +29,8 @@ export class GraphImporter {
     this.dropGraph = dropGraph;
     this.concurrency = importOptions.concurrency;
     this.max_queue_size = importOptions.maxQueueSize;
+    this.expectedAmountOfVertices = null;
+    this.expectedAmountOfEdges = null;
 
     let agentOptions = {};
     if (arangoConfig.ca) {
@@ -66,7 +72,7 @@ export class GraphImporter {
     return lineCount;
   }
 
-  insertManyDocumentsIntoCollection = async (db, coll, maker, limit, batchSize) => {
+  insertManyDocumentsIntoCollection = async (db, coll, maker, limit, batchSize, vertexInsert = true) => {
     // This function uses the asynchronous API of `arangod` to quickly
     // insert a lot of documents into a collection. You can control which
     // documents to insert with the `maker` function. The arguments are:
@@ -96,9 +102,20 @@ export class GraphImporter {
     let jobs = [];
     let counter = 1;
     let documentCount = 0;
+
+    const {expectedAmountOfVertices, expectedAmountOfEdges} = await this.getVertexAndEdgeCountsToInsert();
+
+    let docsToBeInserted;
+    if (vertexInsert) {
+      docsToBeInserted = expectedAmountOfVertices;
+    } else {
+      // We are inserting edges here and passing an array instead of a maker method
+      docsToBeInserted = maker.length;
+    }
+
     while (true) {
       if (!done) {
-        while (l.length < batchSize) {
+        while (l.length < batchSize && documentCount < docsToBeInserted) {
           let d;
           if (Array.isArray(maker)) {
             d = maker;
@@ -197,7 +214,13 @@ export class GraphImporter {
     const queue = new PQueue({concurrency: this.concurrency});
 
     queue.on('active', () => {
-      console.log(`Working on edges. Queue Size: ${queue.size} - Still Pending: ${queue.pending}`);
+      if (printMessages) {
+        console.log(`Working on edges. Queue Size: ${queue.size} - Still Pending: ${queue.pending}`);
+        printMessages = false; // Set flag to false to prevent immediate consecutive prints
+        setTimeout(() => {
+          printMessages = true; // Set flag to true after 5 seconds
+        }, intervalTime);
+      }
     });
 
     for await (const line of rl) {
@@ -208,27 +231,34 @@ export class GraphImporter {
         _to: `${this.graphName}_v/${toSource}`,
       });
 
-      if (docs.length >= batchSize) {
-
+      if (docs.length === batchSize) {
         while (true) {
           if (queue.size < this.max_queue_size) {
             break;
           } else {
-            console.log("=> Queue rate limiting. Reached 1k elements. Sleeping 5 seconds.")
+            console.log(`=> Queue rate limiting. Reached ${this.max_queue_size} elements. Sleeping 5 seconds.`)
             await sleep(5000);
           }
         }
 
+        const copyDocs = [...docs];
         queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
-          docs, docs.length, batchSize));
+          copyDocs, copyDocs.length, batchSize, false));
         docs = [];
       }
     }
 
+    if (docs.length > 0) {
+      // last batch might still contain documents
+      const copyDocs = [...docs];
+      queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
+        copyDocs, copyDocs.length, batchSize, false));
+      docs = [];
+    }
+
     // wait for all futures
     await queue.onIdle();
-    console.log('12. All work is done');
-    console.log(`-> Inserted ${counter * batchSize} edges into collection ${this.graphName}_e`);
+    console.log(`-> Done inserting edges into collection ${this.graphName}_e`);
   }
 
   async insertEdges() {
@@ -246,8 +276,7 @@ export class GraphImporter {
       function (i) {
         return {_key: JSON.stringify(i)};
       },
-      lineCount, 10000);
-    console.log(`-> Inserted ${lineCount} vertices into collection ${this.graphName}_v`);
+      lineCount, 10000, true);
   }
 
   async createGraph(edgeDefinitions, options) {
@@ -275,5 +304,76 @@ export class GraphImporter {
     } else {
       throw new Error(`Graph ${this.graphName} already exists`);
     }
+  }
+
+  readGraphProperties() {
+    const filePath = new URL(`../data/${this.graphName}/${this.graphName}.properties`, import.meta.url).pathname;
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split('\n').filter(line => line.trim() !== '' && !line.startsWith('#'));
+
+    const result = {};
+    let currentSection = '';
+
+    lines.forEach(line => {
+      if (line.startsWith('graph.')) {
+        const section = line.substring(6, line.indexOf('.', 6));
+        const keyValuePair = line.substring(line.indexOf('.', 6) + 1).split('=').map(item => item.trim());
+
+        if (!result[section]) {
+          result[section] = {};
+        }
+
+        result[section][keyValuePair[0]] = keyValuePair[1];
+        currentSection = section;
+      } else {
+        const keyValuePair = line.split('=').map(item => item.trim());
+        result[currentSection][keyValuePair[0]] = keyValuePair[1];
+      }
+    });
+
+    return result;
+  }
+
+  async getVertexAndEdgeCountsToInsert() {
+
+    if (this.expectedAmountOfVertices && this.expectedAmountOfEdges) {
+      // returning cached value in case that method has been called already
+      return {
+        expectedAmountOfVertices: this.expectedAmountOfVertices,
+        expectedAmountOfEdges: this.expectedAmountOfEdges
+      };
+    }
+
+    const graphProperties = this.readGraphProperties();
+    const expectedAmountOfVertices = graphProperties[`${this.graphName}`]['meta.vertices'];
+    const expectedAmountOfEdges = graphProperties[`${this.graphName}`]['meta.edges'];
+
+    this.expectedAmountOfVertices = expectedAmountOfVertices;
+    this.expectedAmountOfEdges = expectedAmountOfEdges;
+
+    const graph = this.db.graph(this.graphName);
+    let exists = await graph.exists();
+    if (!exists) {
+      throw new Error(`Graph ${this.graphName} does not exist`);
+    }
+    return {expectedAmountOfVertices, expectedAmountOfEdges};
+  }
+
+  async verifyGraph() {
+    const {expectedAmountOfVertices, expectedAmountOfEdges} = await this.getVertexAndEdgeCountsToInsert();
+    const vertexCollection = this.db.collection(`${this.graphName}_v`);
+    const edgeCollection = this.db.collection(`${this.graphName}_e`);
+    const vProperties = await vertexCollection.count();
+    const eProperties = await edgeCollection.count();
+    const vCount = vProperties.count;
+    const eCount = eProperties.count;
+
+    if (vCount !== parseInt(expectedAmountOfVertices)) {
+      throw new Error(`Expected amount of vertices (${expectedAmountOfVertices}) does not match actual amount of vertices (${vCount})`);
+    }
+    if (eCount !== parseInt(expectedAmountOfEdges)) {
+      throw new Error(`Expected amount of edges (${expectedAmountOfEdges}) does not match actual amount of edges (${eCount})`);
+    }
+    console.log(`Graph ${this.graphName} verified. Expected amount of vertices: ${expectedAmountOfVertices}, actual amount of vertices: ${vCount}, expected amount of edges: ${expectedAmountOfEdges}, actual amount of edges: ${eCount}`)
   }
 }

@@ -29,5 +29,9 @@ const main = async () => {
   if (!argv.skipEdges) {
     await graphImporter.insertEdges();
   }
+  if (argv.verifyGraph) {
+    await graphImporter.verifyGraph();
+  }
+
 }
 main().then(r => console.log('Everything is done')).catch(e => console.error(e));

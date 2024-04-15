@@ -74,6 +74,12 @@ function parseArgs() {
       description: 'Maximum queue size',
       default: environment.config.import_configuration.max_queue_size
     })
+    .options('verifyGraph', {
+      alias: 'v',
+      type: 'boolean',
+      description: 'Verify insertions, will check if the number of inserted vertices and edges is correct',
+      default: false,
+    })
     .help()
     .argv;
 
