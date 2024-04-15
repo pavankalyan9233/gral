@@ -1,5 +1,8 @@
 # Example Datasets for Testing and Benchmarking GAE
 
+This tool downloads and imports LDBC Graph Analytics based datasets into ArangoDB.
+Link to the LDBC Graph Analytics source: https://ldbcouncil.org/benchmarks/graphalytics/
+
 ## Usage
 
 Download the dataset you want to use, see the [Important Data Usage Info](#important-data-usage-info) section below.
