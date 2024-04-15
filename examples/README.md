@@ -24,6 +24,13 @@ Example importing the graph `wiki-Talk`, drop if exists, with 500 max queue size
 node main.js --graphName wiki-Talk -d true --mqs 500 --con 50
 ```
 
+## Recommended Parameters
+
+Currently, the vertices insert does not have any parameters. The import for edges (edge amount usually is way bigger
+than vertices), can be configured. On my test machine I've used the following parameters:
+Queue size and concurrent connections: `--mqs 200 --con 20` for the `twitter_mpi` dataset.
+On Hardware with 192GiB RAM and CPU: AMD Ryzen 9 7950X3D 16-Core Processor
+
 ## Important Data Usage Info
 
 This directory contains example datasets for testing and benchmarking GAE.
