@@ -250,8 +250,7 @@ mod tests {
 
     #[test]
     fn test_wcc_simple() {
-        let g_arc = Graph::new(true, vec![]);
-        let mut g = g_arc.write().unwrap();
+        let mut g = Graph::new(true, vec![]);
         g.insert_empty_vertex(b"V/A");
         g.insert_empty_vertex(b"V/B");
         g.insert_empty_vertex(b"V/C");
@@ -272,8 +271,7 @@ mod tests {
 
     #[test]
     fn test_scc_simple() {
-        let g_arc = Graph::new(true, vec![]);
-        let mut g = g_arc.write().unwrap();
+        let mut g = Graph::new(true, vec![]);
         g.insert_empty_vertex(b"V/A");
         g.insert_empty_vertex(b"V/B");
         g.insert_empty_vertex(b"V/C");
@@ -292,8 +290,7 @@ mod tests {
 
     #[test]
     fn test_scc_simple2() {
-        let g_arc = Graph::new(true, vec![]);
-        let mut g = g_arc.write().unwrap();
+        let mut g = Graph::new(true, vec![]);
         g.insert_empty_vertex(b"V/A");
         g.insert_empty_vertex(b"V/B");
         g.insert_empty_vertex(b"V/C");

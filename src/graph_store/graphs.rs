@@ -56,7 +56,7 @@ mod tests {
         let mut graphs = Graphs::new();
         let new_graph = Graph::new(false, vec![]);
 
-        assert_eq!(graphs.register(new_graph.clone()), 1);
+        assert_eq!(graphs.register(Arc::new(RwLock::new(new_graph))), 1);
     }
 
     #[test]
@@ -64,7 +64,7 @@ mod tests {
         let mut graphs = Graphs::new();
         let new_graph = Graph::new(false, vec![]);
 
-        let graph_id = graphs.register(new_graph.clone());
+        let graph_id = graphs.register(Arc::new(RwLock::new(new_graph)));
 
         assert!(graphs.list.contains_key(&graph_id));
     }
@@ -73,18 +73,19 @@ mod tests {
     fn updates_graph_id_during_its_registration() {
         let mut graphs = Graphs::new();
         let new_graph = Graph::new(false, vec![]);
+        let graph_in_vec = Arc::new(RwLock::new(new_graph));
 
-        let graph_id = graphs.register(new_graph.clone());
+        let graph_id = graphs.register(graph_in_vec.clone());
 
-        assert_eq!(new_graph.read().unwrap().graph_id, graph_id);
+        assert_eq!(graph_in_vec.read().unwrap().graph_id, graph_id);
     }
 
     #[test]
     fn removes_graph_from_list() {
         let mut graphs = Graphs {
             list: HashMap::from([
-                (1, Graph::new(false, vec![])),
-                (2, Graph::new(false, vec![])),
+                (1, Arc::new(RwLock::new(Graph::new(false, vec![])))),
+                (2, Arc::new(RwLock::new(Graph::new(false, vec![])))),
             ]),
             next_id: 3,
         };

@@ -57,8 +57,7 @@ mod tests {
 
     #[test]
     fn test_pagerank_cyclic() {
-        let g_arc = make_cyclic_graph(10);
-        let g = g_arc.read().unwrap();
+        let g = make_cyclic_graph(10);
         let (rank, steps) = page_rank(&g, 5, 0.85);
         assert_eq!(steps, 1);
         for i in 0..10 {
@@ -69,8 +68,7 @@ mod tests {
 
     #[test]
     fn test_pagerank_star() {
-        let g_arc = make_star_graph(10);
-        let g = g_arc.read().unwrap();
+        let g = make_star_graph(10);
         let (rank, steps) = page_rank(&g, 100, 0.85);
         assert!(steps > 50 && steps < 70);
         assert!(0.49 < rank[9] && rank[9] < 0.50);
