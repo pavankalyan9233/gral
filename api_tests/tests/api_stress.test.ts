@@ -19,7 +19,7 @@ describe.skip('API Stress Test', () => {
 
   beforeAll(async () => {
     jwt = await arangodb.getArangoJWT(3);
-  }, config.test_configuration.timeout);
+  }, config.test_configuration.medium_timeout);
 
   test('Test high requests against service api', async () => {
     const endpoint = 'localhost:9092';

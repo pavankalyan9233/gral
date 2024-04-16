@@ -131,6 +131,16 @@ jobs:
           keys:
             - v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}
 
+      # It is important that this importer runs first, before integration tests are being executed as that data
+      # is being used in the integration tests
+      - run:
+          name: Test ArangoDB Importer
+          command: |
+            sudo apt-get update -y && sudo apt-get install zstd -y
+            cd ~/app/examples && npm install
+            ./scripts/downloadSingleDataset wiki-Talk
+            node main.js --graphName wiki-Talk -d true --mqs 100 --con 10 --verifyGraph true
+
       # In the upcoming run section, three gral instances are being started, each using a different type of authentication
       # First is using ArangoDB as the authentication endpoint
       # Second is using the authentication service as the authentication endpoint
@@ -145,14 +155,6 @@ jobs:
             sleep 1
             cd ~/app/api_tests && npm install && npm run test
             sudo pkill -9 gral
-
-      - run:
-          name: Test ArangoDB Importer
-          command: |
-            sudo apt-get update -y && sudo apt-get install zstd -y
-            cd ~/app/examples && npm install
-            ./scripts/downloadSingleDataset wiki-Talk
-            node main.js --graphName wiki-Talk -d true --mqs 100 --con 10 --verifyGraph true
 
       - save_cache:
           key: v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}

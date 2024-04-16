@@ -7,7 +7,7 @@ use crate::computations::{Computation, LoadComputation, StoreComputation};
 use crate::graph_store::graph::{Graph, VertexHash, VertexIndex};
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
-use log::{debug, info};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -296,6 +296,12 @@ async fn get_all_shard_data(
         id: u64,
     }
 
+    if dbservers.len() == 0 {
+        // This actually happened writing integration tests, we cannot divide by zero
+        error!("No dbserver found. List is empty.");
+        return Err("No dbserver found".to_string());
+    }
+
     let par_per_dbserver = (req.parallelism as usize + dbservers.len() - 1) / dbservers.len();
     let mut task_set = JoinSet::new();
     let mut endpoints_round_robin: usize = 0;
@@ -463,6 +469,7 @@ pub async fn fetch_graph_from_arangodb(
     let edge_coll_list = req.edge_collections.clone();
     let edge_map = compute_shard_map(&shard_dist, &edge_coll_list)?;
 
+    // TODO: also opt out in case zero shards have been found
     info!(
         "{:?} Need to fetch data from {} vertex shards and {} edge shards...",
         std::time::SystemTime::now().duration_since(begin).unwrap(),

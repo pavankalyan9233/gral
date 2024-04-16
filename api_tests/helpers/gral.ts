@@ -20,6 +20,31 @@ function buildHeaders(jwt: string) {
   };
 }
 
+async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: string) {
+  const url = buildUrl(endpoint, `/v1/jobs/${jobId}`);
+
+  let retries = 0;
+
+  // While this is a `while` loop, the test framework will forcefully stop
+  // the test after a certain amount of time. The default timeout is 5 seconds.
+  // For longer running tests, this needs to be adjusted inside the test() definition
+  // itself
+  while (true) {
+    try {
+      const response = await axios.get(url, buildHeaders(jwt));
+      const body = response.data;
+      if (body !== undefined && body.progress >= body.total) {
+        return {result: body, retriesNeeded: retries};
+      } else {
+        retries++;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } catch (error) {
+      throw new Error(`Job <${jobId}> did not finish in time: ${error}`);
+    }
+  }
+}
+
 async function shutdownInstance(endpoint: string, jwt: string) {
   return new Promise((resolve, reject) => {
     const url = buildUrl(endpoint, '/v1/shutdown');
@@ -34,7 +59,7 @@ async function shutdownInstance(endpoint: string, jwt: string) {
 }
 
 export const gral = {
-  buildUrl, buildHeaders, shutdownInstance
+  buildUrl, buildHeaders, shutdownInstance, waitForJobToBeFinished
 };
 
 module.exports = gral;
