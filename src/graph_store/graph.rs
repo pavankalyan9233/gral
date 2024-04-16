@@ -189,12 +189,19 @@ impl Graph {
         self.insert_vertex(key.to_vec(), vec![]);
     }
 
-    pub fn insert_edge_between_vertices(&mut self, from: &[u8], to: &[u8]) {
-        let f = self.index_from_vertex_key(from);
-        assert!(f.is_some());
-        let t = self.index_from_vertex_key(to);
-        assert!(t.is_some());
-        self.insert_edge(f.unwrap(), t.unwrap());
+    pub fn insert_edge_between_vertices(&mut self, from: &[u8], to: &[u8]) -> Result<(), String> {
+        let f = self.index_from_vertex_key(from).ok_or(format!(
+            "Cannot find _from vertex key {} in graph for edge to {}",
+            std::str::from_utf8(from).unwrap(),
+            std::str::from_utf8(to).unwrap(),
+        ))?;
+        let t = self.index_from_vertex_key(to).ok_or(format!(
+            "Cannot find _to vertex key {} in graph for edge from {}",
+            std::str::from_utf8(to).unwrap(),
+            std::str::from_utf8(from).unwrap(),
+        ))?;
+        self.insert_edge(f, t);
+        Ok(())
     }
 
     pub fn out_neighbours(&self, source: VertexIndex) -> impl Iterator<Item = &VertexIndex> {

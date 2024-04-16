@@ -5,7 +5,6 @@ use crate::args::GralArgs;
 use crate::auth::create_jwt_token;
 use crate::computations::{Computation, LoadComputation, StoreComputation};
 use crate::graph_store::graph::Graph;
-use crate::graph_store::vertex_key_index::VertexIndex;
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
@@ -633,39 +632,21 @@ pub async fn fetch_graph_from_arangodb(
                             }
                         }
                     }
-                    let mut edges: Vec<(VertexIndex, VertexIndex)> =
-                        Vec::with_capacity(froms.len());
-                    {
-                        // First translate keys to indexes by reading
-                        // the graph object:
-                        let graph = graph_clone.read().unwrap();
-                        assert!(froms.len() == tos.len());
-                        for i in 0..froms.len() {
-                            let from_key = &froms[i];
-                            let from_opt = graph.index_from_vertex_key(from_key);
-                            let to_key = &tos[i];
-                            let to_opt = graph.index_from_vertex_key(to_key);
-                            if let (Some(fo), Some(to)) = (from_opt, to_opt) {
-                                edges.push((fo, to));
-                            } else {
-                                eprintln!(
-                                    "Did not find _from value {} or _to value {} in vertex keys!",
-                                    std::str::from_utf8(from_key).unwrap(),
-                                    std::str::from_utf8(to_key).unwrap()
-                                );
-                            }
-                        }
-                    }
+
                     let nr_edges: u64;
                     {
-                        // Now actually insert edges by writing the graph
-                        // object:
                         let mut graph = graph_clone.write().unwrap();
-                        for e in edges {
-                            graph.insert_edge(e.0, e.1);
+                        assert!(froms.len() == tos.len());
+                        for i in 0..froms.len() {
+                            if let Err(message) =
+                                graph.insert_edge_between_vertices(&froms[i], &tos[i])
+                            {
+                                eprintln!("{}", message);
+                            }
                         }
                         nr_edges = graph.number_of_edges();
                     }
+
                     let mut prog = prog_reported_clone.lock().unwrap();
                     if nr_edges > *prog + 1000000_u64 {
                         *prog = nr_edges;
