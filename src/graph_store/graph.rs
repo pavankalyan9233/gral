@@ -1,12 +1,11 @@
 use log::info;
 use metrics::increment_counter;
-use rand::Rng;
 use serde_json::Value;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::{Arc, RwLock};
-use xxhash_rust::xxh3::xxh3_64_with_seed;
+
+use crate::graph_store::vertex_key_index::{VertexIndex, VertexKeyIndex};
 
 // Got this function from stack overflow:
 //  https://stackoverflow.com/questions/76454260/rust-serde-get-runtime-heap-size-of-vecserde-jsonvalue
@@ -30,27 +29,6 @@ fn sizeof_val(v: &serde_json::Value) -> usize {
         }
 }
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
-pub struct VertexHash(u64);
-
-impl VertexHash {
-    pub fn new(x: u64) -> VertexHash {
-        VertexHash(x)
-    }
-}
-
-#[derive(Eq, PartialEq, Clone, Copy, Ord, PartialOrd, Debug)]
-pub struct VertexIndex(u64);
-
-impl VertexIndex {
-    pub fn new(x: u64) -> VertexIndex {
-        VertexIndex(x)
-    }
-    pub fn to_u64(self) -> u64 {
-        self.0
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct Edge {
     pub from: VertexIndex, // index of vertex
@@ -62,15 +40,7 @@ pub struct Graph {
     // Index in list of graphs:
     pub graph_id: u64,
 
-    // List of hashes by index:
-    pub index_to_hash: Vec<VertexHash>,
-
-    // key is the hash of the vertex, value is the index, high bit
-    // indicates a collision
-    pub hash_to_index: HashMap<VertexHash, VertexIndex>,
-
-    // key is the key of the vertex, value is the exceptional hash
-    pub exceptions: HashMap<Vec<u8>, VertexHash>,
+    vertex_key_index: VertexKeyIndex,
 
     // Maps indices of vertices to their names, not necessarily used:
     pub index_to_key: Vec<Vec<u8>>,
@@ -128,9 +98,7 @@ impl Graph {
         increment_counter!("gral_mycounter_total");
         Arc::new(RwLock::new(Graph {
             graph_id: 0,
-            index_to_hash: vec![],
-            hash_to_index: HashMap::new(),
-            exceptions: HashMap::new(),
+            vertex_key_index: VertexKeyIndex::new(),
             index_to_key: vec![],
             vertex_nr_cols: col_names.len(),
             vertex_json: vec![vec![]; col_names.len()],
@@ -151,31 +119,16 @@ impl Graph {
         }))
     }
 
+    pub fn index_from_vertex_key(&self, k: &[u8]) -> Option<VertexIndex> {
+        self.vertex_key_index.get(k)
+    }
+
     pub fn insert_vertex(
         &mut self,
-        hash: VertexHash,
         key: Vec<u8>, // cannot be empty
         mut columns: Vec<Value>,
     ) -> VertexIndex {
-        // First detect a collision:
-        let index = VertexIndex(self.index_to_hash.len() as u64);
-        let mut actual = hash;
-        if self.hash_to_index.contains_key(&hash) {
-            // This is a collision, we create a random alternative
-            // hash and report the collision:
-            let mut rng = rand::thread_rng();
-            loop {
-                actual = VertexHash(rng.gen::<u64>());
-                if !self.hash_to_index.contains_key(&actual) {
-                    break;
-                }
-            }
-            let oi = self.hash_to_index.get_mut(&hash).unwrap();
-            *oi = VertexIndex(oi.0 | 0x800000000000000);
-        }
-        // Will succeed:
-        self.index_to_hash.push(actual);
-        self.hash_to_index.insert(actual, index);
+        let index = self.vertex_key_index.add(&key);
         if self.store_keys {
             self.index_to_key.push(key.clone());
         }
@@ -191,7 +144,7 @@ impl Graph {
     }
 
     pub fn number_of_vertices(&self) -> u64 {
-        self.index_to_hash.len() as u64
+        self.vertex_key_index.count() as u64
     }
 
     pub fn number_of_edges(&self) -> u64 {
@@ -202,7 +155,7 @@ impl Graph {
         self.vertices_sealed = true;
         info!(
             "Vertices sealed in graph, number of vertices: {}",
-            self.index_to_hash.len()
+            self.number_of_vertices()
         );
     }
 
@@ -297,53 +250,20 @@ impl Graph {
 
         info!(
             "Sealed graph with {} vertices and {} edges.",
-            self.index_to_hash.len(),
+            self.number_of_vertices(),
             self.edges.len()
         );
-    }
-
-    pub fn hash_from_vertex_key(&self, k: &[u8]) -> Option<VertexHash> {
-        let hash = VertexHash(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
-        let index = self.hash_to_index.get(&hash);
-        match index {
-            None => None,
-            Some(index) => {
-                if index.0 & 0x80000000_00000000 != 0 {
-                    // collision!
-                    let except = self.exceptions.get(k);
-                    match except {
-                        Some(h) => Some(*h),
-                        None => Some(hash),
-                    }
-                } else {
-                    Some(hash)
-                }
-            }
-        }
-    }
-
-    pub fn index_from_vertex_key(&self, k: &[u8]) -> Option<VertexIndex> {
-        let hash: Option<VertexHash> = self.hash_from_vertex_key(k);
-        match hash {
-            None => None,
-            Some(vh) => {
-                let index = self.hash_to_index.get(&vh);
-                index.copied()
-            }
-        }
     }
 
     pub fn insert_edge(&mut self, from: VertexIndex, to: VertexIndex) {
         self.edges.push(Edge { from, to });
     }
 
-    pub fn add_vertex_nodata(&mut self, key: &[u8]) {
-        let key = key.to_vec();
-        let hash = VertexHash::new(xxh3_64_with_seed(&key, 0xdeadbeefdeadbeef));
-        self.insert_vertex(hash, key, vec![]);
+    pub fn insert_empty_vertex(&mut self, key: &[u8]) {
+        self.insert_vertex(key.to_vec(), vec![]);
     }
 
-    pub fn add_edge_nodata(&mut self, from: &[u8], to: &[u8]) {
+    pub fn insert_edge_between_vertices(&mut self, from: &[u8], to: &[u8]) {
         let f = self.index_from_vertex_key(from);
         assert!(f.is_some());
         let t = self.index_from_vertex_key(to);
@@ -411,17 +331,10 @@ impl Graph {
     pub fn memory_usage(&self) -> MemoryUsageGraph {
         let nrv = self.number_of_vertices() as usize;
         let nre = self.number_of_edges() as usize;
-        let size_hash = size_of::<VertexHash>();
         let size_index = size_of::<VertexIndex>();
 
         // First what we always have:
-        let mut total_v: usize = nrv * (
-                // index_to_hash:
-                size_hash +
-                // hash_to_index:
-                size_hash + size_index
-            )  // Heuristics for the (hopefully few) exceptions:
-              + self.exceptions.len() * (48 + size_hash)
+        let mut total_v: usize = self.vertex_key_index.memory_in_bytes()
                 // index_to_key:
               + nrv * size_of::<Vec<u8>>() + self.vertex_id_size_sum
                 // JSON data:
@@ -465,7 +378,6 @@ mod tests {
             let g_arc = Graph::new(true, vec!["first column name".to_string()]);
             let mut g = g_arc.write().unwrap();
             g.insert_vertex(
-                VertexHash(0),
                 vec![],
                 vec![
                     serde_json::Value::String("first column entry".to_string()),
@@ -486,9 +398,7 @@ mod tests {
             let mut g = g_arc.write().unwrap();
 
             // add one vertex
-            let hash_a = VertexHash::new(56);
-            let index_a = g.insert_vertex(
-                hash_a,
+            g.insert_vertex(
                 b"V/A".to_vec(),
                 vec![
                     serde_json::Value::String("string column entry A".to_string()),
@@ -496,8 +406,7 @@ mod tests {
                 ],
             );
 
-            assert_eq!(g.index_to_hash, vec![hash_a]);
-            assert_eq!(g.hash_to_index, HashMap::from([(hash_a, index_a)]));
+            assert_eq!(g.vertex_key_index.count(), 1);
             assert_eq!(g.index_to_key, vec![b"V/A"]); // only if graph was created with true
             assert_eq!(
                 g.vertex_json,
@@ -510,9 +419,7 @@ mod tests {
             );
 
             // add another vertex
-            let hash_b = VertexHash::new(900);
-            let index_b = g.insert_vertex(
-                hash_b,
+            g.insert_vertex(
                 b"V/B".to_vec(),
                 vec![
                     serde_json::Value::String("string column entry B".to_string()),
@@ -520,11 +427,7 @@ mod tests {
                 ],
             );
 
-            assert_eq!(g.index_to_hash, vec![hash_a, hash_b]);
-            assert_eq!(
-                g.hash_to_index,
-                HashMap::from([(hash_a, index_a), (hash_b, index_b)])
-            );
+            assert_eq!(g.vertex_key_index.count(), 2);
             assert_eq!(g.index_to_key, vec![b"V/A", b"V/B"]);
             assert_eq!(
                 g.vertex_json,
@@ -542,24 +445,12 @@ mod tests {
         }
 
         #[test]
-        fn generates_new_vertex_hash_for_already_existing_hash() {
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
-            g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
-
-            g.insert_vertex(VertexHash::new(32), b"V/B".to_vec(), vec![]);
-
-            assert_eq!(g.index_to_hash[0], VertexHash::new(32));
-            assert!(g.index_to_hash[1] != VertexHash::new(32));
-        }
-
-        #[test]
         fn does_not_care_about_duplicate_vertex_key() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
+            g.insert_vertex(b"V/A".to_vec(), vec![]);
 
-            g.insert_vertex(VertexHash::new(1), b"V/A".to_vec(), vec![]);
+            g.insert_vertex(b"V/A".to_vec(), vec![]);
 
             assert_eq!(g.index_to_key, vec![b"V/A", b"V/A"]);
         }
@@ -573,7 +464,7 @@ mod tests {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
 
-            g.insert_edge(VertexIndex::new(1), VertexIndex(2));
+            g.insert_edge(VertexIndex::new(1), VertexIndex::new(2));
 
             assert_eq!(
                 g.edges,
@@ -588,8 +479,8 @@ mod tests {
         fn inserts_edge_between_two_existing_vertices_into_given_graph() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            let from = g.insert_vertex(VertexHash::new(32), b"V/A".to_vec(), vec![]);
-            let to = g.insert_vertex(VertexHash::new(90), b"V/B".to_vec(), vec![]);
+            let from = g.insert_vertex(b"V/A".to_vec(), vec![]);
+            let to = g.insert_vertex(b"V/B".to_vec(), vec![]);
 
             g.insert_edge(from, to);
 
@@ -607,35 +498,35 @@ mod tests {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             // add 6 random vertices
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/B");
-            g.add_vertex_nodata(b"V/C");
-            g.add_vertex_nodata(b"V/D");
-            g.add_vertex_nodata(b"V/E");
-            g.add_vertex_nodata(b"V/F");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/B");
+            g.insert_empty_vertex(b"V/C");
+            g.insert_empty_vertex(b"V/D");
+            g.insert_empty_vertex(b"V/E");
+            g.insert_empty_vertex(b"V/F");
             // add edges
-            g.insert_edge(VertexIndex::new(4), VertexIndex(1));
-            g.insert_edge(VertexIndex::new(0), VertexIndex(3));
-            g.insert_edge(VertexIndex::new(0), VertexIndex(2));
-            g.insert_edge(VertexIndex::new(1), VertexIndex(6));
+            g.insert_edge(VertexIndex::new(4), VertexIndex::new(1));
+            g.insert_edge(VertexIndex::new(0), VertexIndex::new(3));
+            g.insert_edge(VertexIndex::new(0), VertexIndex::new(2));
+            g.insert_edge(VertexIndex::new(1), VertexIndex::new(6));
 
             g.index_edges(true, false);
 
             assert!(g.edges_indexed_from);
 
             assert_eq!(
-                g.out_vertices(VertexIndex(0)).collect::<Vec<_>>(),
-                vec![&VertexIndex(3), &VertexIndex(2)]
+                g.out_vertices(VertexIndex::new(0)).collect::<Vec<_>>(),
+                vec![&VertexIndex::new(3), &VertexIndex::new(2)]
             );
             assert_eq!(
-                g.out_vertices(VertexIndex(1)).collect::<Vec<_>>(),
-                vec![&VertexIndex(6)]
+                g.out_vertices(VertexIndex::new(1)).collect::<Vec<_>>(),
+                vec![&VertexIndex::new(6)]
             );
-            assert_eq!(g.out_vertices(VertexIndex(2)).count(), 0);
-            assert_eq!(g.out_vertices(VertexIndex(3)).count(), 0);
+            assert_eq!(g.out_vertices(VertexIndex::new(2)).count(), 0);
+            assert_eq!(g.out_vertices(VertexIndex::new(3)).count(), 0);
             assert_eq!(
-                g.out_vertices(VertexIndex(4)).collect::<Vec<_>>(),
-                vec![&VertexIndex(1)]
+                g.out_vertices(VertexIndex::new(4)).collect::<Vec<_>>(),
+                vec![&VertexIndex::new(1)]
             );
         }
 
@@ -647,17 +538,17 @@ mod tests {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             // add 6 random vertices
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/B");
-            g.add_vertex_nodata(b"V/C");
-            g.add_vertex_nodata(b"V/D");
-            g.add_vertex_nodata(b"V/E");
-            g.add_vertex_nodata(b"V/F");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/B");
+            g.insert_empty_vertex(b"V/C");
+            g.insert_empty_vertex(b"V/D");
+            g.insert_empty_vertex(b"V/E");
+            g.insert_empty_vertex(b"V/F");
             // add edges
-            g.insert_edge(VertexIndex::new(4), VertexIndex(1));
-            g.insert_edge(VertexIndex::new(0), VertexIndex(3));
-            g.insert_edge(VertexIndex::new(0), VertexIndex(2));
-            g.insert_edge(VertexIndex::new(1), VertexIndex(6));
+            g.insert_edge(VertexIndex::new(4), VertexIndex::new(1));
+            g.insert_edge(VertexIndex::new(0), VertexIndex::new(3));
+            g.insert_edge(VertexIndex::new(0), VertexIndex::new(2));
+            g.insert_edge(VertexIndex::new(1), VertexIndex::new(6));
 
             g.index_edges(true, false);
 
@@ -667,10 +558,10 @@ mod tests {
             assert_eq!(
                 g.edges_by_from,
                 vec![
-                    VertexIndex(3),
-                    VertexIndex(2),
-                    VertexIndex(6),
-                    VertexIndex(1)
+                    VertexIndex::new(3),
+                    VertexIndex::new(2),
+                    VertexIndex::new(6),
+                    VertexIndex::new(1)
                 ]
             );
 
@@ -678,13 +569,13 @@ mod tests {
             assert_eq!(
                 &g.edges_by_from
                     [g.edge_index_by_from[0] as usize..g.edge_index_by_from[1] as usize],
-                &vec![VertexIndex(3), VertexIndex(2)]
+                &vec![VertexIndex::new(3), VertexIndex::new(2)]
             );
             // out edges of 1
             assert_eq!(
                 &g.edges_by_from
                     [g.edge_index_by_from[1] as usize..g.edge_index_by_from[2] as usize],
-                &vec![VertexIndex(6)]
+                &vec![VertexIndex::new(6)]
             );
             // out edges of 2
             assert_eq!(
@@ -702,7 +593,7 @@ mod tests {
             assert_eq!(
                 &g.edges_by_from
                     [g.edge_index_by_from[4] as usize..g.edge_index_by_from[5] as usize],
-                &vec![VertexIndex(1)]
+                &vec![VertexIndex::new(1)]
             );
         }
 
@@ -711,23 +602,23 @@ mod tests {
         fn requesting_out_vertices_in_not_properly_indexed_graph_panicks() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            g.add_vertex_nodata(b"V/A");
-            g.insert_edge(VertexIndex::new(0), VertexIndex(0));
+            g.insert_empty_vertex(b"V/A");
+            g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
 
-            g.out_vertices(VertexIndex(0)).count();
+            g.out_vertices(VertexIndex::new(0)).count();
         }
 
         #[test]
         fn counts_outgoing_vertices() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/A");
-            g.insert_edge(VertexIndex::new(0), VertexIndex(0));
-            g.insert_edge(VertexIndex::new(0), VertexIndex(1));
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
+            g.insert_edge(VertexIndex::new(0), VertexIndex::new(1));
             g.index_edges(true, false);
 
-            assert_eq!(g.out_vertex_count(VertexIndex(0)), 2);
+            assert_eq!(g.out_vertex_count(VertexIndex::new(0)), 2);
         }
     }
 
@@ -741,35 +632,35 @@ mod tests {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
             // add 6 random vertices
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/B");
-            g.add_vertex_nodata(b"V/C");
-            g.add_vertex_nodata(b"V/D");
-            g.add_vertex_nodata(b"V/E");
-            g.add_vertex_nodata(b"V/F");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/B");
+            g.insert_empty_vertex(b"V/C");
+            g.insert_empty_vertex(b"V/D");
+            g.insert_empty_vertex(b"V/E");
+            g.insert_empty_vertex(b"V/F");
             // add edges
-            g.insert_edge(VertexIndex::new(1), VertexIndex(4));
-            g.insert_edge(VertexIndex::new(3), VertexIndex(0));
-            g.insert_edge(VertexIndex::new(2), VertexIndex(0));
-            g.insert_edge(VertexIndex::new(6), VertexIndex(1));
+            g.insert_edge(VertexIndex::new(1), VertexIndex::new(4));
+            g.insert_edge(VertexIndex::new(3), VertexIndex::new(0));
+            g.insert_edge(VertexIndex::new(2), VertexIndex::new(0));
+            g.insert_edge(VertexIndex::new(6), VertexIndex::new(1));
 
             g.index_edges(false, true);
 
             assert!(g.edges_indexed_to);
 
             assert_eq!(
-                g.in_vertices(VertexIndex(0)).collect::<Vec<_>>(),
-                vec![&VertexIndex(3), &VertexIndex(2)]
+                g.in_vertices(VertexIndex::new(0)).collect::<Vec<_>>(),
+                vec![&VertexIndex::new(3), &VertexIndex::new(2)]
             );
             assert_eq!(
-                g.in_vertices(VertexIndex(1)).collect::<Vec<_>>(),
-                vec![&VertexIndex(6)]
+                g.in_vertices(VertexIndex::new(1)).collect::<Vec<_>>(),
+                vec![&VertexIndex::new(6)]
             );
-            assert_eq!(g.in_vertices(VertexIndex(2)).count(), 0);
-            assert_eq!(g.in_vertices(VertexIndex(3)).count(), 0);
+            assert_eq!(g.in_vertices(VertexIndex::new(2)).count(), 0);
+            assert_eq!(g.in_vertices(VertexIndex::new(3)).count(), 0);
             assert_eq!(
-                g.in_vertices(VertexIndex(4)).collect::<Vec<_>>(),
-                vec![&VertexIndex(1)]
+                g.in_vertices(VertexIndex::new(4)).collect::<Vec<_>>(),
+                vec![&VertexIndex::new(1)]
             );
         }
 
@@ -778,23 +669,23 @@ mod tests {
         fn requesting_in_vertices_in_not_properly_indexed_graph_panicks() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            g.add_vertex_nodata(b"V/A");
-            g.insert_edge(VertexIndex::new(0), VertexIndex(0));
+            g.insert_empty_vertex(b"V/A");
+            g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
 
-            g.in_vertices(VertexIndex(0)).count();
+            g.in_vertices(VertexIndex::new(0)).count();
         }
 
         #[test]
         fn counts_incoming_vertices() {
             let g_arc = Graph::new(true, vec![]);
             let mut g = g_arc.write().unwrap();
-            g.add_vertex_nodata(b"V/A");
-            g.add_vertex_nodata(b"V/A");
-            g.insert_edge(VertexIndex::new(0), VertexIndex(0));
-            g.insert_edge(VertexIndex::new(1), VertexIndex(0));
+            g.insert_empty_vertex(b"V/A");
+            g.insert_empty_vertex(b"V/A");
+            g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
+            g.insert_edge(VertexIndex::new(1), VertexIndex::new(0));
             g.index_edges(false, true);
 
-            assert_eq!(g.in_vertex_count(VertexIndex(0)), 2);
+            assert_eq!(g.in_vertex_count(VertexIndex::new(0)), 2);
         }
     }
 }

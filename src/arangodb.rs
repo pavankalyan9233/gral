@@ -4,7 +4,8 @@ use crate::api::graphanalyticsengine::{
 use crate::args::GralArgs;
 use crate::auth::create_jwt_token;
 use crate::computations::{Computation, LoadComputation, StoreComputation};
-use crate::graph_store::graph::{Graph, VertexHash, VertexIndex};
+use crate::graph_store::graph::Graph;
+use crate::graph_store::vertex_key_index::VertexIndex;
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
@@ -16,7 +17,6 @@ use std::thread::JoinHandle;
 use std::time::SystemTime;
 use tokio::task::JoinSet;
 use warp::http::StatusCode;
-use xxhash_rust::xxh3::xxh3_64_with_seed;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ShardLocation {
@@ -542,10 +542,9 @@ pub async fn fetch_graph_from_arangodb(
                         let mut graph = graph_clone.write().unwrap();
                         for i in 0..vertex_keys.len() {
                             let k = &vertex_keys[i];
-                            let hash = VertexHash::new(xxh3_64_with_seed(k, 0xdeadbeefdeadbeef));
                             let mut cols: Vec<Value> = vec![];
                             std::mem::swap(&mut cols, &mut vertex_json[i]);
-                            graph.insert_vertex(hash, k.clone(), cols);
+                            graph.insert_vertex(k.clone(), cols);
                         }
                         nr_vertices = graph.number_of_vertices();
                     }

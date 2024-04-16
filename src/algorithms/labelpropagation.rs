@@ -1,4 +1,5 @@
-use crate::graph_store::graph::{Graph, VertexIndex};
+use crate::graph_store::graph::Graph;
+use crate::graph_store::vertex_key_index::VertexIndex;
 use log::info;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::HashMap;
