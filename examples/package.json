@@ -1,0 +1,21 @@
+{
+  "name": "arangodb-ldbc-graphanalytics",
+  "version": "1.0.0",
+  "description": "Tool to upload LDBC graph data to ArangoDB and run graph analytics queries",
+  "main": "main.js",
+  "type": "module",
+  "dependencies": {
+    "arangojs": "^8.1.1",
+    "yargs": "^16.2.0",
+    "axios": "^1.6.8",
+    "p-queue": "^8.0.1"
+  },
+  "scripts": {
+    "help": "node main.js --help",
+    "twitter": "node main.js --graphName twitter_mpi",
+    "wikiTalk": "node main.js --graphName wiki-Talk",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}
