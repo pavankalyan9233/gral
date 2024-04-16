@@ -44,8 +44,8 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
                 nr_e
             );
         }
-        let a = e.from.to_u64();
-        let b = e.to.to_u64();
+        let a = e.from().to_u64();
+        let b = e.to().to_u64();
         let mut c = mini[b as usize];
         let mut rep = mini[a as usize];
         if c == rep {

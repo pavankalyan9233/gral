@@ -31,8 +31,8 @@ fn sizeof_val(v: &serde_json::Value) -> usize {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Edge {
-    pub from: VertexIndex, // index of vertex
-    pub to: VertexIndex,   // index of vertex
+    from: VertexIndex,
+    to: VertexIndex,
 }
 impl Edge {
     pub fn create(from: VertexIndex, to: VertexIndex) -> Edge {
@@ -240,8 +240,8 @@ impl Graph {
         for i in 0..nre {
             println!(
                 "  {} -> {}",
-                self.edges[i as usize].from.to_u64(),
-                self.edges[i as usize].to.to_u64()
+                self.edges[i as usize].from().to_u64(),
+                self.edges[i as usize].to().to_u64()
             );
         }
     }
