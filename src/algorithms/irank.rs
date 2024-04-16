@@ -1,4 +1,5 @@
-use crate::graph_store::graph::{Graph, VertexIndex};
+use crate::graph_store::graph::Graph;
+use crate::graph_store::vertex_key_index::VertexIndex;
 use log::{error, info};
 use std::collections::HashMap;
 

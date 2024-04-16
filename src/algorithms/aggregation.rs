@@ -22,9 +22,9 @@ pub fn aggregate_over_components(
     assert!(comp.number.is_some());
     let comps = comp.components.as_ref().unwrap();
     let next = &comp.next_in_component.as_ref().unwrap();
-    assert_eq!(graph.index_to_hash.len(), comps.len());
+    assert_eq!(graph.number_of_vertices() as usize, comps.len());
     assert_eq!(comps.len(), next.len());
-    assert_eq!(graph.vertex_json.len(), graph.index_to_hash.len());
+    assert_eq!(graph.vertex_json.len(), graph.number_of_vertices() as usize);
 
     for (i, co) in comps.iter().enumerate() {
         if *co == i as u64 {
