@@ -33,8 +33,12 @@ async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: stri
     try {
       const response = await axios.get(url, buildHeaders(jwt));
       const body = response.data;
-      if (body !== undefined && body.progress >= body.total) {
-        return {result: body, retriesNeeded: retries};
+      if (body !== undefined) {
+        if (body.error) {
+          throw new Error(`Job <${jobId}> failed: ${body.errorMessage}`)
+        } else if (body.progress >= body.total) {
+          return {result: body, retriesNeeded: retries};
+        }
       } else {
         retries++;
         await new Promise(resolve => setTimeout(resolve, 1000));
