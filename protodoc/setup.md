@@ -55,7 +55,7 @@ The following API calls are available, all start with the `BASE_URL` from above:
 
  - `DELETE $BASE_URL/engine/<id>`: undeploy (delete) a specific GAE
 
-All these API calls can be executed conveniently with the provided `gae` shell script. Just set the environment variables `ARANGO_GRAPH_TOKEN` to the access token described above and `DEPLOYMENT_URL` to the URL of your deployment (leaving out the port part :8529).
+All these API calls can be executed conveniently with the provided `gae` shell script. Just set the environment variables `ARANGO_GRAPH_TOKEN` to the access token described above and `DEPLOYMENT_URL` to the URL of your deployment (leaving out the port part :8529). Instead of `ARANGO_GRAPH_TOKEN` you can also set the variables `ARANGO_GRAPH_API_KEY_ID` and `ARANGO_GRAPH_API_KEY_SECRET` to your API key ID and secret, the `gae` script will then automatically get an `ARANGO_GRAPH_TOKEN`.
 
 ## Interacting with a running GAE
 
