@@ -296,7 +296,7 @@ async fn get_all_shard_data(
         id: u64,
     }
 
-    if dbservers.len() == 0 {
+    if dbservers.is_empty() {
         // This actually happened writing integration tests, we cannot divide by zero
         error!("No dbserver found. List is empty.");
         return Err("No dbserver found".to_string());
