@@ -53,10 +53,8 @@ async function shutdownInstance(endpoint: string, jwt: string) {
   return new Promise((resolve, reject) => {
     const url = buildUrl(endpoint, '/v1/shutdown');
     axios.delete(url, buildHeaders(jwt)).then((response) => {
-      console.log(response);
       resolve(response);
     }).catch((error) => {
-      console.log(error);
       reject(error);
     });
   });

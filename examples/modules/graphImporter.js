@@ -287,8 +287,6 @@ export class GraphImporter {
     const filePath = new URL(`../data/${this.graphName}/${this.graphName}.v`, import.meta.url).pathname;
     const lineCount = await this.countLinesUsingWc(filePath);
     const startsWithZero = await this.checkIfFirstVertexIdIsZero(filePath);
-    console.log(`Does it start with 0? ${startsWithZero}`);
-
     console.log(`Will now insert vertices into collection ${this.graphName}_v. This will take a while...`)
 
     await this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
