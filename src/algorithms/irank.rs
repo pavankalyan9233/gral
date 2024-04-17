@@ -76,10 +76,10 @@ pub fn i_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> Result<(Vec<f6
         let mut sink_sum: f64 = 0.0;
         for (v, rankv) in rank.iter().enumerate() {
             let vi = VertexIndex::new(v as u64);
-            let edge_count = g.out_vertex_count(vi);
+            let edge_count = g.out_neighbour_count(vi);
             if edge_count > 0 {
                 let tosend = damping_factor * rankv / edge_count as f64;
-                g.out_vertices(vi).for_each(|sink| {
+                g.out_neighbours(vi).for_each(|sink| {
                     new_rank[sink.to_u64() as usize] += tosend;
                 });
             } else {
