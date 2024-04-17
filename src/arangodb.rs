@@ -430,9 +430,12 @@ async fn fetch_edge_and_vertex_collections_by_graph(
     let mut vertex_collection_names = vec![];
 
     let resp = client.get(url).bearer_auth(jwt_token).send().await;
-    let parsed_response = handle_arangodb_response_with_parsed_body::<serde_json::Value>(resp, StatusCode::OK)
-        .await?;
-    let graph = parsed_response["graph"].as_object().ok_or("graph is not an object")?;
+    let parsed_response =
+        handle_arangodb_response_with_parsed_body::<serde_json::Value>(resp, StatusCode::OK)
+            .await?;
+    let graph = parsed_response["graph"]
+        .as_object()
+        .ok_or("graph is not an object")?;
     let edge_definitions = graph
         .get("edgeDefinitions")
         .ok_or("no edgeDefinitions")?
