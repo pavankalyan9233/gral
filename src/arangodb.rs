@@ -421,6 +421,57 @@ fn collection_name_from_id(id: &str) -> String {
     }
 }
 
+async fn fetch_edge_and_vertex_collections_by_graph(
+    client: reqwest::Client,
+    jwt_token: &String,
+    url: String,
+) -> Result<(Vec<String>, Vec<String>), String> {
+    let mut edge_collection_names = vec![];
+    let mut vertex_collection_names = vec![];
+
+    let resp = client.get(url).bearer_auth(&jwt_token).send().await;
+    let resp = handle_arangodb_response_with_parsed_body::<serde_json::Value>(resp, StatusCode::OK)
+        .await?;
+    info!("Got responses: {:?}", resp);
+    let graph = resp["graph"].as_object().ok_or("graph is not an object")?;
+    let edge_definitions = graph
+        .get("edgeDefinitions")
+        .ok_or("no edgeDefinitions")?
+        .as_array()
+        .ok_or("edgeDefinitions is not an array")?;
+
+    for edge_definition in edge_definitions {
+        let mut non_unique_vertex_collection_names = vec![];
+        let edge_collection_name = edge_definition["collection"]
+            .as_str()
+            .ok_or("collection is not a string")?;
+        edge_collection_names.push(edge_collection_name.to_string());
+
+        let from = edge_definition["from"]
+            .as_array()
+            .ok_or("from is not an array")?;
+        for vertex in from {
+            let vertex_collection_name =
+                vertex.as_str().ok_or("from collection is not a string")?;
+            non_unique_vertex_collection_names.push(vertex_collection_name.to_string());
+        }
+
+        let to = edge_definition["to"]
+            .as_array()
+            .ok_or("to is not an array")?;
+        for vertex in to {
+            let vertex_collection_name = vertex.as_str().ok_or("to collection is not a string")?;
+            non_unique_vertex_collection_names.push(vertex_collection_name.to_string());
+        }
+
+        non_unique_vertex_collection_names.sort();
+        non_unique_vertex_collection_names.dedup();
+        vertex_collection_names.append(&mut non_unique_vertex_collection_names);
+    }
+
+    Ok((vertex_collection_names, edge_collection_names))
+}
+
 pub async fn fetch_graph_from_arangodb(
     user: String,
     req: GraphAnalyticsEngineLoadDataRequest,
@@ -462,12 +513,52 @@ pub async fn fetch_graph_from_arangodb(
         handle_arangodb_response_with_parsed_body::<ShardDistribution>(resp, StatusCode::OK)
             .await?;
 
+    let mut vertex_coll_list = req.vertex_collections.clone();
+    let mut edge_coll_list = req.edge_collections.clone();
+
+    if !req.graph_name.is_empty() {
+        if !req.vertex_collections.is_empty() || !req.edge_collections.is_empty() {
+            let error_message =
+                "Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.";
+            error!("{:?}", error_message);
+            return Err(error_message.to_string());
+        }
+
+        // in case a graph name has been give, we need to fetch the vertex and edge collections from ArangoDB
+        let graph_name = req.graph_name.clone();
+        let param_url = format!("/_api/gharial/{}", graph_name);
+        let url = make_url(&param_url);
+        let (vertices, edges) =
+            fetch_edge_and_vertex_collections_by_graph(client, &jwt_token, url).await?;
+        info!(
+            "{:?} Got vertex collections: {:?}, edge collections: {:?} from graph definition for: {:?}.",
+            std::time::SystemTime::now().duration_since(begin).unwrap(),
+            vertices, edges, graph_name
+        );
+        vertex_coll_list.extend(vertices);
+        edge_coll_list.extend(edges);
+    } else {
+        if req.vertex_collections.is_empty() || req.edge_collections.is_empty() {
+            let error_message =
+                "Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.";
+            error!("{:?}", error_message);
+            return Err(error_message.to_string());
+        }
+    }
+
     // Compute which shard we must get from which dbserver, we do vertices
     // and edges right away to be able to error out early:
-    let vertex_coll_list = req.vertex_collections.clone();
     let vertex_map = compute_shard_map(&shard_dist, &vertex_coll_list)?;
-    let edge_coll_list = req.edge_collections.clone();
     let edge_map = compute_shard_map(&shard_dist, &edge_coll_list)?;
+
+    if vertex_map.is_empty() {
+        error!("No vertex shards found!");
+        return Err("No vertex shards found!".to_string());
+    }
+    if edge_map.is_empty() {
+        error!("No edge shards found!");
+        return Err("No edge shards found!".to_string());
+    }
 
     // TODO: also opt out in case zero shards have been found
     info!(

@@ -87,6 +87,68 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     });
   });
 
+  test('load the wiki-Talk graph without graph_name and vertex and edge collections given', async () => {
+    const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
+    const graphAnalyticsEngineLoadDataRequest = {
+      "database": "_system"
+    };
+
+    const response = await axios.post(
+      url, graphAnalyticsEngineLoadDataRequest, gral.buildHeaders(jwt)
+    );
+    const body = response.data;
+
+    try {
+      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.jobId);
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toContain('Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.');
+    }
+  });
+
+  test('load the wiki-Talk graph with graph_name and vertex and edge collections given', async () => {
+    const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
+    const graphAnalyticsEngineLoadDataRequest = {
+      "database": "_system",
+      "graph_name": "wiki-Talk",
+      "vertex_collections": ["wiki-Talk_v"],
+      "edge_collections": ["wiki-Talk_e"]
+    };
+
+    const response = await axios.post(
+      url, graphAnalyticsEngineLoadDataRequest, gral.buildHeaders(jwt)
+    );
+    const body = response.data;
+
+    try {
+      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.jobId);
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toContain('Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.');
+    }
+  });
+
+  test('load the wiki-Talk graph with empty vertex and edge collections given', async () => {
+    const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
+    const graphAnalyticsEngineLoadDataRequest = {
+      "database": "_system",
+      "vertex_collections": [],
+      "edge_collections": []
+    };
+
+    const response = await axios.post(
+      url, graphAnalyticsEngineLoadDataRequest, gral.buildHeaders(jwt)
+    );
+    const body = response.data;
+
+    try {
+      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.jobId);
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toContain('Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.');
+    }
+  });
+
   test('load the wiki-Talk graph into memory, via provided graph name', async () => {
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
     const graphAnalyticsEngineLoadDataRequest = {
