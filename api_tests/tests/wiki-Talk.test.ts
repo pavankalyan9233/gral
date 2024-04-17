@@ -6,6 +6,11 @@ import axios from 'axios';
 
 const gralEndpoint = config.gral_instances.arangodb_auth;
 
+function isClose(a: number, b: number, relativeTolerance: number = 1e-5) {
+  // relativeTolerance: "floating point number value for percentage"
+  return Math.abs(a - b) <= Math.max(Math.abs(a), Math.abs(b)) * relativeTolerance;
+}
+
 const verifyGraphStatus = async (graphId: string, jwt: string) => {
   // precondition
   expect(graphId).not.toBeUndefined();
@@ -49,8 +54,11 @@ const verifyGraphStatus = async (graphId: string, jwt: string) => {
   expectTypeOf(graph.memoryUsage).toBeString();
   const memoryUsage = parseInt(graph.memoryUsage);
   expect(memoryUsage).toBeGreaterThan(0);
-  const expectedMemoryUsage = numberOfVertices * memoryPerVertex + numberOfEdges * memoryPerEdge;
-  expect(memoryUsage).toBe(expectedMemoryUsage);
+  const expectedMemoryUsage = (numberOfVertices * memoryPerVertex) + (numberOfEdges * memoryPerEdge);
+  // we cannot expect the exact value, as the amount of memory per vertex or edge might is divided by the number of
+  // vertices or edges, respectively, and the division might not be exact
+  const closenessResult = isClose(memoryUsage, expectedMemoryUsage, 0.05);
+  expect(closenessResult).toBeTruthy();
 };
 
 describe.sequential('API tests based on wiki-Talk graph dataset', () => {
