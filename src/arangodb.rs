@@ -429,11 +429,10 @@ async fn fetch_edge_and_vertex_collections_by_graph(
     let mut edge_collection_names = vec![];
     let mut vertex_collection_names = vec![];
 
-    let resp = client.get(url).bearer_auth(&jwt_token).send().await;
-    let resp = handle_arangodb_response_with_parsed_body::<serde_json::Value>(resp, StatusCode::OK)
+    let resp = client.get(url).bearer_auth(jwt_token).send().await;
+    let parsed_response = handle_arangodb_response_with_parsed_body::<serde_json::Value>(resp, StatusCode::OK)
         .await?;
-    info!("Got responses: {:?}", resp);
-    let graph = resp["graph"].as_object().ok_or("graph is not an object")?;
+    let graph = parsed_response["graph"].as_object().ok_or("graph is not an object")?;
     let edge_definitions = graph
         .get("edgeDefinitions")
         .ok_or("no edgeDefinitions")?
@@ -537,13 +536,11 @@ pub async fn fetch_graph_from_arangodb(
         );
         vertex_coll_list.extend(vertices);
         edge_coll_list.extend(edges);
-    } else {
-        if req.vertex_collections.is_empty() || req.edge_collections.is_empty() {
-            let error_message =
+    } else if req.vertex_collections.is_empty() || req.edge_collections.is_empty() {
+        let error_message =
                 "Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.";
-            error!("{:?}", error_message);
-            return Err(error_message.to_string());
-        }
+        error!("{:?}", error_message);
+        return Err(error_message.to_string());
     }
 
     // Compute which shard we must get from which dbserver, we do vertices
