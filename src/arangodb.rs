@@ -4,7 +4,7 @@ use crate::api::graphanalyticsengine::{
 use crate::args::GralArgs;
 use crate::auth::create_jwt_token;
 use crate::computations::{Computation, LoadComputation, StoreComputation};
-use crate::graph_store::graph::Graph;
+use crate::graph_store::graph::{Edge, Graph};
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
@@ -633,17 +633,27 @@ pub async fn fetch_graph_from_arangodb(
                         }
                     }
 
-                    let nr_edges: u64;
+                    let mut edges: Vec<Edge> = Vec::with_capacity(froms.len());
                     {
-                        let mut graph = graph_clone.write().unwrap();
+                        // First translate keys to indexes by reading
+                        // the graph object:
+                        let graph = graph_clone.read().unwrap();
                         assert!(froms.len() == tos.len());
                         for i in 0..froms.len() {
-                            if let Err(message) =
-                                graph.insert_edge_between_vertices(&froms[i], &tos[i])
-                            {
-                                eprintln!("{}", message);
+                            match graph.get_new_edge_between_vertices(&froms[i], &tos[i]) {
+                                Ok(edge) => edges.push(edge),
+                                Err(message) => eprintln!("{}", message),
                             }
                         }
+                    }
+                    let nr_edges: u64;
+                    {
+                        // Now actually insert edges by writing the graph
+                        // object:
+                        let mut graph = graph_clone.write().unwrap();
+                        edges
+                            .into_iter()
+                            .for_each(|e| graph.insert_edge_unchecked(e));
                         nr_edges = graph.number_of_edges();
                     }
 

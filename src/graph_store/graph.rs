@@ -196,11 +196,13 @@ impl Graph {
         );
     }
 
-    pub fn insert_edge_between_vertices(
-        &mut self,
+    /// Returns a new edge only if both from and to keys exist in the graph.
+    /// Does not insert the edge into the graph.
+    pub fn get_new_edge_between_vertices(
+        &self,
         from_key: &[u8],
         to_key: &[u8],
-    ) -> Result<(), String> {
+    ) -> Result<Edge, String> {
         let from = self.index_from_vertex_key(from_key).ok_or(format!(
             "Cannot find _from vertex key {} in graph for edge to {}",
             std::str::from_utf8(from_key).unwrap(),
@@ -211,8 +213,23 @@ impl Graph {
             std::str::from_utf8(to_key).unwrap(),
             std::str::from_utf8(from_key).unwrap(),
         ))?;
-        self.edges.push(Edge { from, to });
+        Ok(Edge { from, to })
+    }
+
+    pub fn insert_edge_between_vertices(
+        &mut self,
+        from_key: &[u8],
+        to_key: &[u8],
+    ) -> Result<(), String> {
+        let edge = self.get_new_edge_between_vertices(from_key, to_key)?;
+        self.edges.push(edge);
         Ok(())
+    }
+
+    /// This method does not check whether the endpoints of the edge exist in the graph.
+    /// Therefore use this method with care to not mistakenly add dangling edges, because Graph cannot handle dangling edges properly.
+    pub fn insert_edge_unchecked(&mut self, edge: Edge) {
+        self.edges.push(edge);
     }
 
     pub fn out_neighbours(&self, source: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
@@ -390,6 +407,37 @@ mod tests {
             g.insert_vertex(b"V/A".to_vec(), vec![]);
 
             assert_eq!(g.index_to_key, vec![b"V/A", b"V/A"]);
+        }
+    }
+
+    mod get_new_edge {
+        use super::*;
+
+        #[test]
+        fn gives_edge_between_two_existing_vertices() {
+            let g = Graph::create(vec!["V/A".to_string(), "V/B".to_string()], vec![]);
+
+            assert_eq!(
+                g.get_new_edge_between_vertices(b"V/A", b"V/B"),
+                Ok(Edge {
+                    from: VertexIndex::new(0),
+                    to: VertexIndex::new(1)
+                })
+            );
+        }
+
+        #[test]
+        fn errors_when_to_vertex_does_not_exist() {
+            let g = Graph::create(vec!["V/A".to_string()], vec![]);
+
+            assert!(g.get_new_edge_between_vertices(b"V/A", b"V/B").is_err());
+        }
+
+        #[test]
+        fn errors_when_from_vertex_does_not_exist() {
+            let g = Graph::create(vec!["V/A".to_string()], vec![]);
+
+            assert!(g.get_new_edge_between_vertices(b"V/B", b"V/A").is_err());
         }
     }
 
