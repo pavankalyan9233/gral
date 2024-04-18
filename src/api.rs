@@ -334,10 +334,7 @@ async fn api_scc(
         {
             // Make sure we have an edge index:
             let mut graph = graph_arc.write().unwrap();
-            if graph.from_index.is_none() {
-                info!("Indexing edges by from...");
-                graph.index_edges(true, false);
-            }
+            graph.index_edges(true, false);
         }
         let graph = graph_arc.read().unwrap();
         let (nr, components, next) = algorithms::conncomp::strongly_connected_components(&graph);
@@ -501,10 +498,7 @@ async fn api_pagerank(
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
-        if graph.from_index.is_none() {
-            info!("Indexing edges by from...");
-            graph.index_edges(true, false);
-        }
+        graph.index_edges(true, false);
     }
     let comp_arc = Arc::new(RwLock::new(PageRankComputation {
         graph: graph_arc.clone(),
@@ -576,10 +570,7 @@ async fn api_irank(
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
-        if graph.from_index.is_none() {
-            info!("Indexing edges by from...");
-            graph.index_edges(true, false);
-        }
+        graph.index_edges(true, false);
     }
     let comp_arc = Arc::new(RwLock::new(PageRankComputation {
         graph: graph_arc.clone(),
