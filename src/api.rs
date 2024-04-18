@@ -321,6 +321,12 @@ async fn api_scc(
         Ok(g) => g,
     };
 
+    {
+        // Make sure we have an edge index:
+        let mut graph = graph_arc.write().unwrap();
+        graph.index_edges(true, false);
+    }
+
     let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
         algorithm: "SCC".to_string(),
         graph: graph_arc.clone(),
