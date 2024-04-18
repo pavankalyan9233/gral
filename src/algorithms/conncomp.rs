@@ -2,11 +2,11 @@ use crate::graph_store::graph::Graph;
 use log::info;
 use std::time::Instant;
 
-    // Returns the number of weakly connected components and a vector
-    // of as many numbers as there are vertices, which contains for each
-    // index the id of the weakly connected component of the vertex.
-    // The id is the smallest index of a vertex in the same weakly connected
-    // component.
+/// Returns the number of weakly connected components and a vector
+/// of as many numbers as there are vertices, which contains for each
+/// index the id of the weakly connected component of the vertex.
+/// The id is the smallest index of a vertex in the same weakly connected
+/// component.
 pub fn weakly_connected_components(g: &Graph) -> Result<(u64, Vec<u64>, Vec<i64>), String> {
     let start = Instant::now();
     let nr_v = g.number_of_vertices();
@@ -83,11 +83,11 @@ pub fn weakly_connected_components(g: &Graph) -> Result<(u64, Vec<u64>, Vec<i64>
 // We use the terminology as in Knuth:
 // https://www-cs-faculty.stanford.edu/~knuth/fasc12a+.pdf
 
-    // Returns the number of strongly connected components and a vector
-    // of as many numbers as there are vertices, which contains for each
-    // index the id of the strongly connected component of the vertex.
-    // The id is the smallest index of a vertex in the same strongly connected
-    // component.
+/// Returns the number of strongly connected components and a vector
+/// of as many numbers as there are vertices, which contains for each
+/// index the id of the strongly connected component of the vertex.
+/// The id is the smallest index of a vertex in the same strongly connected
+/// component.
 pub fn strongly_connected_components(g: &Graph) -> Result<(u64, Vec<u64>, Vec<i64>), String> {
 
     let start = Instant::now();

@@ -184,7 +184,7 @@ pub fn labelpropagation_async(
     while step < supersteps {
         step += 1;
         info!(
-            "{:?} label propagation (sync)  step {step}...",
+            "{:?} label propagation (async)  step {step}...",
             start.elapsed()
         );
         // Go through all vertices and determine new label, need to look at
@@ -272,7 +272,7 @@ pub fn labelpropagation_async(
             }
         }
         info!(
-            "{:?} label propagation (sync)  step {step}, difference count {diffcount}",
+            "{:?} label propagation (async)  step {step}, difference count {diffcount}",
             start.elapsed()
         );
         if diffcount == 0 {
@@ -280,7 +280,7 @@ pub fn labelpropagation_async(
         }
     }
     let dur = start.elapsed();
-    info!("label propagation (sync) completed in {dur:?} seconds.");
+    info!("label propagation (async) completed in {dur:?} seconds.");
     let mut result: Vec<String> = Vec::with_capacity(nr);
     let mut total_label_size: usize = 0;
     for s in &labels {
