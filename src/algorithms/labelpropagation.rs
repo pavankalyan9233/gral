@@ -33,6 +33,13 @@ pub fn labelpropagation_sync(
     labelname: &str,
     random_tiebreak: bool,
 ) -> Result<(Vec<String>, usize, u32), String> {
+    if !g.is_indexed_by_from() {
+        return Err("The graph is missing the from-neighbour index which is required for the label propagation (sync) algorithm.".to_string());
+    }
+    if !g.is_indexed_by_to() {
+        return Err("The graph is missing the to-neighbour index which is required for the label propagation (sync) algorithm.".to_string());
+    }
+
     info!("Running synchronous label propagation...");
     let start = std::time::SystemTime::now();
 
@@ -166,6 +173,13 @@ pub fn labelpropagation_async(
     labelname: &str,
     random_tiebreak: bool,
 ) -> Result<(Vec<String>, usize, u32), String> {
+    if !g.is_indexed_by_from() {
+        return Err("The graph is missing the from-neighbour index which is required for the label propagation (async) algorithm.".to_string());
+    }
+    if !g.is_indexed_by_to() {
+        return Err("The graph is missing the to-neighbour index which is required for the label propagation (async) algorithm.".to_string());
+    }
+
     info!("Running asynchronous label propagation...");
     let start = std::time::SystemTime::now();
 
@@ -297,31 +311,87 @@ mod tests {
     use crate::graph_store::examples::make_star_graph;
     use serde_json::json;
 
-    #[test]
-    fn test_label_propagation_sync_cyclic() {
-        let mut g = make_cyclic_graph(10);
-        g.vertex_column_names = vec!["startlabel".to_string()];
-        g.vertex_json = vec![Vec::new()];
-        for i in 0..10 {
-            g.vertex_json[0].push(json!(format!("K{i}")));
+    mod sync_version {
+        use super::*;
+
+        #[test]
+        fn test_label_propagation_sync_cyclic() {
+            let mut g = make_cyclic_graph(10);
+            g.vertex_column_names = vec!["startlabel".to_string()];
+            g.vertex_json = vec![Vec::new()];
+            for i in 0..10 {
+                g.vertex_json[0].push(json!(format!("K{i}")));
+            }
+            g.vertex_column_types = vec!["string".to_string()];
+            g.index_edges(true, true);
+            let (labels, _size, _steps) =
+                labelpropagation_sync(&g, 10, "startlabel", false).unwrap();
+            println!("{:?}", labels);
         }
-        g.vertex_column_types = vec!["string".to_string()];
-        g.index_edges(true, true);
-        let (labels, _size, _steps) = labelpropagation_sync(&g, 10, "startlabel", false).unwrap();
-        println!("{:?}", labels);
+
+        #[test]
+        fn test_label_propagation_sync_star() {
+            let mut g = make_star_graph(10);
+            g.vertex_column_names = vec!["startlabel".to_string()];
+            g.vertex_json = vec![Vec::new()];
+            for i in 0..10 {
+                g.vertex_json[0].push(json!(format!("K{i}")));
+            }
+            g.vertex_column_types = vec!["string".to_string()];
+            g.index_edges(true, true);
+            let (labels, _size, _steps) =
+                labelpropagation_sync(&g, 5, "startlabel", false).unwrap();
+            println!("{:?}", labels);
+        }
+
+        #[test]
+        fn does_not_run_when_graph_has_no_from_neighbour_index() {
+            let mut g = Graph::create(
+                vec!["V/A".to_string()],
+                vec![("V/A".to_string(), "V/A".to_string())],
+            );
+            g.index_edges(false, true);
+
+            assert!(labelpropagation_sync(&g, 10, "startlabel", false).is_err());
+        }
+
+        #[test]
+        fn does_not_run_when_graph_has_no_to_neighbour_index() {
+            let mut g = Graph::create(
+                vec!["V/A".to_string()],
+                vec![("V/A".to_string(), "V/A".to_string())],
+            );
+            g.index_edges(true, false);
+
+            assert!(labelpropagation_sync(&g, 10, "startlabel", false).is_err());
+        }
     }
 
-    #[test]
-    fn test_label_propagation_sync_star() {
-        let mut g = make_star_graph(10);
-        g.vertex_column_names = vec!["startlabel".to_string()];
-        g.vertex_json = vec![Vec::new()];
-        for i in 0..10 {
-            g.vertex_json[0].push(json!(format!("K{i}")));
+    mod async_version {
+        use super::*;
+
+        // TODO write tests for async version
+
+        #[test]
+        fn does_not_run_when_graph_has_no_from_neighbour_index() {
+            let mut g = Graph::create(
+                vec!["V/A".to_string()],
+                vec![("V/A".to_string(), "V/A".to_string())],
+            );
+            g.index_edges(false, true);
+
+            assert!(labelpropagation_async(&g, 10, "startlabel", false).is_err());
         }
-        g.vertex_column_types = vec!["string".to_string()];
-        g.index_edges(true, true);
-        let (labels, _size, _steps) = labelpropagation_sync(&g, 5, "startlabel", false).unwrap();
-        println!("{:?}", labels);
+
+        #[test]
+        fn does_not_run_when_graph_has_no_to_neighbour_index() {
+            let mut g = Graph::create(
+                vec!["V/A".to_string()],
+                vec![("V/A".to_string(), "V/A".to_string())],
+            );
+            g.index_edges(true, false);
+
+            assert!(labelpropagation_async(&g, 10, "startlabel", false).is_err());
+        }
     }
 }

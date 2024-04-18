@@ -89,9 +89,11 @@ pub fn weakly_connected_components(g: &Graph) -> Result<(u64, Vec<u64>, Vec<i64>
 /// The id is the smallest index of a vertex in the same strongly connected
 /// component.
 pub fn strongly_connected_components(g: &Graph) -> Result<(u64, Vec<u64>, Vec<i64>), String> {
+    if !g.is_indexed_by_from() {
+        return Err("The graph is missing the from-neighbour index which is required for the strongly connected components algorithm.".to_string());
+    }
 
     let start = Instant::now();
-
     let nr_v = g.number_of_vertices();
     let lambda = u64::MAX; // Lambda in Knuth
     let sent = nr_v; // SENT in Knuth
@@ -301,6 +303,16 @@ mod tests {
             assert_eq!(comp[0], 1);
             assert_eq!(comp[1], 1);
             assert_eq!(comp[2], 2);
+        }
+
+        #[test]
+        fn does_not_run_when_graph_has_no_from_neighbour_index() {
+            let g = Graph::create(
+                vec!["V/A".to_string()],
+                vec![("V/A".to_string(), "V/A".to_string())],
+            );
+
+            assert!(strongly_connected_components(&g).is_err());
         }
     }
 }

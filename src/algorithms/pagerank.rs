@@ -7,8 +7,13 @@ pub fn page_rank(
     supersteps: u32,
     damping_factor: f64,
 ) -> Result<(Vec<f64>, u32), String> {
+    if !g.is_indexed_by_from() {
+        return Err("The graph is missing the from-neighbour index which is required for the page rank algorithm.".to_string());
+    }
+
     info!("Running page rank...");
     let start = std::time::SystemTime::now();
+
     let nr = g.number_of_vertices() as usize;
     let mut rank = vec![1.0 / nr as f64; nr];
     let mut new_rank = vec![1.0 / nr as f64 * (1.0 - damping_factor); nr];
@@ -78,5 +83,15 @@ mod tests {
         assert!(0.49 < rank[9] && rank[9] < 0.50);
         assert!(0.05 < rank[0] && rank[0] < 0.06);
         println!("{:?}", rank);
+    }
+
+    #[test]
+    fn does_not_run_when_graph_has_no_from_neighbour_index() {
+        let g = Graph::create(
+            vec!["V/A".to_string()],
+            vec![("V/A".to_string(), "V/A".to_string())],
+        );
+
+        assert!(page_rank(&g, 100, 0.85).is_err());
     }
 }
