@@ -2,12 +2,12 @@ use crate::graph_store::graph::Graph;
 use log::info;
 use std::time::Instant;
 
-pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
     // Returns the number of weakly connected components and a vector
     // of as many numbers as there are vertices, which contains for each
     // index the id of the weakly connected component of the vertex.
     // The id is the smallest index of a vertex in the same weakly connected
     // component.
+pub fn weakly_connected_components(g: &Graph) -> Result<(u64, Vec<u64>, Vec<i64>), String> {
     let start = Instant::now();
     let nr_v = g.number_of_vertices();
     let nr_e = g.number_of_edges();
@@ -77,18 +77,18 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
         start.elapsed(),
         nr_components
     );
-    (nr_components, mini, next)
+    Ok((nr_components, mini, next))
 }
 
 // We use the terminology as in Knuth:
 // https://www-cs-faculty.stanford.edu/~knuth/fasc12a+.pdf
 
-pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
     // Returns the number of strongly connected components and a vector
     // of as many numbers as there are vertices, which contains for each
     // index the id of the strongly connected component of the vertex.
     // The id is the smallest index of a vertex in the same strongly connected
     // component.
+pub fn strongly_connected_components(g: &Graph) -> Result<(u64, Vec<u64>, Vec<i64>), String> {
 
     let start = Instant::now();
 
@@ -237,11 +237,11 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
         start.elapsed(),
         count
     );
-    (
+    Ok((
         count,
         rep,
         vec![], /* FIXME: Provide component list later */
-    )
+    ))
 }
 
 #[cfg(test)]
@@ -254,7 +254,7 @@ mod tests {
             vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
             vec![("V/A".to_string(), "V/B".to_string())],
         );
-        let (numb, comp, next) = weakly_connected_components(&g);
+        let (numb, comp, next) = weakly_connected_components(&g).unwrap();
         assert_eq!(numb, 2);
         assert_eq!(comp.len(), 3);
         assert_eq!(next.len(), 3);
@@ -266,38 +266,41 @@ mod tests {
         assert_eq!(next[2], -1);
     }
 
-    #[test]
-    fn test_scc_simple() {
-        let mut g = Graph::create(
-            vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
-            vec![("V/A".to_string(), "V/B".to_string())],
-        );
-        g.index_edges(true, false);
-        let (numb, comp, next) = strongly_connected_components(&g);
-        assert_eq!(numb, 3);
-        assert_eq!(comp.len(), 3);
-        assert_eq!(next.len(), 0); // Not yet implemented!
-        assert_eq!(comp[0], 0);
-        assert_eq!(comp[1], 1);
-        assert_eq!(comp[2], 2);
-    }
+    mod scc {
+        use super::*;
+        #[test]
+        fn test_scc_simple() {
+            let mut g = Graph::create(
+                vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
+                vec![("V/A".to_string(), "V/B".to_string())],
+            );
+            g.index_edges(true, false);
+            let (numb, comp, next) = strongly_connected_components(&g).unwrap();
+            assert_eq!(numb, 3);
+            assert_eq!(comp.len(), 3);
+            assert_eq!(next.len(), 0); // Not yet implemented!
+            assert_eq!(comp[0], 0);
+            assert_eq!(comp[1], 1);
+            assert_eq!(comp[2], 2);
+        }
 
-    #[test]
-    fn test_scc_simple2() {
-        let mut g = Graph::create(
-            vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
-            vec![
-                ("V/A".to_string(), "V/B".to_string()),
-                ("V/B".to_string(), "V/A".to_string()),
-            ],
-        );
-        g.index_edges(true, false);
-        let (numb, comp, next) = strongly_connected_components(&g);
-        assert_eq!(numb, 2);
-        assert_eq!(comp.len(), 3);
-        assert_eq!(next.len(), 0); // Not yet implemented!
-        assert_eq!(comp[0], 1);
-        assert_eq!(comp[1], 1);
-        assert_eq!(comp[2], 2);
+        #[test]
+        fn test_scc_simple2() {
+            let mut g = Graph::create(
+                vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
+                vec![
+                    ("V/A".to_string(), "V/B".to_string()),
+                    ("V/B".to_string(), "V/A".to_string()),
+                ],
+            );
+            g.index_edges(true, false);
+            let (numb, comp, next) = strongly_connected_components(&g).unwrap();
+            assert_eq!(numb, 2);
+            assert_eq!(comp.len(), 3);
+            assert_eq!(next.len(), 0); // Not yet implemented!
+            assert_eq!(comp[0], 1);
+            assert_eq!(comp[1], 1);
+            assert_eq!(comp[2], 2);
+        }
     }
 }
