@@ -168,19 +168,19 @@ impl Graph {
     }
 
     pub fn index_edges(&mut self, by_from: bool, by_to: bool) {
-        if (self.from_index.is_some() && by_from) && (self.to_index.is_some() && by_to) {
+        if (self.is_indexed_by_from() && by_from) && (self.is_indexed_by_to() && by_to) {
             return;
         }
 
         let mut tmp: Vec<Edge> = self.edges.to_vec();
         let number_v = self.number_of_vertices() as usize;
 
-        if self.from_index.is_none() && by_from {
+        if !self.is_indexed_by_from() && by_from {
             info!("Graph: {}: Indexing edges by from...", self.graph_id);
             self.from_index = Some(NeighbourIndex::create_from(&mut tmp, number_v));
         }
 
-        if self.to_index.is_none() && by_to {
+        if !self.is_indexed_by_to() && by_to {
             info!("Graph: {}: Indexing edges by to...", self.graph_id);
             self.to_index = Some(NeighbourIndex::create_to(&mut tmp, number_v));
         }
@@ -230,6 +230,13 @@ impl Graph {
     /// Therefore use this method with care to not mistakenly add dangling edges, because Graph cannot handle dangling edges properly.
     pub fn insert_edge_unchecked(&mut self, edge: Edge) {
         self.edges.push(edge);
+    }
+
+    pub fn is_indexed_by_from(&self) -> bool {
+        self.from_index.is_some()
+    }
+    pub fn is_indexed_by_to(&self) -> bool {
+        self.to_index.is_some()
     }
 
     pub fn out_neighbours(&self, source: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
@@ -305,12 +312,12 @@ impl Graph {
             );
 
         // Edge index, if present:
-        if self.from_index.is_some() {
+        if self.is_indexed_by_from() {
             // edge_index_by_to and edge_by_to:
             total_v += nrv * size_of::<u64>();
             total_e += nre * size_index;
         }
-        if self.to_index.is_some() {
+        if self.is_indexed_by_to() {
             total_v += nrv * size_of::<u64>();
             total_e += nre * size_index;
         }
@@ -505,7 +512,7 @@ mod tests {
 
             g.index_edges(true, false);
 
-            assert!(g.from_index.is_some());
+            assert!(g.is_indexed_by_from());
 
             assert_eq!(
                 g.out_neighbours(VertexIndex::new(0)).collect::<Vec<_>>(),
@@ -574,7 +581,7 @@ mod tests {
 
             g.index_edges(false, true);
 
-            assert!(g.to_index.is_some());
+            assert!(g.is_indexed_by_to());
 
             assert_eq!(
                 g.in_neighbours(VertexIndex::new(0)).collect::<Vec<_>>(),
