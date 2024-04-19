@@ -117,8 +117,7 @@ mod tests {
 
     #[test]
     fn test_irank_cyclic() {
-        let g_arc = make_cyclic_graph(10);
-        let mut g = g_arc.write().unwrap();
+        let mut g = make_cyclic_graph(10);
         g.vertex_column_names = vec!["@collectionname".to_string()];
         g.vertex_json = vec![Vec::new()];
         for _i in 0..10 {
@@ -135,8 +134,7 @@ mod tests {
 
     #[test]
     fn test_irank_star() {
-        let g_arc = make_star_graph(10);
-        let mut g = g_arc.write().unwrap();
+        let mut g = make_star_graph(10);
         g.vertex_column_names = vec!["@collectionname".to_string()];
         g.vertex_json = vec![Vec::new()];
         for _i in 0..10 {

@@ -2,7 +2,6 @@ use log::info;
 use metrics::increment_counter;
 use serde_json::Value;
 use std::mem::size_of;
-use std::sync::{Arc, RwLock};
 
 use crate::graph_store::neighbour_index::NeighbourIndex;
 use crate::graph_store::vertex_key_index::{VertexIndex, VertexKeyIndex};
@@ -91,9 +90,9 @@ pub struct MemoryUsageGraph {
 }
 
 impl Graph {
-    pub fn new(store_keys: bool, col_names: Vec<String>) -> Arc<RwLock<Graph>> {
+    pub fn new(store_keys: bool, col_names: Vec<String>) -> Self {
         increment_counter!("gral_mycounter_total");
-        Arc::new(RwLock::new(Graph {
+        Graph {
             graph_id: 0,
             vertex_key_index: VertexKeyIndex::new(),
             index_to_key: vec![],
@@ -109,7 +108,23 @@ impl Graph {
             edges_sealed: false,
             vertex_id_size_sum: 0,
             vertex_json_size_sum: 0,
-        }))
+        }
+    }
+
+    /// For test purposes
+    /// Panics if it tries to insert a dangling edge
+    pub fn create(vertices: Vec<String>, edges: Vec<(String, String)>) -> Self {
+        let mut g = Graph::new(true, vec![]);
+        vertices.into_iter().for_each(|v| {
+            g.insert_vertex(v.as_bytes().to_vec(), vec![]);
+        });
+        g.seal_vertices();
+        edges.into_iter().for_each(|(from, to)| {
+            g.insert_edge_between_vertices(from.as_bytes(), to.as_bytes())
+                .unwrap();
+        });
+        g.seal_edges();
+        g
     }
 
     pub fn index_from_vertex_key(&self, k: &[u8]) -> Option<VertexIndex> {
@@ -181,20 +196,40 @@ impl Graph {
         );
     }
 
-    pub fn insert_edge(&mut self, from: VertexIndex, to: VertexIndex) {
-        self.edges.push(Edge { from, to });
+    /// Returns a new edge only if both from and to keys exist in the graph.
+    /// Does not insert the edge into the graph.
+    pub fn get_new_edge_between_vertices(
+        &self,
+        from_key: &[u8],
+        to_key: &[u8],
+    ) -> Result<Edge, String> {
+        let from = self.index_from_vertex_key(from_key).ok_or(format!(
+            "Cannot find _from vertex key {} in graph for edge to {}",
+            std::str::from_utf8(from_key).unwrap(),
+            std::str::from_utf8(to_key).unwrap(),
+        ))?;
+        let to = self.index_from_vertex_key(to_key).ok_or(format!(
+            "Cannot find _to vertex key {} in graph for edge from {}",
+            std::str::from_utf8(to_key).unwrap(),
+            std::str::from_utf8(from_key).unwrap(),
+        ))?;
+        Ok(Edge { from, to })
     }
 
-    pub fn insert_empty_vertex(&mut self, key: &[u8]) {
-        self.insert_vertex(key.to_vec(), vec![]);
+    pub fn insert_edge_between_vertices(
+        &mut self,
+        from_key: &[u8],
+        to_key: &[u8],
+    ) -> Result<(), String> {
+        let edge = self.get_new_edge_between_vertices(from_key, to_key)?;
+        self.edges.push(edge);
+        Ok(())
     }
 
-    pub fn insert_edge_between_vertices(&mut self, from: &[u8], to: &[u8]) {
-        let f = self.index_from_vertex_key(from);
-        assert!(f.is_some());
-        let t = self.index_from_vertex_key(to);
-        assert!(t.is_some());
-        self.insert_edge(f.unwrap(), t.unwrap());
+    /// This method does not check whether the endpoints of the edge exist in the graph.
+    /// Therefore use this method with care to not mistakenly add dangling edges, because Graph cannot handle dangling edges properly.
+    pub fn insert_edge_unchecked(&mut self, edge: Edge) {
+        self.edges.push(edge);
     }
 
     pub fn out_neighbours(&self, source: VertexIndex) -> impl Iterator<Item = &VertexIndex> {
@@ -297,8 +332,7 @@ mod tests {
         #[test]
         #[should_panic]
         fn panicks_when_created_graph_has_different_number_of_columns() {
-            let g_arc = Graph::new(true, vec!["first column name".to_string()]);
-            let mut g = g_arc.write().unwrap();
+            let mut g = Graph::new(true, vec!["first column name".to_string()]);
             g.insert_vertex(
                 vec![],
                 vec![
@@ -310,14 +344,13 @@ mod tests {
 
         #[test]
         fn inserts_vertex_into_given_graph() {
-            let g_arc = Graph::new(
+            let mut g = Graph::new(
                 true,
                 vec![
                     "string column name".to_string(),
                     "number column name".to_string(),
                 ],
             );
-            let mut g = g_arc.write().unwrap();
 
             // add one vertex
             g.insert_vertex(
@@ -368,8 +401,7 @@ mod tests {
 
         #[test]
         fn does_not_care_about_duplicate_vertex_key() {
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
+            let mut g = Graph::new(true, vec![]);
             g.insert_vertex(b"V/A".to_vec(), vec![]);
 
             g.insert_vertex(b"V/A".to_vec(), vec![]);
@@ -378,35 +410,73 @@ mod tests {
         }
     }
 
+    mod get_new_edge {
+        use super::*;
+
+        #[test]
+        fn gives_edge_between_two_existing_vertices() {
+            let g = Graph::create(vec!["V/A".to_string(), "V/B".to_string()], vec![]);
+
+            assert_eq!(
+                g.get_new_edge_between_vertices(b"V/A", b"V/B"),
+                Ok(Edge {
+                    from: VertexIndex::new(0),
+                    to: VertexIndex::new(1)
+                })
+            );
+        }
+
+        #[test]
+        fn errors_when_to_vertex_does_not_exist() {
+            let g = Graph::create(vec!["V/A".to_string()], vec![]);
+
+            assert!(g.get_new_edge_between_vertices(b"V/A", b"V/B").is_err());
+        }
+
+        #[test]
+        fn errors_when_from_vertex_does_not_exist() {
+            let g = Graph::create(vec!["V/A".to_string()], vec![]);
+
+            assert!(g.get_new_edge_between_vertices(b"V/B", b"V/A").is_err());
+        }
+    }
+
     mod inserts_edge {
         use super::*;
 
         #[test]
-        fn inserts_dangling_edge_into_given_graph() {
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
+        fn inserts_edge_between_two_existing_vertices_into_given_graph() {
+            let mut g = Graph::create(vec!["V/A".to_string(), "V/B".to_string()], vec![]);
 
-            g.insert_edge(VertexIndex::new(1), VertexIndex::new(2));
+            let _ = g.insert_edge_between_vertices(b"V/A", b"V/B");
 
             assert_eq!(
                 g.edges,
                 vec![Edge {
-                    from: VertexIndex::new(1),
-                    to: VertexIndex::new(2)
+                    from: VertexIndex::new(0),
+                    to: VertexIndex::new(1)
                 }]
             );
         }
 
         #[test]
-        fn inserts_edge_between_two_existing_vertices_into_given_graph() {
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
-            let from = g.insert_vertex(b"V/A".to_vec(), vec![]);
-            let to = g.insert_vertex(b"V/B".to_vec(), vec![]);
+        fn errors_when_to_vertex_does_not_exist() {
+            let mut g = Graph::create(vec!["V/A".to_string()], vec![]);
 
-            g.insert_edge(from, to);
+            let r = g.insert_edge_between_vertices(b"V/A", b"V/B");
 
-            assert_eq!(g.edges, vec![Edge { from, to }]);
+            assert!(r.is_err());
+            assert_eq!(g.edges, vec![]);
+        }
+
+        #[test]
+        fn errors_when_from_vertex_does_not_exist() {
+            let mut g = Graph::create(vec!["V/A".to_string()], vec![]);
+
+            let r = g.insert_edge_between_vertices(b"V/B", b"V/A");
+
+            assert!(r.is_err());
+            assert_eq!(g.edges, vec![]);
         }
     }
 
@@ -415,22 +485,23 @@ mod tests {
 
         #[test]
         fn adds_from_index_and_retrieves_out_vertices_via_function() {
-            // TODO does not work when edges are dangling (if number of vertices in graph is not correct,
-            // because edge_index_by_from should be number of vertices + 1)
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
-            // add 6 random vertices
-            g.insert_empty_vertex(b"V/A");
-            g.insert_empty_vertex(b"V/B");
-            g.insert_empty_vertex(b"V/C");
-            g.insert_empty_vertex(b"V/D");
-            g.insert_empty_vertex(b"V/E");
-            g.insert_empty_vertex(b"V/F");
-            // add edges
-            g.insert_edge(VertexIndex::new(4), VertexIndex::new(1));
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(3));
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(2));
-            g.insert_edge(VertexIndex::new(1), VertexIndex::new(6));
+            let mut g = Graph::create(
+                vec![
+                    "V/A".to_string(),
+                    "V/B".to_string(),
+                    "V/C".to_string(),
+                    "V/D".to_string(),
+                    "V/E".to_string(),
+                    "V/F".to_string(),
+                    "V/G".to_string(),
+                ],
+                vec![
+                    ("V/E".to_string(), "V/B".to_string()),
+                    ("V/A".to_string(), "V/D".to_string()),
+                    ("V/A".to_string(), "V/C".to_string()),
+                    ("V/B".to_string(), "V/G".to_string()),
+                ],
+            );
 
             g.index_edges(true, false);
 
@@ -455,22 +526,23 @@ mod tests {
         #[test]
         #[should_panic]
         fn requesting_out_vertices_in_not_properly_indexed_graph_panicks() {
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
-            g.insert_empty_vertex(b"V/A");
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
+            let g = Graph::create(
+                vec!["V/A".to_string()],
+                vec![("V/A".to_string(), "V/A".to_string())],
+            );
 
             g.out_neighbours(VertexIndex::new(0)).count();
         }
 
         #[test]
         fn counts_outgoing_vertices() {
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
-            g.insert_empty_vertex(b"V/A");
-            g.insert_empty_vertex(b"V/A");
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(1));
+            let mut g = Graph::create(
+                vec!["V/A".to_string(), "V/B".to_string()],
+                vec![
+                    ("V/A".to_string(), "V/A".to_string()),
+                    ("V/A".to_string(), "V/B".to_string()),
+                ],
+            );
             g.index_edges(true, false);
 
             assert_eq!(g.out_neighbour_count(VertexIndex::new(0)), 2);
@@ -482,22 +554,23 @@ mod tests {
 
         #[test]
         fn adds_to_index() {
-            // TODO does not work when edges are dangling (if number of vertices in graph is not correct,
-            // because edge_index_by_from should be number of vertices + 1)
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
-            // add 6 random vertices
-            g.insert_empty_vertex(b"V/A");
-            g.insert_empty_vertex(b"V/B");
-            g.insert_empty_vertex(b"V/C");
-            g.insert_empty_vertex(b"V/D");
-            g.insert_empty_vertex(b"V/E");
-            g.insert_empty_vertex(b"V/F");
-            // add edges
-            g.insert_edge(VertexIndex::new(1), VertexIndex::new(4));
-            g.insert_edge(VertexIndex::new(3), VertexIndex::new(0));
-            g.insert_edge(VertexIndex::new(2), VertexIndex::new(0));
-            g.insert_edge(VertexIndex::new(6), VertexIndex::new(1));
+            let mut g = Graph::create(
+                vec![
+                    "V/A".to_string(),
+                    "V/B".to_string(),
+                    "V/C".to_string(),
+                    "V/D".to_string(),
+                    "V/E".to_string(),
+                    "V/F".to_string(),
+                    "V/G".to_string(),
+                ],
+                vec![
+                    ("V/B".to_string(), "V/E".to_string()),
+                    ("V/D".to_string(), "V/A".to_string()),
+                    ("V/C".to_string(), "V/A".to_string()),
+                    ("V/G".to_string(), "V/B".to_string()),
+                ],
+            );
 
             g.index_edges(false, true);
 
@@ -522,22 +595,23 @@ mod tests {
         #[test]
         #[should_panic]
         fn requesting_in_vertices_in_not_properly_indexed_graph_panicks() {
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
-            g.insert_empty_vertex(b"V/A");
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
+            let g = Graph::create(
+                vec!["V/A".to_string()],
+                vec![("V/A".to_string(), "V/A".to_string())],
+            );
 
             g.in_neighbours(VertexIndex::new(0)).count();
         }
 
         #[test]
         fn counts_incoming_vertices() {
-            let g_arc = Graph::new(true, vec![]);
-            let mut g = g_arc.write().unwrap();
-            g.insert_empty_vertex(b"V/A");
-            g.insert_empty_vertex(b"V/A");
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(0));
-            g.insert_edge(VertexIndex::new(1), VertexIndex::new(0));
+            let mut g = Graph::create(
+                vec!["V/A".to_string(), "V/B".to_string()],
+                vec![
+                    ("V/A".to_string(), "V/A".to_string()),
+                    ("V/B".to_string(), "V/A".to_string()),
+                ],
+            );
             g.index_edges(false, true);
 
             assert_eq!(g.in_neighbour_count(VertexIndex::new(0)), 2);

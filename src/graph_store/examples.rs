@@ -3,44 +3,31 @@
 // TODO: Find a proper place for this.
 
 use super::graph::Graph;
-use std::sync::{Arc, RwLock};
 
-pub fn make_cyclic_graph(n: u32) -> Arc<RwLock<Graph>> {
-    let g_arc = Graph::new(true, vec![]);
-    {
-        let mut g = g_arc.write().unwrap();
-        for i in 0..n {
-            let id = format!("V/K{i}");
-            g.insert_empty_vertex(id.as_bytes());
-        }
-        g.seal_vertices();
-        for i in 0..n {
+pub fn make_cyclic_graph(n: u32) -> Graph {
+    let vertices: Vec<String> = (0..n).map(|i| format!("V/K{i}")).collect();
+    let edges: Vec<(String, String)> = (0..n)
+        .map(|i| {
             let from = format!("V/K{}", i);
             let to = format!("V/K{}", (i + 1) % 10);
-            g.insert_edge_between_vertices(from.as_bytes(), to.as_bytes());
-        }
-        g.seal_edges();
-        g.index_edges(true, false);
-    }
-    g_arc
+            (from, to)
+        })
+        .collect();
+    let mut g = Graph::create(vertices, edges);
+    g.index_edges(true, false);
+    g
 }
 
-pub fn make_star_graph(n: u32) -> Arc<RwLock<Graph>> {
-    let g_arc = Graph::new(true, vec![]);
-    {
-        let mut g = g_arc.write().unwrap();
-        for i in 0..n {
-            let id = format!("V/K{i}");
-            g.insert_empty_vertex(id.as_bytes());
-        }
-        g.seal_vertices();
-        let to = format!("V/K{}", n - 1);
-        for i in 0..(n - 1) {
+pub fn make_star_graph(n: u32) -> Graph {
+    let vertices: Vec<String> = (0..n).map(|i| format!("V/K{i}")).collect();
+    let edges: Vec<(String, String)> = (0..n - 1)
+        .map(|i| {
+            let to = format!("V/K{}", n - 1);
             let from = format!("V/K{}", i);
-            g.insert_edge_between_vertices(from.as_bytes(), to.as_bytes());
-        }
-        g.seal_edges();
-        g.index_edges(true, false);
-    }
-    g_arc
+            (from, to)
+        })
+        .collect();
+    let mut g = Graph::create(vertices, edges);
+    g.index_edges(true, false);
+    g
 }
