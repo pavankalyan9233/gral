@@ -8,6 +8,7 @@ export const config = {
     endpoint: "http://localhost:8529",
     username: "root",
     password: "",
+    database: "_system"
   },
   test_configuration: {
     timeout: 10000,
