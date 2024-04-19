@@ -1,3 +1,4 @@
+use prost_wkt_build::*;
 use std::io::Result;
 use std::path::PathBuf;
 
@@ -11,23 +12,21 @@ fn main() -> Result<()> {
         println!("cargo:rerun-if-changed={}", proto_file.display());
     }
 
-    let descriptor_path =
-        PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("proto_descriptor.bin");
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let descriptor_path = out_dir.join("proto_descriptor.bin");
 
     let mut prost_build = prost_build::Config::new();
     prost_build
+        .type_attribute(".", "#[derive(serde::Serialize,serde::Deserialize)]")
         // Save descriptors to file
         .file_descriptor_set_path(&descriptor_path)
-        // Override prost-types with pbjson-types
-        .compile_well_known_types()
-        .extern_path(".google.protobuf", "::pbjson_types")
         // Generate prost structs
         .compile_protos(&proto_files, &[root])?;
 
+    // And add serde serialization and deserialization:
     let descriptor_set = std::fs::read(descriptor_path)?;
-    pbjson_build::Builder::new()
-        .register_descriptors(&descriptor_set)?
-        .build(&[".arangodb.cloud.internal.graphanalytics.v1"])?;
+    let descriptor = FileDescriptorSet::decode(&descriptor_set[..])?;
+    prost_wkt_build::add_serde(out_dir, descriptor);
 
     // Produce code for authentication service:
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
