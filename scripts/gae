@@ -1,14 +1,25 @@
 #!/bin/bash
 
 # Needed environment variables:
-#   ARANGO_GRAPH_TOKEN
 #   DEPLOYMENT_URL (without port component)
+# and:
+#   either ARANGO_GRAPH_TOKEN (provided by a call to oasisctl)
+#   or (ARANGO_GRAPH_API_KEY_ID and ARANGO_GRAPH_API_SECRET)
+# In the latter case, every call to this script will use an additional
+# API call to get the token from the API key. Note that this imposes a
+# certain delay!
+#
+# For the `api` subcommand the environment variable ENGINE_URL needs to
+# be set!
+#
 # Do not forget to set the feature flag "GraphAnalytics" (without the quotes)
 # for your organization, probably before you create the deployment!
+#
+# This script needs the tools `curl` and `jq` installed!
+#
 
 if [ "$ARANGO_GRAPH_TOKEN" == "" ] ; then
-    echo "Need ARANGO_GRAPH_TOKEN from environment."
-    exit 1
+    ARANGO_GRAPH_TOKEN=$(curl "https://dashboard.adbdev.cloud/api/iam/v1/apikeys/$ARANGO_GRAPH_API_KEY_ID/authenticate?secret=$ARANGO_GRAPH_API_KEY_SECRET" -X POST | jq .token -r)
 fi
 
 if [ "$DEPLOYMENT_URL" == "" ] ; then

@@ -330,7 +330,7 @@ async fn api_scc(
         {
             // Make sure we have an edge index:
             let mut graph = graph_arc.write().unwrap();
-            if !graph.edges_indexed_from {
+            if graph.from_index.is_none() {
                 info!("Indexing edges by from...");
                 graph.index_edges(true, false);
             }
@@ -497,7 +497,7 @@ async fn api_pagerank(
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
-        if !graph.edges_indexed_from {
+        if graph.from_index.is_none() {
             info!("Indexing edges by from...");
             graph.index_edges(true, false);
         }
@@ -572,7 +572,7 @@ async fn api_irank(
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
-        if !graph.edges_indexed_from {
+        if graph.from_index.is_none() {
             info!("Indexing edges by from...");
             graph.index_edges(true, false);
         }

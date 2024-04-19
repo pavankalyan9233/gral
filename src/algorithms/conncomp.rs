@@ -44,8 +44,8 @@ pub fn weakly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
                 nr_e
             );
         }
-        let a = e.from.to_u64();
-        let b = e.to.to_u64();
+        let a = e.from().to_u64();
+        let b = e.to().to_u64();
         let mut c = mini[b as usize];
         let mut rep = mini[a as usize];
         if c == rep {
@@ -132,13 +132,14 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
         let mut v = w;
         parent[v as usize] = sent; // root of a spanning tree
         root = v;
+        let from_index = g.from_index.as_ref().unwrap();
 
         // Prepare exploration from v:
         'T3: loop {
             // This is the outer main loop for the depth first search. We
             // return to this place whenever we start exploring from a new
             // vertex v.
-            let mut a = g.edge_index_by_from[v as usize];
+            let mut a = from_index.vertex_offset[v as usize];
             p += 1;
             rep[v as usize] = p;
             link[v as usize] = sent;
@@ -152,9 +153,9 @@ pub fn strongly_connected_components(g: &Graph) -> (u64, Vec<u64>, Vec<i64>) {
 
                 // First the case of doing another arc from here:
                 let u: u64; // the vertex we move to
-                if a < g.edge_index_by_from[v as usize + 1] {
+                if a < from_index.vertex_offset[v as usize + 1] {
                     // T5
-                    u = g.edges_by_from[a as usize].to_u64();
+                    u = from_index.sorted_neighbours[a as usize].to_u64();
                     a += 1;
                     // T6
                     if parent[u as usize] == lambda {

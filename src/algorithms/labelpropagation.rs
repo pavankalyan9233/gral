@@ -59,8 +59,8 @@ pub fn labelpropagation_sync(
         for v in 0..nr {
             let mut counts = HashMap::<&String, u64>::with_capacity(101);
             let vi = VertexIndex::new(v as u64);
-            if g.out_vertex_count(vi) > 0 {
-                g.out_vertices(vi).for_each(|sink| {
+            if g.out_neighbour_count(vi) > 0 {
+                g.out_neighbours(vi).for_each(|sink| {
                     let lab = labels[sink.to_u64() as usize];
                     let count = counts.get_mut(lab);
                     match count {
@@ -74,8 +74,8 @@ pub fn labelpropagation_sync(
                 });
             }
             // Now incoming edges:
-            if g.in_vertex_count(vi) > 0 {
-                g.in_vertices(vi).for_each(|source| {
+            if g.in_neighbour_count(vi) > 0 {
+                g.in_neighbours(vi).for_each(|source| {
                     let lab = labels[source.to_u64() as usize];
                     let count = counts.get_mut(lab);
                     match count {
@@ -194,8 +194,8 @@ pub fn labelpropagation_async(
         for v in order.iter() {
             let mut counts = HashMap::<&String, u64>::with_capacity(101);
             let vi = VertexIndex::new(*v as u64);
-            if g.out_vertex_count(vi) > 0 {
-                g.out_vertices(vi).for_each(|sink| {
+            if g.out_neighbour_count(vi) > 0 {
+                g.out_neighbours(vi).for_each(|sink| {
                     let lab = labels[sink.to_u64() as usize];
                     let count = counts.get_mut(lab);
                     match count {
@@ -209,8 +209,8 @@ pub fn labelpropagation_async(
                 });
             };
             // Now incoming edges:
-            if g.in_vertex_count(vi) > 0 {
-                g.in_vertices(vi).for_each(|source| {
+            if g.in_neighbour_count(vi) > 0 {
+                g.in_neighbours(vi).for_each(|source| {
                     let lab = labels[source.to_u64() as usize];
                     let count = counts.get_mut(lab);
                     match count {
