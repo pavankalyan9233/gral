@@ -279,7 +279,25 @@ export class GraphImporter {
       lineCount, 10000, true);
   }
 
-  async createGraph(edgeDefinitions, options) {
+  async insertVerticesArray(vList) {
+    const vertexCollection = this.db.collection(this.getVertexCollectionName());
+    await vertexCollection.saveAll(vList);
+  }
+
+  async insertEdgesArray(eList) {
+    const edgeCollection = this.db.collection(this.getEdgeCollectionName());
+    await edgeCollection.saveAll(eList);
+  }
+
+  getVertexCollectionName() {
+    return `${this.graphName}_v`;
+  }
+
+  getEdgeCollectionName() {
+    return `${this.graphName}_e`;
+  }
+
+  async createGraph() {
     const graph = this.db.graph(this.graphName);
     let exists = await graph.exists();
 
@@ -290,8 +308,8 @@ export class GraphImporter {
     }
 
     if (!exists) {
-      const edgeCollectionName = `${this.graphName}_e`;
-      const vertexCollectionName = `${this.graphName}_v`;
+      const edgeCollectionName = this.getEdgeCollectionName();
+      const vertexCollectionName = this.getVertexCollectionName();
       const edgeDefinitions = [{
         collection: edgeCollectionName,
         from: [vertexCollectionName],
