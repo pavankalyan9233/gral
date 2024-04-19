@@ -2,15 +2,15 @@ use crate::python;
 use python::Script;
 
 pub struct Executor {
-    pub graph_name: String,
+    pub graph_id: u64,
     pub script: Script,
 }
 
 impl Executor {
-    pub fn new(graph_name: String, user_script_snippet: String) -> Executor {
+    pub fn new(graph_id: u64, user_script_snippet: String) -> Executor {
         Executor {
-            graph_name: graph_name.clone(),
-            script: Script::new(graph_name, user_script_snippet),
+            graph_id,
+            script: Script::new(graph_id, user_script_snippet),
         }
     }
 

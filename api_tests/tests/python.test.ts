@@ -19,7 +19,7 @@ describe('Python integration', () => {
     await graphGenerator.generateCompleteGraph(5, 'complete_graph_5');
   }, config.test_configuration.timeout);
 
-  test('Load a graph and store the parquet file', async () => {
+  test('Load a graph and do a python3 based pagerank computation on it', async () => {
     let url = gral.buildUrl(gral_endpoint, '/v1/loaddata');
     const postBody = {
       vertex_collections: ['complete_graph_5_v'],
