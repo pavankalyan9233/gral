@@ -91,7 +91,7 @@ mod tests {
         // destroy script
         drop(script);
 
-        // expect that the temp file automatically will be destructed
+        // expect that the temp file automatically is removed during destruction
         assert!(!std::path::Path::new(&file_path).exists());
     }
 }
