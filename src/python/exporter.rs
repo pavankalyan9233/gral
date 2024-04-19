@@ -9,17 +9,13 @@ use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 
 pub struct Exporter {
-    pub graph_id: u64,
     pub g_arc: Arc<RwLock<Graph>>,
     pub temp_file: tempfile::NamedTempFile,
 }
 
 impl Exporter {
     pub fn new(g_arc: Arc<RwLock<Graph>>) -> Exporter {
-        let graph_id = g_arc.read().unwrap().graph_id;
-
         Exporter {
-            graph_id,
             g_arc,
             temp_file: Builder::new()
                 .prefix("gral")

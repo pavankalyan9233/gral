@@ -1,16 +1,24 @@
+use crate::graph_store::graph::Graph;
 use crate::python;
+use crate::python::exporter::Exporter;
+use crate::python::importer::Importer;
 use python::Script;
+use std::sync::{Arc, RwLock};
 
 pub struct Executor {
-    pub graph_id: u64,
-    pub script: Script,
+    pub g_arc: Arc<RwLock<Graph>>,
+    pub script: Script,     // builds the python3 execution script
+    pub exporter: Exporter, // exports a graph to a parquet file
+    pub importer: Importer, // imports a computed dictionary from a parquet file
 }
 
 impl Executor {
-    pub fn new(graph_id: u64, user_script_snippet: String) -> Executor {
+    pub fn new(graph: Arc<RwLock<Graph>>, user_script_snippet: String) -> Executor {
         Executor {
-            graph_id,
-            script: Script::new(graph_id, user_script_snippet),
+            script: Script::new(graph.read().unwrap().graph_id, user_script_snippet),
+            g_arc: graph.clone(),
+            exporter: Exporter::new(graph.clone()),
+            importer: Importer::new(graph.clone()),
         }
     }
 
