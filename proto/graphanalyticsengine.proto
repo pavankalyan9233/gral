@@ -210,6 +210,13 @@ service GraphAnalyticsEngineService {
     //    };
     //}
 
+    // Get logs, for now, the return type is not defined, therefore commented out:
+    //rpc GraphAnalyticsEngineLogs(Empty) returns (LogsAsText) {
+    //    option (google.api.http) = {
+    //        get: "/v1/logs"
+    //    };
+    //}
+
     // Shutdown service.
     rpc GraphAnalticsEngineShutdown(Empty) returns (GraphAnalyticsEngineShutdownResponse) {
         option(google.api.http) = {
