@@ -10,6 +10,8 @@ pub struct ComponentsComputation {
     pub next_in_component: Option<Vec<i64>>,
     pub shall_stop: bool,
     pub number: Option<u64>,
+    pub error_code: i32,
+    pub error_message: String,
 }
 
 impl BaseComputation for ComponentsComputation {
@@ -17,7 +19,7 @@ impl BaseComputation for ComponentsComputation {
         self.components.is_some()
     }
     fn get_error(&self) -> (i32, String) {
-        (0, "".to_string())
+        (self.error_code, self.error_message.clone())
     }
     fn cancel(&mut self) {
         self.shall_stop = true;

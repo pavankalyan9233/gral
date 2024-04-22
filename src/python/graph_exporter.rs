@@ -56,32 +56,31 @@ impl GraphExporter {
 mod tests {
     use super::*;
     use crate::graph_store::graph::Graph;
-    use crate::graph_store::vertex_key_index::VertexIndex;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
     use std::fs::File;
+    use std::sync::RwLock;
 
     #[test]
     fn test_export_graph_into_parquet_file() {
-        let g_arc = Graph::new(false, vec![]);
-        // add 6 random vertices
+        let mut g = Graph::create(vec![], vec![]);
         {
-            let mut g = g_arc.write().unwrap();
-            g.insert_empty_vertex(b"V/A");
-            g.insert_empty_vertex(b"V/B");
-            g.insert_empty_vertex(b"V/C");
-            g.insert_empty_vertex(b"V/D");
-            g.insert_empty_vertex(b"V/E");
-            g.insert_empty_vertex(b"V/F");
+            g.insert_vertex(b"V/A".to_vec(), vec![]);
+            g.insert_vertex(b"V/B".to_vec(), vec![]);
+            g.insert_vertex(b"V/C".to_vec(), vec![]);
+            g.insert_vertex(b"V/D".to_vec(), vec![]);
+            g.insert_vertex(b"V/E".to_vec(), vec![]);
+            g.insert_vertex(b"V/F".to_vec(), vec![]);
             // add edges
-            g.insert_edge(VertexIndex::new(4), VertexIndex::new(1));
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(3));
-            g.insert_edge(VertexIndex::new(0), VertexIndex::new(2));
-            g.insert_edge(VertexIndex::new(1), VertexIndex::new(6));
+            let _ = g.insert_edge_between_vertices(b"V/D", b"V/B");
+            let _ = g.insert_edge_between_vertices(b"V/A", b"V/D");
+            let _ = g.insert_edge_between_vertices(b"V/A", b"V/C");
+            let _ = g.insert_edge_between_vertices(b"V/B", b"V/F");
             g.seal_vertices();
             g.seal_edges();
         }
 
-        let exporter = GraphExporter::new(g_arc.clone(), "/tmp/dont_care.parquet".to_string());
+        let g_arc = Arc::new(RwLock::new(g));
+        let exporter = GraphExporter::new(g_arc, "/tmp/dont_care.parquet".to_string());
         match exporter.write_parquet_file() {
             Ok(file_path) => {
                 let file = File::open(file_path).unwrap();

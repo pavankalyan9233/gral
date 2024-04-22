@@ -6,8 +6,7 @@ use crate::auth::create_jwt_token;
 use crate::computations::types::BaseComputation;
 use crate::computations::types::LoadComputation;
 use crate::computations::types::StoreComputation;
-use crate::graph_store::graph::Graph;
-use crate::graph_store::vertex_key_index::VertexIndex;
+use crate::graph_store::graph::{Edge, Graph};
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use log::{debug, info};
@@ -635,26 +634,17 @@ pub async fn fetch_graph_from_arangodb(
                             }
                         }
                     }
-                    let mut edges: Vec<(VertexIndex, VertexIndex)> =
-                        Vec::with_capacity(froms.len());
+
+                    let mut edges: Vec<Edge> = Vec::with_capacity(froms.len());
                     {
                         // First translate keys to indexes by reading
                         // the graph object:
                         let graph = graph_clone.read().unwrap();
                         assert!(froms.len() == tos.len());
                         for i in 0..froms.len() {
-                            let from_key = &froms[i];
-                            let from_opt = graph.index_from_vertex_key(from_key);
-                            let to_key = &tos[i];
-                            let to_opt = graph.index_from_vertex_key(to_key);
-                            if let (Some(fo), Some(to)) = (from_opt, to_opt) {
-                                edges.push((fo, to));
-                            } else {
-                                eprintln!(
-                                    "Did not find _from value {} or _to value {} in vertex keys!",
-                                    std::str::from_utf8(from_key).unwrap(),
-                                    std::str::from_utf8(to_key).unwrap()
-                                );
+                            match graph.get_new_edge_between_vertices(&froms[i], &tos[i]) {
+                                Ok(edge) => edges.push(edge),
+                                Err(message) => eprintln!("{}", message),
                             }
                         }
                     }
@@ -663,11 +653,12 @@ pub async fn fetch_graph_from_arangodb(
                         // Now actually insert edges by writing the graph
                         // object:
                         let mut graph = graph_clone.write().unwrap();
-                        for e in edges {
-                            graph.insert_edge(e.0, e.1);
-                        }
+                        edges
+                            .into_iter()
+                            .for_each(|e| graph.insert_edge_unchecked(e));
                         nr_edges = graph.number_of_edges();
                     }
+
                     let mut prog = prog_reported_clone.lock().unwrap();
                     if nr_edges > *prog + 1000000_u64 {
                         *prog = nr_edges;

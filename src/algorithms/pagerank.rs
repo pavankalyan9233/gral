@@ -2,9 +2,18 @@ use crate::graph_store::graph::Graph;
 use crate::graph_store::vertex_key_index::VertexIndex;
 use log::info;
 
-pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, u32) {
+pub fn page_rank(
+    g: &Graph,
+    supersteps: u32,
+    damping_factor: f64,
+) -> Result<(Vec<f64>, u32), String> {
+    if !g.is_indexed_by_from() {
+        return Err("The graph is missing the from-neighbour index which is required for the page rank algorithm.".to_string());
+    }
+
     info!("Running page rank...");
     let start = std::time::SystemTime::now();
+
     let nr = g.number_of_vertices() as usize;
     let mut rank = vec![1.0 / nr as f64; nr];
     let mut new_rank = vec![1.0 / nr as f64 * (1.0 - damping_factor); nr];
@@ -46,7 +55,7 @@ pub fn page_rank(g: &Graph, supersteps: u32, damping_factor: f64) -> (Vec<f64>, 
     }
     let dur = start.elapsed();
     info!("Page rank completed in {dur:?} seconds.");
-    (rank, step)
+    Ok((rank, step))
 }
 
 #[cfg(test)]
@@ -57,9 +66,8 @@ mod tests {
 
     #[test]
     fn test_pagerank_cyclic() {
-        let g_arc = make_cyclic_graph(10);
-        let g = g_arc.read().unwrap();
-        let (rank, steps) = page_rank(&g, 5, 0.85);
+        let g = make_cyclic_graph(10);
+        let (rank, steps) = page_rank(&g, 5, 0.85).unwrap();
         assert_eq!(steps, 1);
         for i in 0..10 {
             assert!((rank[i] - 1.0 / 10.0).abs() < 0.000001);
@@ -69,12 +77,21 @@ mod tests {
 
     #[test]
     fn test_pagerank_star() {
-        let g_arc = make_star_graph(10);
-        let g = g_arc.read().unwrap();
-        let (rank, steps) = page_rank(&g, 100, 0.85);
+        let g = make_star_graph(10);
+        let (rank, steps) = page_rank(&g, 100, 0.85).unwrap();
         assert!(steps > 50 && steps < 70);
         assert!(0.49 < rank[9] && rank[9] < 0.50);
         assert!(0.05 < rank[0] && rank[0] < 0.06);
         println!("{:?}", rank);
+    }
+
+    #[test]
+    fn does_not_run_when_graph_has_no_from_neighbour_index() {
+        let g = Graph::create(
+            vec!["V/A".to_string()],
+            vec![("V/A".to_string(), "V/A".to_string())],
+        );
+
+        assert!(page_rank(&g, 100, 0.85).is_err());
     }
 }
