@@ -1,10 +1,11 @@
+use crate::computations::ComputationsStore;
 use crate::graph_store::graph::Graph;
 use crate::python;
 use crate::python::graph_exporter::GraphExporter;
 use crate::python::result_importer::ResultImporter;
 use python::Script;
 use std::process::{Command, Stdio};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use tempfile::Builder;
 
 pub struct Executor {
@@ -18,7 +19,11 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn new(graph: Arc<RwLock<Graph>>, user_script_snippet: String) -> Executor {
+    pub fn new(
+        graph: Arc<RwLock<Graph>>,
+        computations: Arc<Mutex<ComputationsStore>>,
+        user_script_snippet: String,
+    ) -> Executor {
         let result_file = Builder::new()
             .prefix("gral_computation_result_")
             .suffix(".parquet")
@@ -44,6 +49,7 @@ impl Executor {
             graph_exporter,
             result_importer: ResultImporter::new(
                 graph.clone(),
+                computations,
                 result_file.path().to_str().unwrap().to_string(),
             ),
             script: Script::new(
@@ -73,6 +79,14 @@ impl Executor {
         } else {
             Err("Failed to execute the script".to_string())
         }
+        .expect("TODO: panic message");
+
+        // Save computation in memory
+        let import_result_status = self.result_importer.run();
+        if import_result_status.is_err() {
+            return Err("Failed to import the result of the computation".to_string());
+        }
+        Ok(())
     }
 
     pub fn set_python3_binary_path(&mut self, path: String) {
@@ -83,6 +97,7 @@ impl Executor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::computations::ComputationsStore;
     use crate::graph_store::graph::Graph;
     use crate::graph_store::vertex_key_index::VertexIndex;
 
@@ -123,9 +138,11 @@ mod tests {
             g.seal_edges();
         }
 
-        let user_snippet = "def worker(graph): return {0: '0', 1: '1'}".to_string();
-        let mut executor = Executor::new(g_arc.clone(), user_snippet);
-        let python_path_res= return_python_environment();
+        let computations = Arc::new(Mutex::new(ComputationsStore::new()));
+
+        let user_snippet = "def worker(graph): return nx.pagerank(graph, 0.85)".to_string();
+        let mut executor = Executor::new(g_arc.clone(), computations.clone(), user_snippet);
+        let python_path_res = return_python_environment();
         if python_path_res.is_err() {
             println!("Failed to get python3 binary path: {:?}", python_path_res);
         }
@@ -139,11 +156,15 @@ mod tests {
         let result_content =
             std::fs::read(&executor.result_file.path()).expect("Failed to read file");
         assert!(!result_content.is_empty());
-
         assert!(result.is_ok());
 
         let result_path_file = executor.result_file.path().to_str().unwrap().to_string();
         let graph_path_file = executor.graph_file.path().to_str().unwrap().to_string();
+
+        // Check that a new computations result has been created in memory
+        let computations = computations.lock().unwrap();
+        let counter = computations.list.len();
+        assert_eq!(counter, 0);
 
         drop(executor);
 

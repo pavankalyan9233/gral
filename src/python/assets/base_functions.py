@@ -25,7 +25,7 @@ def read_graph(graph_file_path):
 
 def store_computation(result):
     if isinstance(result, dict):
-        df = pd.DataFrame(result, index=[0])
+        df = pd.DataFrame(list(result.items()), columns=['Node', 'Result'])
         df.to_parquet(result_file_path)
 
     else:
