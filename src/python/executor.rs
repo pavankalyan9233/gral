@@ -1,7 +1,7 @@
 use crate::graph_store::graph::Graph;
 use crate::python;
-use crate::python::exporter::Exporter;
-use crate::python::importer::Importer;
+use crate::python::graph_exporter::GraphExporter;
+use crate::python::result_importer::ResultImporter;
 use python::Script;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, RwLock};
@@ -11,8 +11,8 @@ pub struct Executor {
     pub g_arc: Arc<RwLock<Graph>>,
     pub result_file: tempfile::NamedTempFile, // file to store the result of the script
     pub graph_file: tempfile::NamedTempFile,  // file to store the result of the script
-    pub exporter: Exporter,                   // exports a graph to a parquet file
-    pub importer: Importer,                   // imports a computed dictionary from a parquet file
+    pub graph_exporter: GraphExporter,        // exports a graph to a parquet file
+    pub result_importer: ResultImporter,      // imports a computed dictionary from a parquet file
     pub script: Script,                       // builds the python3 execution script
     pub python3_binary_path: String,
 }
@@ -31,18 +31,18 @@ impl Executor {
             .tempfile()
             .expect("Failed to create temporary file for graph export");
 
-        let exporter = Exporter::new(
+        let graph_exporter = GraphExporter::new(
             graph.clone(),
             graph_file.path().to_str().unwrap().to_string(),
         );
-        exporter
+        graph_exporter
             .write_parquet_file()
             .expect("Could not write graph export into parquet file");
 
         Executor {
             g_arc: graph.clone(),
-            exporter,
-            importer: Importer::new(
+            graph_exporter,
+            result_importer: ResultImporter::new(
                 graph.clone(),
                 result_file.path().to_str().unwrap().to_string(),
             ),
@@ -86,6 +86,24 @@ mod tests {
     use crate::graph_store::graph::Graph;
     use crate::graph_store::vertex_key_index::VertexIndex;
 
+    #[cfg(target_os = "macos")]
+    fn return_python_environment() -> Result<String, String> {
+        return if let Ok(python_path) = std::env::var("PYTHON3_BINARY_PATH") {
+            println!("Python 3 binary path: {}", python_path);
+            Ok(python_path)
+        } else {
+            Err(
+                "Python 3 binary path not provided in PYTHON3_BINARY_PATH environment variable."
+                    .to_string(),
+            )
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn return_python_environment() -> Result<String, ()> {
+        return "python3".to_string();
+    }
+
     #[test]
     fn test_full_executor_run() {
         let g_arc = Graph::new(false, vec![]);
@@ -108,10 +126,12 @@ mod tests {
 
         let user_snippet = "def worker(graph): return {0: '0', 1: '1'}".to_string();
         let mut executor = Executor::new(g_arc.clone(), user_snippet);
-
-        // Please keep this line for debugging purposes (venv issue on macOS)
-        // executor.set_python3_binary_path("/Users/hkernbach/venv/bin/python".to_string());
-        // Please keep this line for debugging purposes
+        let python_path_res= return_python_environment();
+        if python_path_res.is_err() {
+            println!("Failed to get python3 binary path: {:?}", python_path_res);
+        }
+        assert!(python_path_res.is_ok());
+        executor.set_python3_binary_path(python_path_res.unwrap());
         let result = executor.run();
         assert!(result.is_ok());
 

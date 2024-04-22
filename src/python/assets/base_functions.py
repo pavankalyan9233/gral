@@ -17,6 +17,7 @@ def read_graph(graph_file_path):
 
     graph = nx.Graph()
     for _, row in df_edges.iterrows():
+        # TODO: Currently the column names are hard-coded. Make it dynamic.
         graph.add_edge(row['_from'], row['_to'])
 
     return graph

@@ -8,14 +8,14 @@ use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 
-pub struct Exporter {
+pub struct GraphExporter {
     pub g_arc: Arc<RwLock<Graph>>,
     pub graph_file_path: String,
 }
 
-impl Exporter {
-    pub fn new(g_arc: Arc<RwLock<Graph>>, graph_file_path: String) -> Exporter {
-        Exporter {
+impl GraphExporter {
+    pub fn new(g_arc: Arc<RwLock<Graph>>, graph_file_path: String) -> GraphExporter {
+        GraphExporter {
             g_arc,
             graph_file_path,
         }
@@ -81,7 +81,7 @@ mod tests {
             g.seal_edges();
         }
 
-        let exporter = Exporter::new(g_arc.clone(), "/tmp/dont_care.parquet".to_string());
+        let exporter = GraphExporter::new(g_arc.clone(), "/tmp/dont_care.parquet".to_string());
         match exporter.write_parquet_file() {
             Ok(file_path) => {
                 let file = File::open(file_path).unwrap();
