@@ -1,5 +1,6 @@
 use metrics::{decrement_gauge, increment_gauge};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::any::Any;
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -18,7 +19,7 @@ pub trait Computation {
     fn algorithm_name(&self) -> String;
     fn as_any(&self) -> &dyn Any;
     fn nr_results(&self) -> u64;
-    fn get_result(&self, which: u64) -> (String, String);
+    fn get_result(&self, which: u64) -> (String, Value);
     fn memory_usage(&self) -> usize;
 }
 
@@ -107,9 +108,9 @@ impl Computation for ComponentsComputation {
             Some(v) => v.len() as u64,
         }
     }
-    fn get_result(&self, which: u64) -> (String, String) {
+    fn get_result(&self, which: u64) -> (String, Value) {
         match &self.components {
-            None => ("".to_string(), "".to_string()),
+            None => ("".to_string(), json!("")),
             Some(vs) => {
                 let guard = self.graph.read().unwrap();
                 let key = std::str::from_utf8(&guard.index_to_key[which as usize])
@@ -118,7 +119,7 @@ impl Computation for ComponentsComputation {
                 let comp = std::str::from_utf8(&guard.index_to_key[vs[which as usize] as usize])
                     .unwrap()
                     .to_string();
-                (key, comp)
+                (key, json!(comp))
             }
         }
     }
@@ -171,8 +172,8 @@ impl Computation for LoadComputation {
     fn nr_results(&self) -> u64 {
         0
     }
-    fn get_result(&self, _which: u64) -> (String, String) {
-        ("".to_string(), "".to_string())
+    fn get_result(&self, _which: u64) -> (String, Value) {
+        ("".to_string(), json!(""))
     }
     fn memory_usage(&self) -> usize {
         // Memory for graph accounted for there!
@@ -230,16 +231,13 @@ impl Computation for AggregationComputation {
     fn nr_results(&self) -> u64 {
         self.result.len() as u64
     }
-    fn get_result(&self, which: u64) -> (String, String) {
+    fn get_result(&self, which: u64) -> (String, Value) {
         let comp = &self.result[which as usize];
         (
             comp.key.clone(),
-            format!(
-                r#""representative":"{}","size":{},"aggregation":{}"#,
-                comp.representative,
-                comp.size,
-                serde_json::to_string(&comp.aggregation).unwrap(),
-            ),
+            json!({"representative": comp.representative,
+                   "size": comp.size,
+                   "aggregation": comp.aggregation}),
         )
     }
     fn memory_usage(&self) -> usize {
@@ -285,8 +283,8 @@ impl Computation for StoreComputation {
     fn nr_results(&self) -> u64 {
         0
     }
-    fn get_result(&self, _which: u64) -> (String, String) {
-        ("".to_string(), "".to_string())
+    fn get_result(&self, _which: u64) -> (String, Value) {
+        ("".to_string(), json!(""))
     }
     fn memory_usage(&self) -> usize {
         // Memory for graph accounted for there!
@@ -335,7 +333,7 @@ impl Computation for PageRankComputation {
     fn nr_results(&self) -> u64 {
         self.rank.len() as u64
     }
-    fn get_result(&self, which: u64) -> (String, String) {
+    fn get_result(&self, which: u64) -> (String, Value) {
         let key;
         {
             let guard = self.graph.read().unwrap();
@@ -343,7 +341,7 @@ impl Computation for PageRankComputation {
                 .unwrap()
                 .to_string();
         }
-        (key, format!("{:.8}", self.rank[which as usize]))
+        (key, json!(self.rank[which as usize]))
     }
     fn memory_usage(&self) -> usize {
         self.rank.len() * std::mem::size_of::<f64>()
@@ -391,7 +389,7 @@ impl Computation for LabelPropagationComputation {
     fn nr_results(&self) -> u64 {
         self.label.len() as u64
     }
-    fn get_result(&self, which: u64) -> (String, String) {
+    fn get_result(&self, which: u64) -> (String, Value) {
         let key;
         {
             let guard = self.graph.read().unwrap();
@@ -399,7 +397,7 @@ impl Computation for LabelPropagationComputation {
                 .unwrap()
                 .to_string();
         }
-        (key, self.label[which as usize].clone())
+        (key, json!(self.label[which as usize]))
     }
     fn memory_usage(&self) -> usize {
         self.label_size_sum + self.label.len() * std::mem::size_of::<String>()

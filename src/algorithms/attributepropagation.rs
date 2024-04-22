@@ -2,7 +2,7 @@ use crate::computations::Computation;
 use crate::graph_store::graph::Graph;
 use crate::graph_store::vertex_key_index::VertexIndex;
 use log::info;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
@@ -48,7 +48,7 @@ impl Computation for AttributePropagationComputation {
     fn nr_results(&self) -> u64 {
         self.label.len() as u64
     }
-    fn get_result(&self, which: u64) -> (String, String) {
+    fn get_result(&self, which: u64) -> (String, Value) {
         let key;
         {
             let guard = self.graph.read().unwrap();
@@ -56,21 +56,7 @@ impl Computation for AttributePropagationComputation {
                 .unwrap()
                 .to_string();
         }
-        let labs = &self.label[which as usize];
-        let mut s = String::with_capacity(16 * labs.len());
-        s.push('[');
-        let mut first = true;
-        for l in labs {
-            if !first {
-                s.push(',');
-                first = false;
-            }
-            s.push('"');
-            s.push_str(l);
-            s.push('"');
-        }
-        s.push(']');
-        (key, s)
+        (key, json!(self.label[which as usize]))
     }
     fn memory_usage(&self) -> usize {
         self.label_size_sum + self.label.len() * std::mem::size_of::<Vec<String>>()
@@ -452,6 +438,6 @@ mod tests {
         assert_eq!(apc.nr_results(), 1);
         let (k, v) = apc.get_result(0);
         assert_eq!(k, "V/A");
-        assert_eq!(v, "[\"X\"]");
+        assert_eq!(v, json!(["X"]));
     }
 }
