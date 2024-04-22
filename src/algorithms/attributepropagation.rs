@@ -164,10 +164,7 @@ pub fn attribute_propagation_async(
         for v in 0..nr {
             let vi = VertexIndex::new(v as u64);
             g.in_neighbours(vi).for_each(|fromv| {
-                let labvec: Vec<u64> = labels[fromv.to_u64() as usize]
-                    .iter()
-                    .map(|ru| -> u64 { *ru })
-                    .collect();
+                let labvec: Vec<u64> = labels[fromv.to_u64() as usize].iter().copied().collect();
                 for l in labvec {
                     if labels[v].insert(l) {
                         diffcount += 1;
