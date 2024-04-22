@@ -94,6 +94,12 @@ jobs:
           keys:
             - v1-coverage-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
       - run:
+          name: Install Python 3 and dependencies
+          command: |
+            sudo apt-get update -y
+            sudo apt-get install python3 python3-pip -y
+            pip3 install -r ./src/python/assets/requirements.txt
+      - run:
           name: Coverage UnitTests
           command: |
             cargo install grcov

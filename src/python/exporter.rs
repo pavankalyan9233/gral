@@ -18,7 +18,7 @@ impl Exporter {
         Exporter {
             g_arc,
             temp_file: Builder::new()
-                .prefix("gral")
+                .prefix("gral_graph_export_")
                 .suffix(".parquet")
                 .tempfile()
                 .expect("Failed to create temporary file"),

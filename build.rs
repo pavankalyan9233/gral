@@ -39,7 +39,7 @@ fn main() -> Result<()> {
 
     // Produce byte representation of our python script for the executor:
     std::fs::copy(
-        "src/python/snippets/base_functions.py",
+        "src/python/assets/base_functions.py",
         out_dir.join("base_functions.py"),
     )
     .expect("Failed to copy Python script to output directory");
