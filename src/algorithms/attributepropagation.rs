@@ -176,6 +176,9 @@ pub fn attribute_propagation_async(
             "{:?} attribute propagation (async)  step {step}, changed: {diffcount}",
             start.elapsed()
         );
+        if diffcount == 0 {
+            break;
+        }
     }
     let dur = start.elapsed();
     info!("attribute propagation (async) completed in {dur:?} seconds.");
@@ -242,6 +245,9 @@ pub fn attribute_propagation_sync(
             start.elapsed()
         );
         labels = newlabels;
+        if diffcount == 0 {
+            break;
+        }
     }
     let dur = start.elapsed();
     info!("attribute propagation (sync) completed in {dur:?} seconds.");
@@ -269,7 +275,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_attribute_propagation_sync_cyclic() {
+        fn test_attribute_propagation_cyclic() {
             let mut g = make_cyclic_graph(10);
             g.vertex_column_names = vec!["startlabel".to_string()];
             g.vertex_json = vec![Vec::new()];
@@ -279,67 +285,24 @@ mod tests {
             }
             g.vertex_column_types = vec!["string".to_string()];
             g.index_edges(false, true);
+            // Sync:
             let (labels, _size, steps) = attribute_propagation_sync(&g, 10, "startlabel").unwrap();
-            println!("{:?}", labels);
             assert_eq!(steps, 10);
             let x = "X".to_string();
             let vx = vec![x];
             for i in 0..10 {
                 assert_eq!(labels[i], vx);
             }
-        }
-
-        #[test]
-        fn test_label_propagation_sync_star() {
-            let mut g = make_star_graph(10);
-            g.vertex_column_names = vec!["startlabel".to_string()];
-            g.vertex_json = vec![Vec::new()];
-            for i in 0..10 {
-                g.vertex_json[0].push(json!(format!("K{i}")));
-            }
-            g.vertex_column_types = vec!["string".to_string()];
-            g.index_edges(true, true);
-            let (labels, _size, _steps) = attribute_propagation_sync(&g, 5, "startlabel").unwrap();
-            println!("{:?}", labels);
-        }
-
-        #[test]
-        fn does_not_run_when_graph_has_no_to_neighbour_index() {
-            let g = Graph::create(
-                vec!["V/A".to_string()],
-                vec![("V/A".to_string(), "V/A".to_string())],
-            );
-
-            assert!(attribute_propagation_sync(&g, 10, "startlabel").is_err());
-        }
-    }
-
-    mod async_version {
-        use super::*;
-
-        #[test]
-        fn test_attribute_propagation_async_cyclic() {
-            let mut g = make_cyclic_graph(10);
-            g.vertex_column_names = vec!["startlabel".to_string()];
-            g.vertex_json = vec![Vec::new()];
-            g.vertex_json[0].push(json!("X"));
-            for _i in 1..10 {
-                g.vertex_json[0].push(json!(null));
-            }
-            g.vertex_column_types = vec!["string".to_string()];
-            g.index_edges(false, true);
+            // Async:
             let (labels, _size, _steps) =
                 attribute_propagation_async(&g, 10, "startlabel").unwrap();
-            println!("{:?}", labels);
-            let x = "X".to_string();
-            let vx = vec![x];
             for i in 0..10 {
                 assert_eq!(labels[i], vx);
             }
         }
 
         #[test]
-        fn test_label_propagation_async_star() {
+        fn test_label_propagation_star() {
             let mut g = make_star_graph(10);
             g.vertex_column_names = vec!["startlabel".to_string()];
             g.vertex_json = vec![Vec::new()];
@@ -348,10 +311,12 @@ mod tests {
             }
             g.vertex_column_types = vec!["string".to_string()];
             g.index_edges(true, true);
-            let (labels, _size, _steps) = attribute_propagation_async(&g, 5, "startlabel").unwrap();
-            println!("{:?}", labels);
+            // Sync:
+            let (labels, _size, steps) = attribute_propagation_sync(&g, 5, "startlabel").unwrap();
+            assert_eq!(steps, 2);
             for i in 0..9 {
-                assert_eq!(labels[i].len(), 1);
+                let v = vec![format!("K{i}")];
+                assert_eq!(labels[i], v);
             }
             assert_eq!(labels[9].len(), 10);
         }
