@@ -791,6 +791,7 @@ async fn api_attribute_propagation(
     let comp_arc = Arc::new(RwLock::new(AttributePropagationComputation {
         graph: graph_arc.clone(),
         sync: body.synchronous,
+        backwards: body.backwards,
         shall_stop: false,
         total: 100,
         progress: 0,
@@ -805,9 +806,15 @@ async fn api_attribute_propagation(
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let res = if body.synchronous {
-            algorithms::attributepropagation::attribute_propagation_async(&graph, 64, &startlabel)
+            algorithms::attributepropagation::attribute_propagation_async(
+                &graph,
+                body.maximum_supersteps,
+                &startlabel,
+                body.backwards,
+            )
         } else {
-            algorithms::attributepropagation::attribute_propagation_sync(&graph, 64, &startlabel)
+            algorithms::attributepropagation::attribute_propagation_sync(&graph,
+                                                                         body.maximum_supersteps, &startlabel, body.backwards)
         };
         info!("Finished attribute propagation computation!");
         let mut comp = comp_arc.write().unwrap();

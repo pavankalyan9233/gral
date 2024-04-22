@@ -152,15 +152,29 @@ service GraphAnalyticsEngineService {
     }
 
     // Process a graph which was previously loaded with the attribute
-    // propagation algorithm and store the results in-memory. There are
-    // some parameters controlling the computation like the name of the
-    // attribute to choose the start label from, and the maximal number
-    // of supersteps. See the input message documentation for details.
-    // The computation will return a numerical job Id, with which the
-    // results can later be queried or written back to the database.
-    // This is an asynchronous job which returns the jobId immediately.
-    // Use the GET job API with the job Id to get information on
-    // progress, errors and the outcome of the computation.
+    // propagation algorithm and store the results in-memory.
+    // The algorithm basically reads a list of labels from a column for each 
+    // vertex. The value can be empty or a string or a list of strings
+    // and the set of labels for each vertex is seeded accordingly. The
+    // algorithm will then simply propagate each label in each label set
+    // along the edges to all reachable vertices and thus compute a new
+    // set of labels. After a specified maximal number of steps or if no
+    // label set changes any more the algorithm stops.
+    //
+    // BEWARE: If there are many labels in the system and the graph is
+    // well-connected then the result can be huge!
+    //
+    // There are some parameters controlling the computation like the
+    // name of the attribute to choose the start label from, whether
+    // the synchronous or the asynchronous varient is to be used, if
+    // we propagate along the the edges forwards or backwords oand the
+    // maximal number of supersteps. See the input message documentation
+    // for details. The computation will return a numerical job Id,
+    // with which the results can later be queried or written back
+    // to the database. This is an asynchronous job which returns
+    // the jobId immediately. Use the GET job API with the job Id to
+    // get information on progress, errors and the outcome of the
+    // computation.
     rpc GraphAnalyticsEngineRunAttributePropagation(GraphAnalyticsEngineAttributePropagationRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
             post: "/v1/attributepropagation"
@@ -364,14 +378,22 @@ message GraphAnalyticsEngineLabelPropagationRequest {
 
 // Request arguments for GraphAnalyticsEngineRunAttributePropagation.
 message GraphAnalyticsEngineAttributePropagationRequest {    
-    // Graph ID
+    // Graph ID. This attribute must be given.
     uint64 graph_id = 1;
     // Start label attribute, must be stored in one column. Use id of vertex
-    // if set to "@id".
+    // if set to "@id". Values can be empty or a string or a list of strings.
+    // All other values are transformed into a string. This attribute
+    // must be given.
     string start_label_attribute = 2;
     // Flag to indicate whether synchronous (true) or asynchronous label
-    // propagation is used:
+    // propagation is used. The default is asynchronous, i.e. `false`.
     bool synchronous = 3;
+    // Flag to indicate whether the propagation happens forwards (along the
+    // directed edges) or backwards (in the opposite direction). The default
+    // is forwards, i.e. `false`.
+    bool backwards = 4;
+    // Maximum number of steps to do:
+    uint32 maximum_supersteps = 5;
 }
 
 // Request arguments for GraphAnalyticsEngineStoreResults.

@@ -10,6 +10,7 @@ use std::sync::{Arc, RwLock};
 pub struct AttributePropagationComputation {
     pub graph: Arc<RwLock<Graph>>,
     pub sync: bool,
+    pub backwards: bool,
     pub shall_stop: bool,
     pub total: u32,
     pub progress: u32,
@@ -125,6 +126,7 @@ pub fn attribute_propagation_async(
     g: &Graph,
     supersteps: u32,
     labelname: &str,
+    _backwards: bool,
 ) -> Result<(Vec<Vec<String>>, usize, u32), String> {
     if !g.is_indexed_by_to() {
         return Err("The graph is missing the to-neighbour index which is required for the label propagation (async) algorithm.".to_string());
@@ -188,6 +190,7 @@ pub fn attribute_propagation_sync(
     g: &Graph,
     supersteps: u32,
     labelname: &str,
+    _backwards: bool,
 ) -> Result<(Vec<Vec<String>>, usize, u32), String> {
     if !g.is_indexed_by_to() {
         return Err("The graph is missing the to-neighbour index which is required for the label propagation (sync) algorithm.".to_string());
@@ -275,12 +278,14 @@ mod tests {
         // Async:
         let x = "X".to_string();
         let vx = vec![x];
-        let (labels, _size, _steps) = attribute_propagation_async(&g, 10, "startlabel").unwrap();
+        let (labels, _size, _steps) =
+            attribute_propagation_async(&g, 10, "startlabel", false).unwrap();
         for i in 0..10 {
             assert_eq!(labels[i], vx);
         }
         // Sync:
-        let (labels, _size, steps) = attribute_propagation_sync(&g, 10, "startlabel").unwrap();
+        let (labels, _size, steps) =
+            attribute_propagation_sync(&g, 10, "startlabel", false).unwrap();
         assert_eq!(steps, 10);
         for i in 0..10 {
             assert_eq!(labels[i], vx);
@@ -298,7 +303,8 @@ mod tests {
         g.vertex_column_types = vec!["string".to_string()];
         g.index_edges(true, true);
         // Sync:
-        let (labels, _size, steps) = attribute_propagation_sync(&g, 5, "startlabel").unwrap();
+        let (labels, _size, steps) =
+            attribute_propagation_sync(&g, 5, "startlabel", false).unwrap();
         assert_eq!(steps, 2);
         for i in 0..9 {
             let v = vec![format!("K{i}")];
@@ -306,7 +312,8 @@ mod tests {
         }
         assert_eq!(labels[9].len(), 10);
         // Async:
-        let (labels, _size, steps) = attribute_propagation_async(&g, 5, "startlabel").unwrap();
+        let (labels, _size, steps) =
+            attribute_propagation_async(&g, 5, "startlabel", false).unwrap();
         assert_eq!(steps, 2);
         for i in 0..9 {
             let v = vec![format!("K{i}")];
@@ -326,7 +333,8 @@ mod tests {
         g.vertex_column_types = vec!["string".to_string()];
         g.index_edges(false, true);
         // Async:
-        let (labels, _size, _steps) = attribute_propagation_async(&g, 6, "startlabel").unwrap();
+        let (labels, _size, _steps) =
+            attribute_propagation_async(&g, 6, "startlabel", false).unwrap();
         for i in 0..31 {
             let mut log: usize = 0;
             let mut j = i + 1;
@@ -337,7 +345,8 @@ mod tests {
             assert_eq!(labels[i].len(), log + 1);
         }
         // Sync:
-        let (labels, _size, steps) = attribute_propagation_sync(&g, 6, "startlabel").unwrap();
+        let (labels, _size, steps) =
+            attribute_propagation_sync(&g, 6, "startlabel", false).unwrap();
         assert_eq!(steps, 5);
         for i in 0..31 {
             let mut log: usize = 0;
@@ -373,12 +382,14 @@ mod tests {
         let y = "Y".to_string();
         let vx = vec![x.clone(), y.clone()];
         let vy = vec![y, x];
-        let (labels, _size, _steps) = attribute_propagation_async(&g, 10, "startlabel").unwrap();
+        let (labels, _size, _steps) =
+            attribute_propagation_async(&g, 10, "startlabel", false).unwrap();
         for i in 0..10 {
             assert!((labels[i] == vx) || (labels[i] == vy));
         }
         // Sync:
-        let (labels, _size, _steps) = attribute_propagation_sync(&g, 10, "startlabel").unwrap();
+        let (labels, _size, _steps) =
+            attribute_propagation_sync(&g, 10, "startlabel", false).unwrap();
         for i in 0..10 {
             assert!((labels[i] == vx) || (labels[i] == vy));
         }
@@ -391,8 +402,8 @@ mod tests {
             vec![("V/A".to_string(), "V/A".to_string())],
         );
 
-        assert!(attribute_propagation_sync(&g, 10, "startlabel").is_err());
-        assert!(attribute_propagation_async(&g, 10, "startlabel").is_err());
+        assert!(attribute_propagation_sync(&g, 10, "startlabel", false).is_err());
+        assert!(attribute_propagation_async(&g, 10, "startlabel", false).is_err());
     }
 
     #[test]
@@ -403,8 +414,8 @@ mod tests {
         );
         g.index_edges(false, true);
 
-        assert!(attribute_propagation_sync(&g, 10, "startlabel").is_err());
-        assert!(attribute_propagation_async(&g, 10, "startlabel").is_err());
+        assert!(attribute_propagation_sync(&g, 10, "startlabel", false).is_err());
+        assert!(attribute_propagation_async(&g, 10, "startlabel", false).is_err());
     }
 
     #[test]
@@ -417,6 +428,7 @@ mod tests {
         let mut apc = AttributePropagationComputation {
             graph: Arc::new(RwLock::new(g)),
             sync: false,
+            backwards: false,
             shall_stop: false,
             total: 100,
             progress: 100,
