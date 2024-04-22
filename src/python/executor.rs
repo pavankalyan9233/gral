@@ -89,19 +89,18 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn return_python_environment() -> Result<String, String> {
         return if let Ok(python_path) = std::env::var("PYTHON3_BINARY_PATH") {
-            println!("Python 3 binary path: {}", python_path);
             Ok(python_path)
         } else {
             Err(
                 "Python 3 binary path not provided in PYTHON3_BINARY_PATH environment variable."
                     .to_string(),
             )
-        }
+        };
     }
 
     #[cfg(not(target_os = "macos"))]
     fn return_python_environment() -> Result<String, ()> {
-        return "python3".to_string();
+        return Ok("python3".to_string());
     }
 
     #[test]
