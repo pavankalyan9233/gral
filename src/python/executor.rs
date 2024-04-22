@@ -115,7 +115,7 @@ mod tests {
 
     #[cfg(not(target_os = "macos"))]
     fn return_python_environment() -> Result<String, ()> {
-        println!("Python 3 binary path: {:?}", python_path);
+        println!("Python 3 binary path: {:?}", "python3".to_string());
         return Ok("python3".to_string());
     }
 
