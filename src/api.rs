@@ -25,10 +25,6 @@ pub mod graphanalyticsengine {
         env!("OUT_DIR"),
         "/arangodb.cloud.internal.graphanalytics.v1.rs"
     ));
-    include!(concat!(
-        env!("OUT_DIR"),
-        "/arangodb.cloud.internal.graphanalytics.v1.serde.rs"
-    ));
 }
 
 /// The following function puts together the filters for the API.
@@ -267,16 +263,27 @@ async fn api_wcc(
         next_in_component: None,
         shall_stop: false,
         number: None,
+        error_code: 0,
+        error_message: "".to_string(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let (nr, components, next) = algorithms::conncomp::weakly_connected_components(&graph);
-        info!("Found {} connected components.", nr);
+        let res = algorithms::conncomp::weakly_connected_components(&graph);
         let mut comp = comp_arc.write().unwrap();
-        comp.components = Some(components);
-        comp.next_in_component = Some(next);
-        comp.number = Some(nr);
+        match res {
+            Ok((nr, components, next)) => {
+                info!("Found {} connected components.", nr);
+                comp.components = Some(components);
+                comp.next_in_component = Some(next);
+                comp.number = Some(nr);
+                comp.error_code = 0;
+            }
+            Err(e) => {
+                comp.error_message = e;
+                comp.error_code = 1;
+            }
+        }
     });
 
     let comp_id: u64;
@@ -321,6 +328,12 @@ async fn api_scc(
         Ok(g) => g,
     };
 
+    {
+        // Make sure we have an edge index:
+        let mut graph = graph_arc.write().unwrap();
+        graph.index_edges(true, false);
+    }
+
     let comp_arc = Arc::new(RwLock::new(ComponentsComputation {
         algorithm: "SCC".to_string(),
         graph: graph_arc.clone(),
@@ -328,24 +341,32 @@ async fn api_scc(
         next_in_component: None,
         shall_stop: false,
         number: None,
+        error_code: 0,
+        error_message: "".to_string(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         {
             // Make sure we have an edge index:
             let mut graph = graph_arc.write().unwrap();
-            if graph.from_index.is_none() {
-                info!("Indexing edges by from...");
-                graph.index_edges(true, false);
-            }
+            graph.index_edges(true, false);
         }
         let graph = graph_arc.read().unwrap();
-        let (nr, components, next) = algorithms::conncomp::strongly_connected_components(&graph);
-        info!("Found {} connected components.", nr);
+        let res = algorithms::conncomp::strongly_connected_components(&graph);
         let mut comp = comp_arc.write().unwrap();
-        comp.components = Some(components);
-        comp.next_in_component = Some(next);
-        comp.number = Some(nr);
+        match res {
+            Ok((nr, components, next)) => {
+                info!("Found {} connected components.", nr);
+                comp.components = Some(components);
+                comp.next_in_component = Some(next);
+                comp.number = Some(nr);
+                comp.error_code = 0;
+            }
+            Err(e) => {
+                comp.error_message = e;
+                comp.error_code = 1;
+            }
+        }
     });
 
     let comp_id: u64;
@@ -501,10 +522,7 @@ async fn api_pagerank(
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
-        if graph.from_index.is_none() {
-            info!("Indexing edges by from...");
-            graph.index_edges(true, false);
-        }
+        graph.index_edges(true, false);
     }
     let comp_arc = Arc::new(RwLock::new(PageRankComputation {
         graph: graph_arc.clone(),
@@ -521,13 +539,21 @@ async fn api_pagerank(
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let (rank, steps) =
+        let res =
             algorithms::pagerank::page_rank(&graph, body.maximum_supersteps, body.damping_factor);
         info!("Finished pagerank computation!");
         let mut comp = comp_arc.write().unwrap();
-        comp.rank = rank;
-        comp.steps = steps;
-        comp.error_code = 0;
+        match res {
+            Ok((rank, steps)) => {
+                comp.rank = rank;
+                comp.steps = steps;
+                comp.error_code = 0;
+            }
+            Err(e) => {
+                comp.error_message = e;
+                comp.error_code = 1;
+            }
+        }
         comp.progress = 100;
     });
 
@@ -576,10 +602,7 @@ async fn api_irank(
     {
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
-        if graph.from_index.is_none() {
-            info!("Indexing edges by from...");
-            graph.index_edges(true, false);
-        }
+        graph.index_edges(true, false);
     }
     let comp_arc = Arc::new(RwLock::new(PageRankComputation {
         graph: graph_arc.clone(),
@@ -1209,7 +1232,10 @@ async fn api_get_arangodb_graph(
     }
 
     let graphsclone = graphs.clone(); // for later removal in subthread
-    let graph = Graph::new(true, body.vertex_attributes.clone());
+    let graph = Arc::new(RwLock::new(Graph::new(
+        true,
+        body.vertex_attributes.clone(),
+    )));
 
     // And store it amongst the graphs:
     let mut graphs = graphs.lock().unwrap();
