@@ -44,13 +44,6 @@ impl Script {
         self.temp_file.path().to_str().unwrap().to_string()
     }
 
-    pub(crate) fn pretty_print(&self) {
-        println!("Script for graph: {}", self.graph_file_path);
-        for line in &self.lines {
-            println!("{}", line);
-        }
-    }
-
     fn add_line(&mut self, line: &str) {
         self.lines.push(line.to_string());
     }

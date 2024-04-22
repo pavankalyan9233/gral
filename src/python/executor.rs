@@ -10,6 +10,7 @@ use tempfile::Builder;
 pub struct Executor {
     pub g_arc: Arc<RwLock<Graph>>,
     pub result_file: tempfile::NamedTempFile, // file to store the result of the script
+    pub graph_file: tempfile::NamedTempFile,  // file to store the result of the script
     pub exporter: Exporter,                   // exports a graph to a parquet file
     pub importer: Importer,                   // imports a computed dictionary from a parquet file
     pub script: Script,                       // builds the python3 execution script
@@ -37,17 +38,23 @@ impl Executor {
         Executor {
             g_arc: graph.clone(),
             exporter,
-            importer: Importer::new(graph.clone()),
+            importer: Importer::new(
+                graph.clone(),
+                result_file.path().to_str().unwrap().to_string(),
+            ),
             script: Script::new(
                 user_script_snippet,
                 result_file.path().to_str().unwrap().to_string(),
                 graph_file.path().to_str().unwrap().to_string(),
             ),
             result_file,
+            graph_file,
         }
     }
 
-    pub fn run(&self) -> Result<(), String> {
+    pub fn run(&mut self) -> Result<(), String> {
+        self.script.write_to_file();
+
         let mut child = Command::new("python3")
             .arg(&self.script.get_file_path())
             .stdout(Stdio::piped())
@@ -94,8 +101,7 @@ mod tests {
             .exporter
             .write_parquet_file()
             .expect("Could not export Graph");
-        executor.script.pretty_print();
-        executor.script.write_to_file();
+
         let result = executor.run();
 
         assert!(result.is_ok());
