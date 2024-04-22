@@ -813,8 +813,12 @@ async fn api_attribute_propagation(
                 body.backwards,
             )
         } else {
-            algorithms::attributepropagation::attribute_propagation_sync(&graph,
-                                                                         body.maximum_supersteps, &startlabel, body.backwards)
+            algorithms::attributepropagation::attribute_propagation_sync(
+                &graph,
+                body.maximum_supersteps,
+                &startlabel,
+                body.backwards,
+            )
         };
         info!("Finished attribute propagation computation!");
         let mut comp = comp_arc.write().unwrap();
