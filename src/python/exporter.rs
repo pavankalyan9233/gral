@@ -1,6 +1,6 @@
 use arrow::array::{ArrayRef, UInt64Array};
+use std::fs::File;
 use std::sync::{Arc, RwLock};
-use tempfile::Builder;
 
 use crate::graph_store::graph::Graph;
 use arrow::record_batch::RecordBatch;
@@ -10,18 +10,14 @@ use parquet::file::properties::WriterProperties;
 
 pub struct Exporter {
     pub g_arc: Arc<RwLock<Graph>>,
-    pub temp_file: tempfile::NamedTempFile,
+    pub graph_file_path: String,
 }
 
 impl Exporter {
-    pub fn new(g_arc: Arc<RwLock<Graph>>) -> Exporter {
+    pub fn new(g_arc: Arc<RwLock<Graph>>, graph_file_path: String) -> Exporter {
         Exporter {
             g_arc,
-            temp_file: Builder::new()
-                .prefix("gral_graph_export_")
-                .suffix(".parquet")
-                .tempfile()
-                .expect("Failed to create temporary file"),
+            graph_file_path,
         }
     }
 
@@ -43,7 +39,7 @@ impl Exporter {
         ])
         .unwrap();
 
-        let file = &self.temp_file;
+        let file = File::create(&self.graph_file_path).unwrap();
         let props = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build();
@@ -52,7 +48,7 @@ impl Exporter {
         writer.write(&batch).expect("Writing batch");
         writer.close().unwrap();
 
-        Ok(file.path().to_str().unwrap().to_string())
+        Ok(self.graph_file_path.clone())
     }
 }
 
@@ -65,7 +61,7 @@ mod tests {
     use std::fs::File;
 
     #[test]
-    fn test_write_into_parquet_file() {
+    fn test_export_graph_into_parquet_file() {
         let g_arc = Graph::new(false, vec![]);
         // add 6 random vertices
         {
@@ -85,7 +81,7 @@ mod tests {
             g.seal_edges();
         }
 
-        let exporter = Exporter::new(g_arc.clone());
+        let exporter = Exporter::new(g_arc.clone(), "/tmp/dont_care.parquet".to_string());
         match exporter.write_parquet_file() {
             Ok(file_path) => {
                 let file = File::open(file_path).unwrap();

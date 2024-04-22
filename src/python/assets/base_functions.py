@@ -17,7 +17,7 @@ def read_graph(graph_file_path):
 
     graph = nx.Graph()
     for _, row in df_edges.iterrows():
-        graph.add_edge(row['Source'], row['Target'])
+        graph.add_edge(row['_from'], row['_to'])
 
     return graph
 

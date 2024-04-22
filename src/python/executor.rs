@@ -14,6 +14,7 @@ pub struct Executor {
     pub exporter: Exporter,                   // exports a graph to a parquet file
     pub importer: Importer,                   // imports a computed dictionary from a parquet file
     pub script: Script,                       // builds the python3 execution script
+    pub python3_binary_path: String,
 }
 
 impl Executor {
@@ -30,7 +31,10 @@ impl Executor {
             .tempfile()
             .expect("Failed to create temporary file for graph export");
 
-        let exporter = Exporter::new(graph.clone());
+        let exporter = Exporter::new(
+            graph.clone(),
+            graph_file.path().to_str().unwrap().to_string(),
+        );
         exporter
             .write_parquet_file()
             .expect("Could not write graph export into parquet file");
@@ -49,13 +53,16 @@ impl Executor {
             ),
             result_file,
             graph_file,
+            python3_binary_path: "python3".to_string(),
         }
     }
 
     pub fn run(&mut self) -> Result<(), String> {
+        // Export generated script to disk
         self.script.write_to_file();
 
-        let mut child = Command::new("python3")
+        // Execute generated script
+        let mut child = Command::new(self.python3_binary_path.clone())
             .arg(&self.script.get_file_path())
             .stdout(Stdio::piped())
             .spawn()
@@ -67,7 +74,12 @@ impl Executor {
             Err("Failed to execute the script".to_string())
         }
     }
+
+    pub fn set_python3_binary_path(&mut self, path: String) {
+        self.python3_binary_path = path;
+    }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,7 +87,7 @@ mod tests {
     use crate::graph_store::vertex_key_index::VertexIndex;
 
     #[test]
-    fn test_write_into_parquet_file() {
+    fn test_full_executor_run() {
         let g_arc = Graph::new(false, vec![]);
         {
             let mut g = g_arc.write().unwrap();
@@ -96,13 +108,28 @@ mod tests {
 
         let user_snippet = "def worker(graph): return {0: '0', 1: '1'}".to_string();
         let mut executor = Executor::new(g_arc.clone(), user_snippet);
-        executor
-            .exporter
-            .write_parquet_file()
-            .expect("Could not export Graph");
 
+        // Please keep this line for debugging purposes (venv issue on macOS)
+        // executor.set_python3_binary_path("/Users/hkernbach/venv/bin/python".to_string());
+        // Please keep this line for debugging purposes
         let result = executor.run();
+        assert!(result.is_ok());
+
+        // Now expect that the computation result file is being generated and contains data
+        assert!(std::path::Path::new(&executor.result_file.path()).exists());
+        let result_content =
+            std::fs::read(&executor.result_file.path()).expect("Failed to read file");
+        assert!(!result_content.is_empty());
 
         assert!(result.is_ok());
+
+        let result_path_file = executor.result_file.path().to_str().unwrap().to_string();
+        let graph_path_file = executor.graph_file.path().to_str().unwrap().to_string();
+
+        drop(executor);
+
+        // assert that all temporary files got deleted
+        assert!(!std::path::Path::new(&result_path_file).exists());
+        assert!(!std::path::Path::new(&graph_path_file).exists());
     }
 }
