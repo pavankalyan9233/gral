@@ -1,6 +1,6 @@
 import {config} from '../environment.config';
 import ngGenerator = require('ngraph.generators');
-import {GraphImporter} from "../../examples/modules/GraphImporter";
+import {GraphImporter} from "../../examples/modules/graphImporter.js";
 
 function getGraphConfig() {
   const arangoConfig = {
@@ -45,6 +45,7 @@ async function writeGraphToArangoDB(graph: any, graphName: string) {
 }
 
 async function generateCompleteGraph(k: number = 5, graphName: string = 'test_graph') {
+  // @ts-ignore
   const graph = ngGenerator.complete(k);
   return await writeGraphToArangoDB(graph, graphName);
 }

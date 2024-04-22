@@ -73,7 +73,6 @@ mod tests {
     use super::*;
     use crate::graph_store::graph::Graph;
     use crate::graph_store::vertex_key_index::VertexIndex;
-    use std::thread::sleep;
 
     #[test]
     fn test_write_into_parquet_file() {

@@ -1,4 +1,4 @@
-import {beforeAll, describe, expect, expectTypeOf, test} from 'vitest';
+import {beforeAll, describe, expect, test} from 'vitest';
 import {config} from '../environment.config';
 import {arangodb} from '../helpers/arangodb';
 import {gral} from '../helpers/gral';
@@ -8,7 +8,7 @@ import {graphGenerator} from "../helpers/graphGenerator";
 const gral_endpoint = config.gral_instances.arangodb_auth;
 describe('Python integration', () => {
 
-  let jwt: String;
+  let jwt: string;
 
   beforeAll(async () => {
     jwt = await arangodb.getArangoJWT();
