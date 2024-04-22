@@ -151,6 +151,23 @@ service GraphAnalyticsEngineService {
         };
     }
 
+    // Process a graph which was previously loaded with the attribute
+    // propagation algorithm and store the results in-memory. There are
+    // some parameters controlling the computation like the name of the
+    // attribute to choose the start label from, and the maximal number
+    // of supersteps. See the input message documentation for details.
+    // The computation will return a numerical job Id, with which the
+    // results can later be queried or written back to the database.
+    // This is an asynchronous job which returns the jobId immediately.
+    // Use the GET job API with the job Id to get information on
+    // progress, errors and the outcome of the computation.
+    rpc GraphAnalyticsEngineRunAttributePropagation(GraphAnalyticsEngineAttributePropagationRequest) returns (GraphAnalyticsEngineProcessResponse) {
+        option (google.api.http) = {
+            post: "/v1/attributepropagation"
+            body: "*"
+        };
+    }
+
     // Stores the results from the previous process into the deployment.
     // Required permissions:
     // - graphanalytics.engine.store-results on the graph analytics engine identified by the given ID.
@@ -343,6 +360,18 @@ message GraphAnalyticsEngineLabelPropagationRequest {
     // (uniform distribution) or deterministically (smallest label amongst
     // the most frequent ones):
     bool random_tiebreak = 4;
+}
+
+// Request arguments for GraphAnalyticsEngineRunAttributePropagation.
+message GraphAnalyticsEngineAttributePropagationRequest {    
+    // Graph ID
+    uint64 graph_id = 1;
+    // Start label attribute, must be stored in one column. Use id of vertex
+    // if set to "@id".
+    string start_label_attribute = 2;
+    // Flag to indicate whether synchronous (true) or asynchronous label
+    // propagation is used:
+    bool synchronous = 3;
 }
 
 // Request arguments for GraphAnalyticsEngineStoreResults.
