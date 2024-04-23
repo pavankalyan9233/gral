@@ -122,12 +122,13 @@ mod tests {
             g.insert_vertex(b"V/D".to_vec(), vec![]);
             g.insert_vertex(b"V/E".to_vec(), vec![]);
             g.insert_vertex(b"V/F".to_vec(), vec![]);
+            g.seal_vertices();
+
             // add edges
             let _ = g.insert_edge_between_vertices(b"V/D", b"V/B");
             let _ = g.insert_edge_between_vertices(b"V/A", b"V/D");
             let _ = g.insert_edge_between_vertices(b"V/A", b"V/C");
             let _ = g.insert_edge_between_vertices(b"V/B", b"V/F");
-            g.seal_vertices();
             g.seal_edges();
         }
 
