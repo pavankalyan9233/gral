@@ -1,4 +1,4 @@
-use crate::computations::ComputationsStore;
+use crate::computations::Computations;
 use crate::graph_store::graph::Graph;
 use arrow::array::RecordBatchReader;
 use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
@@ -7,14 +7,14 @@ use std::sync::{Arc, Mutex, RwLock};
 
 pub struct ResultImporter {
     pub g_arc: Arc<RwLock<Graph>>, // TODO: might not be required
-    pub computations: Arc<Mutex<ComputationsStore>>,
+    pub computations: Arc<Mutex<Computations>>,
     pub file_path: String,
 }
 
 impl ResultImporter {
     pub fn new(
         g_arc: Arc<RwLock<Graph>>,
-        computations: Arc<Mutex<ComputationsStore>>,
+        computations: Arc<Mutex<Computations>>,
         file_path: String,
     ) -> ResultImporter {
         ResultImporter {

@@ -10,7 +10,7 @@ use crate::api::graphanalyticsengine::GraphAnalyticsEngineShutdownResponse;
 use crate::api::{api_filter, handle_errors};
 use crate::args::parse_args;
 use crate::auth::with_auth;
-use crate::computations::ComputationsStore;
+use crate::computations::Computations;
 use crate::graph_store::graphs::Graphs;
 use crate::metrics;
 
@@ -78,7 +78,7 @@ pub async fn run() {
             ))
         });
     let the_graphs = Arc::new(Mutex::new(Graphs::new()));
-    let the_computations = Arc::new(Mutex::new(ComputationsStore::new()));
+    let the_computations = Arc::new(Mutex::new(Computations::new()));
 
     let api_metrics = warp::path!("v1" / "statistics")
         .and(warp::get())

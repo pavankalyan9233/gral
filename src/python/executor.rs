@@ -1,4 +1,4 @@
-use crate::computations::ComputationsStore;
+use crate::computations::Computations;
 use crate::graph_store::graph::Graph;
 use crate::python;
 use crate::python::graph_exporter::GraphExporter;
@@ -21,7 +21,7 @@ pub struct Executor {
 impl Executor {
     pub fn new(
         graph: Arc<RwLock<Graph>>,
-        computations: Arc<Mutex<ComputationsStore>>,
+        computations: Arc<Mutex<Computations>>,
         user_script_snippet: String,
     ) -> Executor {
         let result_file = Builder::new()
@@ -79,14 +79,6 @@ impl Executor {
         } else {
             Err("Failed to execute the script".to_string())
         }
-        .expect("TODO: panic message");
-
-        // Save computation in memory
-        let import_result_status = self.result_importer.run();
-        if import_result_status.is_err() {
-            return Err("Failed to import the result of the computation".to_string());
-        }
-        Ok(())
     }
 
     pub fn set_python3_binary_path(&mut self, path: String) {
@@ -97,8 +89,9 @@ impl Executor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::computations::ComputationsStore;
+    use crate::computations::Computations;
     use crate::graph_store::graph::Graph;
+    use std::sync::Mutex;
 
     #[cfg(target_os = "macos")]
     fn return_python_environment() -> Result<String, String> {
@@ -139,10 +132,10 @@ mod tests {
         }
 
         let g_arc = Arc::new(RwLock::new(g));
-        let computations = Arc::new(Mutex::new(ComputationsStore::new()));
+        let computations = Arc::new(Mutex::new(Computations::new()));
 
         let user_snippet = "def worker(graph): return nx.pagerank(graph, 0.85)".to_string();
-        let mut executor = Executor::new(g_arc, computations.clone(), user_snippet);
+        let mut executor = Executor::new(g_arc, computations, user_snippet);
         let python_path_res = return_python_environment();
         if python_path_res.is_err() {
             println!("Failed to get python3 binary path: {:?}", python_path_res);
@@ -157,15 +150,11 @@ mod tests {
         let result_content =
             std::fs::read(&executor.result_file.path()).expect("Failed to read file");
         assert!(!result_content.is_empty());
+
         assert!(result.is_ok());
 
         let result_path_file = executor.result_file.path().to_str().unwrap().to_string();
         let graph_path_file = executor.graph_file.path().to_str().unwrap().to_string();
-
-        // Check that a new computations result has been created in memory
-        let computations = computations.lock().unwrap();
-        let counter = computations.list.len();
-        assert_eq!(counter, 0);
 
         drop(executor);
 

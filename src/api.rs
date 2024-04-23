@@ -3,18 +3,14 @@ use crate::algorithms::aggregation::aggregate_over_components;
 use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
 use crate::args::{with_args, GralArgs};
 use crate::auth::{with_auth, Unauthorized};
-use crate::computations::computations_store::with_computations;
-use crate::computations::types::AggregationComputation;
-use crate::computations::types::BaseComputation;
-use crate::computations::types::ComponentsComputation;
-use crate::computations::types::LabelPropagationComputation;
-use crate::computations::types::LoadComputation;
-use crate::computations::types::PageRankComputation;
-use crate::computations::types::StoreComputation;
-use crate::computations::ComputationsStore;
-use crate::constants;
+use crate::computations::{
+    with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
+    LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
+};
 use crate::graph_store::graph::Graph;
 use crate::graph_store::graphs::{with_graphs, Graphs};
+
+use crate::constants;
 use bytes::Bytes;
 use graphanalyticsengine::*;
 use http::Error;
@@ -35,7 +31,7 @@ pub mod graphanalyticsengine {
 /// To this end, it relies on the following async functions below.
 pub fn api_filter(
     graphs: Arc<Mutex<Graphs>>,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let version = warp::path!("v1" / "version")
@@ -238,7 +234,7 @@ fn get_and_check_graph(
 async fn api_wcc(
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     // Parse body and extract integers:
@@ -270,7 +266,7 @@ async fn api_wcc(
         error_code: 0,
         error_message: "".to_string(),
     }));
-    let generic_comp_arc: Arc<RwLock<dyn BaseComputation + Send + Sync>> = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let res = algorithms::conncomp::weakly_connected_components(&graph);
@@ -310,7 +306,7 @@ async fn api_wcc(
 async fn api_scc(
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     // Parse body and extract integers:
@@ -348,7 +344,7 @@ async fn api_scc(
         error_code: 0,
         error_message: "".to_string(),
     }));
-    let generic_comp_arc: Arc<RwLock<dyn BaseComputation + Send + Sync>> = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         {
             // Make sure we have an edge index:
@@ -393,7 +389,7 @@ async fn api_scc(
 async fn api_aggregate_components(
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     // Parse body and extract integers:
@@ -416,7 +412,7 @@ async fn api_aggregate_components(
     };
 
     // Computation ID is optional:
-    let mut prev_comp: Option<Arc<RwLock<dyn BaseComputation + Send + Sync>>> = None;
+    let mut prev_comp: Option<Arc<RwLock<dyn Computation + Send + Sync>>> = None;
     if body.job_id != 0 {
         let comps = computations.lock().unwrap();
         let comp = comps.list.get(&body.job_id);
@@ -430,7 +426,7 @@ async fn api_aggregate_components(
         prev_comp = Some(comp.unwrap().clone());
     }
 
-    let generic_comp_arc: Arc<RwLock<dyn BaseComputation + Send + Sync>>;
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>>;
     if prev_comp.is_none() {
         return Ok(err_bad_req_process(
             "Aggregation algorithm needs previous computation as absis to work".to_string(),
@@ -501,7 +497,7 @@ async fn api_aggregate_components(
 async fn api_pagerank(
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     // Parse body and extract integers:
@@ -540,7 +536,7 @@ async fn api_pagerank(
         rank: vec![],
         result_position: 0,
     }));
-    let generic_comp_arc: Arc<RwLock<dyn BaseComputation + Send + Sync>> = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let res =
@@ -581,7 +577,7 @@ async fn api_pagerank(
 async fn api_irank(
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     // Parse body and extract integers:
@@ -620,7 +616,7 @@ async fn api_irank(
         rank: vec![],
         result_position: 0,
     }));
-    let generic_comp_arc: Arc<RwLock<dyn BaseComputation + Send + Sync>> = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
         let res = algorithms::irank::i_rank(&graph, body.maximum_supersteps, body.damping_factor);
@@ -660,7 +656,7 @@ async fn api_irank(
 async fn api_label_propagation(
     _user: String,
     graphs: Arc<Mutex<Graphs>>,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     // Parse body and extract integers:
@@ -700,7 +696,7 @@ async fn api_label_propagation(
         result_position: 0,
         label_size_sum: 0,
     }));
-    let generic_comp_arc: Arc<RwLock<dyn BaseComputation + Send + Sync>> = comp_arc.clone();
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     let startlabel = body.start_label_attribute.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
@@ -754,7 +750,7 @@ async fn api_label_propagation(
 /// This function writes a computation result back to ArangoDB:
 async fn api_write_result_back_arangodb(
     user: String,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
@@ -780,7 +776,7 @@ async fn api_write_result_back_arangodb(
     }
     let mut body = parsed.unwrap();
 
-    let mut result_comps: Vec<Arc<RwLock<dyn BaseComputation + Send + Sync>>> = vec![];
+    let mut result_comps: Vec<Arc<RwLock<dyn Computation + Send + Sync>>> = vec![];
     {
         let comps = computations.lock().unwrap();
         for id in &body.job_ids {
@@ -878,7 +874,7 @@ async fn api_write_result_back_arangodb(
 async fn api_get_arangodb_graph_aql(
     _user: String,
     _graphs: Arc<Mutex<Graphs>>,
-    _computations: Arc<Mutex<ComputationsStore>>,
+    _computations: Arc<Mutex<Computations>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     let err_bad_req = |e: String| {
@@ -919,7 +915,7 @@ async fn api_get_arangodb_graph_aql(
 async fn api_get_job(
     job_id: u64,
     _user: String,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     let not_found_err = |j: String| {
         warp::reply::with_status(
@@ -975,7 +971,7 @@ async fn api_get_job(
 async fn api_drop_job(
     job_id: u64,
     _user: String,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
     let not_found_err = |j: String| {
         warp::reply::with_status(
@@ -1136,7 +1132,7 @@ async fn api_list_graphs(_user: String, graphs: Arc<Mutex<Graphs>>) -> Result<Ve
 
 async fn api_list_jobs(
     _user: String,
-    computations: Arc<Mutex<ComputationsStore>>,
+    computations: Arc<Mutex<Computations>>,
 ) -> Result<Vec<u8>, Rejection> {
     let comps = computations.lock().unwrap();
     let mut response: Vec<GraphAnalyticsEngineJob> = vec![];
@@ -1208,7 +1204,7 @@ async fn api_drop_graph(
 async fn api_get_arangodb_graph(
     user: String,
     graphs: Arc<Mutex<Graphs>>,
-    comps: Arc<Mutex<ComputationsStore>>,
+    comps: Arc<Mutex<Computations>>,
     args: Arc<Mutex<GralArgs>>,
     bytes: Bytes,
 ) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {

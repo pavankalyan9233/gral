@@ -3,9 +3,7 @@ use crate::api::graphanalyticsengine::{
 };
 use crate::args::GralArgs;
 use crate::auth::create_jwt_token;
-use crate::computations::types::BaseComputation;
-use crate::computations::types::LoadComputation;
-use crate::computations::types::StoreComputation;
+use crate::computations::{Computation, LoadComputation, StoreComputation};
 use crate::graph_store::graph::{Edge, Graph};
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
@@ -866,7 +864,7 @@ pub async fn write_result_to_arangodb(
     user: String,
     req: GraphAnalyticsEngineStoreResultsRequest,
     args: Arc<Mutex<GralArgs>>,
-    result_comp_arcs: Vec<Arc<RwLock<dyn BaseComputation + Send + Sync>>>,
+    result_comp_arcs: Vec<Arc<RwLock<dyn Computation + Send + Sync>>>,
     attribute_names: Vec<String>,
     comp_arc: Arc<RwLock<StoreComputation>>,
 ) -> Result<(), String> {
@@ -923,7 +921,7 @@ pub async fn write_result_to_arangodb(
     let producer = std::thread::spawn(move || -> Result<(), String> {
         // Lock all computations for reading:
         let nr_results = result_comp_arcs.len();
-        let mut results: Vec<RwLockReadGuard<'_, dyn BaseComputation + Send + Sync>> =
+        let mut results: Vec<RwLockReadGuard<'_, dyn Computation + Send + Sync>> =
             Vec::with_capacity(nr_results);
         // In the following, we must do a trick to please the compiler as
         // well as the linter: We must use result_comp_arcs[i] to get the
