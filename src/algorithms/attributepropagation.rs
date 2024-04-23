@@ -126,10 +126,10 @@ pub fn attribute_propagation_async(
     g: &Graph,
     supersteps: u32,
     labelname: &str,
-    _backwards: bool,
+    backwards: bool,
 ) -> Result<(Vec<Vec<String>>, usize, u32), String> {
-    if !g.is_indexed_by_to() {
-        return Err("The graph is missing the to-neighbour index which is required for the label propagation (async) algorithm.".to_string());
+    if (backwards && !g.is_indexed_by_from()) || (!backwards && !g.is_indexed_by_to()) {
+        return Err("The graph is missing the to-neighbour index for forwards operation or the from-neighbour index for backwards operation, which is required for the label propagation (async) algorithm.".to_string());
     }
 
     info!("Running attribute propagation...");
@@ -152,16 +152,33 @@ pub fn attribute_propagation_async(
         // Go through all vertices and determine new label list:
         // Only need to look at edges by to in the reverse direction:
         let mut diffcount: u64 = 0;
-        for v in 0..nr {
-            let vi = VertexIndex::new(v as u64);
-            g.in_neighbours(vi).for_each(|fromv| {
-                let labvec: Vec<u64> = labels[fromv.to_u64() as usize].iter().copied().collect();
-                for l in labvec {
-                    if labels[v].insert(l) {
-                        diffcount += 1;
+
+        if backwards {
+            for v in 0..nr {
+                let vi = VertexIndex::new(v as u64);
+                g.out_neighbours(vi).for_each(|fromv| {
+                    let labvec: Vec<u64> =
+                        labels[fromv.to_u64() as usize].iter().copied().collect();
+                    for l in labvec {
+                        if labels[v].insert(l) {
+                            diffcount += 1;
+                        }
                     }
-                }
-            });
+                });
+            }
+        } else {
+            for v in 0..nr {
+                let vi = VertexIndex::new(v as u64);
+                g.in_neighbours(vi).for_each(|fromv| {
+                    let labvec: Vec<u64> =
+                        labels[fromv.to_u64() as usize].iter().copied().collect();
+                    for l in labvec {
+                        if labels[v].insert(l) {
+                            diffcount += 1;
+                        }
+                    }
+                });
+            }
         }
         info!(
             "{:?} attribute propagation (async)  step {step}, changed: {diffcount}",
@@ -190,10 +207,10 @@ pub fn attribute_propagation_sync(
     g: &Graph,
     supersteps: u32,
     labelname: &str,
-    _backwards: bool,
+    backwards: bool,
 ) -> Result<(Vec<Vec<String>>, usize, u32), String> {
-    if !g.is_indexed_by_to() {
-        return Err("The graph is missing the to-neighbour index which is required for the label propagation (sync) algorithm.".to_string());
+    if (backwards && !g.is_indexed_by_from()) || (!backwards && !g.is_indexed_by_to()) {
+        return Err("The graph is missing the to-neighbour index for forwards operation or the from-neighbour index for backwards operation, which is required for the label propagation (async) algorithm.".to_string());
     }
 
     info!("Running attribute propagation...");
@@ -217,20 +234,38 @@ pub fn attribute_propagation_sync(
         // Go through all vertices and determine new label list:
         // Only need to look at edges by to in the reverse direction:
         let mut diffcount: u64 = 0;
-        for v in 0..nr {
-            let vi = VertexIndex::new(v as u64);
-            let mut hs: HashSet<u64> = HashSet::with_capacity(labels[v].len() + 1);
-            for l in labels[v].iter() {
-                hs.insert(*l);
-            }
-            g.in_neighbours(vi).for_each(|fromv| {
-                for l in labels[fromv.to_u64() as usize].iter() {
-                    if hs.insert(*l) {
-                        diffcount += 1;
-                    }
+        if backwards {
+            for v in 0..nr {
+                let vi = VertexIndex::new(v as u64);
+                let mut hs: HashSet<u64> = HashSet::with_capacity(labels[v].len() + 1);
+                for l in labels[v].iter() {
+                    hs.insert(*l);
                 }
-            });
-            newlabels.push(hs);
+                g.out_neighbours(vi).for_each(|fromv| {
+                    for l in labels[fromv.to_u64() as usize].iter() {
+                        if hs.insert(*l) {
+                            diffcount += 1;
+                        }
+                    }
+                });
+                newlabels.push(hs);
+            }
+        } else {
+            for v in 0..nr {
+                let vi = VertexIndex::new(v as u64);
+                let mut hs: HashSet<u64> = HashSet::with_capacity(labels[v].len() + 1);
+                for l in labels[v].iter() {
+                    hs.insert(*l);
+                }
+                g.in_neighbours(vi).for_each(|fromv| {
+                    for l in labels[fromv.to_u64() as usize].iter() {
+                        if hs.insert(*l) {
+                            diffcount += 1;
+                        }
+                    }
+                });
+                newlabels.push(hs);
+            }
         }
         info!(
             "{:?} attribute propagation (sync)  step {step}, changed: {diffcount}",
@@ -360,6 +395,42 @@ mod tests {
     }
 
     #[test]
+    fn test_attribute_propagation_btree_backwards() {
+        let mut g = make_btree_graph(5);
+        g.vertex_column_names = vec!["startlabel".to_string()];
+        g.vertex_json = vec![Vec::new()];
+        for i in 0..31 {
+            g.vertex_json[0].push(json!(format!("K{i}")));
+        }
+        g.vertex_column_types = vec!["string".to_string()];
+        g.index_edges(true, false);
+        // Async:
+        let (labels, _size, _steps) =
+            attribute_propagation_async(&g, 6, "startlabel", true).unwrap();
+        for i in 0..31 {
+            let mut log: usize = 0;
+            let mut j = i + 1;
+            while j > 1 {
+                j >>= 1;
+                log += 1;
+            }
+            assert_eq!(labels[i].len(), 5 - log);
+        }
+        // Sync:
+        let (labels, _size, steps) = attribute_propagation_sync(&g, 6, "startlabel", true).unwrap();
+        assert_eq!(steps, 5);
+        for i in 0..31 {
+            let mut log: usize = 0;
+            let mut j = i + 1;
+            while j > 1 {
+                j >>= 1;
+                log += 1;
+            }
+            assert_eq!(labels[i].len(), 5 - log);
+        }
+    }
+
+    #[test]
     fn test_graph_with_lists_and_nulls() {
         let mut g = make_cyclic_graph(10);
         g.vertex_column_names = vec!["startlabel".to_string()];
@@ -371,9 +442,10 @@ mod tests {
         for _i in 3..6 {
             g.vertex_json[0].push(json!([]));
         }
-        for _i in 6..9 {
+        for _i in 6..8 {
             g.vertex_json[0].push(json!(["X"]));
         }
+        g.vertex_json[0].push(json!(["X", "Y"]));
         g.vertex_json[0].push(json!("Y"));
         g.vertex_column_types = vec!["string".to_string()];
         g.index_edges(false, true);
