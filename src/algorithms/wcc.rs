@@ -85,20 +85,91 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_wcc_simple() {
+    fn gives_empty_results_on_empty_graph() {
+        let g = Graph::create(vec![], vec![]);
+
+        let (components_count, components, next_in_component) =
+            weakly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 0);
+        assert_eq!(components, Vec::<u64>::new());
+        assert_eq!(next_in_component, Vec::<i64>::new())
+    }
+
+    #[test]
+    fn in_unconnected_graph_each_vertex_is_its_own_component() {
         let g = Graph::create(
             vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
-            vec![("V/A".to_string(), "V/B".to_string())],
+            vec![],
         );
-        let (numb, comp, next) = weakly_connected_components(&g).unwrap();
-        assert_eq!(numb, 2);
-        assert_eq!(comp.len(), 3);
-        assert_eq!(next.len(), 3);
-        assert_eq!(comp[0], 0);
-        assert_eq!(comp[1], 0);
-        assert_eq!(comp[2], 2);
-        assert_eq!(next[0], 1);
-        assert_eq!(next[1], -1);
-        assert_eq!(next[2], -1);
+
+        let (components_count, components, next_in_component) =
+            weakly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 3);
+        assert_eq!(components, vec![0, 1, 2]);
+        assert_eq!(next_in_component, vec![-1, -1, -1])
+    }
+
+    #[test]
+    fn connected_vertices_lie_in_one_component_represented_by_smallest_index() {
+        let g = Graph::create(
+            vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
+            vec![
+                ("V/A".to_string(), "V/B".to_string()),
+                ("V/A".to_string(), "V/C".to_string()),
+            ],
+        );
+
+        let (components_count, components, next_in_component) =
+            weakly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 1);
+        assert_eq!(components, vec![0, 0, 0]);
+        assert_eq!(next_in_component, vec![2, -1, 1]);
+    }
+
+    #[test]
+    fn edge_direction_is_irrelevant() {
+        let g = Graph::create(
+            vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
+            vec![
+                ("V/B".to_string(), "V/A".to_string()),
+                ("V/A".to_string(), "V/C".to_string()),
+            ],
+        );
+
+        let (components_count, components, next_in_component) =
+            weakly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 1);
+        assert_eq!(components, vec![0, 0, 0]);
+        assert_eq!(next_in_component, vec![2, -1, 1]);
+    }
+
+    #[test]
+    fn finds_all_components() {
+        let g = Graph::create(
+            vec![
+                "V/A".to_string(),
+                "V/B".to_string(),
+                "V/C".to_string(),
+                "V/D".to_string(),
+                "V/E".to_string(),
+                "V/F".to_string(),
+            ],
+            vec![
+                ("V/A".to_string(), "V/B".to_string()),
+                ("V/A".to_string(), "V/C".to_string()),
+                ("V/E".to_string(), "V/F".to_string()),
+            ],
+        );
+
+        let (components_count, components, next_in_component) =
+            weakly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 3);
+        assert_eq!(components, vec![0, 0, 0, 3, 4, 4]);
+        assert_eq!(next_in_component, vec![2, -1, 1, -1, 5, -1]);
     }
 }
