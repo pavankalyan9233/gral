@@ -27,7 +27,7 @@ const verifyGraphStatus = async (graph_id: string, jwt: string) => {
   expectTypeOf(body.graph.graph_id).toBeString();
   const graph = body.graph;
   expect(graph.graph_id).toBe(graph_id);
-  
+
   expect(graph).toHaveProperty('number_of_vertices');
   expectTypeOf(graph.number_of_vertices).toBeString();
   const number_of_vertices = parseInt(graph.number_of_vertices);
