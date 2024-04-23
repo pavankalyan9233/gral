@@ -19,7 +19,8 @@ describe('Python integration', () => {
     await graphGenerator.generateCompleteGraph(5, 'complete_graph_5');
   }, config.test_configuration.timeout);
 
-  test('Load a graph and do a python3 based pagerank computation on it', async () => {
+  test('WIP: Load a graph and do a python3 based pagerank computation on it', async () => {
+    // TODO: This needs to be finalized in the upcoming PR which will add an API ENDPOINT for python3 based computation
     let url = gral.buildUrl(gral_endpoint, '/v1/loaddata');
     const postBody = {
       vertex_collections: ['complete_graph_5_v'],
