@@ -773,7 +773,26 @@ async fn api_attribute_propagation(
             StatusCode::BAD_REQUEST,
         ));
     }
-    let body = parsed.unwrap();
+    let mut body = parsed.unwrap();
+
+    // Check arguments or set defaults:
+    if body.graph_id == 0 {
+        return Ok(err_bad_req_process(
+            "Attribute 'graph_id' must be non-empty".to_string(),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    if body.start_label_attribute.is_empty() {
+        return Ok(err_bad_req_process(
+            "Attribute 'start_label_attribute' must be non-empty".to_string(),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    if body.maximum_supersteps == 0 {
+        body.maximum_supersteps = 64;
+    }
 
     let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
