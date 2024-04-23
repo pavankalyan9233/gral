@@ -423,7 +423,7 @@ fn collection_name_from_id(id: &str) -> String {
 
 async fn fetch_edge_and_vertex_collections_by_graph(
     client: reqwest::Client,
-    jwt_token: &String,
+    jwt_token: String,
     url: String,
 ) -> Result<(Vec<String>, Vec<String>), String> {
     let mut edge_collection_names = vec![];
@@ -474,6 +474,43 @@ async fn fetch_edge_and_vertex_collections_by_graph(
     Ok((vertex_collection_names, edge_collection_names))
 }
 
+async fn get_collections(
+    url: String,
+    graph_name: String,
+    mut vertex_collections: Vec<String>,
+    mut edge_collections: Vec<String>,
+    client: reqwest::Client,
+    jwt_token: String,
+    begin: SystemTime,
+) -> Result<(Vec<String>, Vec<String>), String> {
+    if !graph_name.is_empty() {
+        if !vertex_collections.is_empty() || !edge_collections.is_empty() {
+            let error_message =
+                "Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.";
+            error!("{:?}", error_message);
+            return Err(error_message.to_string());
+        }
+
+        // in case a graph name has been give, we need to fetch the vertex and edge collections from ArangoDB
+        let graph_name = graph_name.clone();
+        let (vertices, edges) =
+            fetch_edge_and_vertex_collections_by_graph(client, jwt_token, url).await?;
+        info!(
+            "{:?} Got vertex collections: {:?}, edge collections: {:?} from graph definition for: {:?}.",
+            SystemTime::now().duration_since(begin).unwrap(),
+            vertices, edges, graph_name
+        );
+        vertex_collections.extend(vertices);
+        edge_collections.extend(edges);
+    } else if vertex_collections.is_empty() || edge_collections.is_empty() {
+        let error_message =
+            "Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.";
+        error!("{:?}", error_message);
+        return Err(error_message.to_string());
+    }
+    Ok((vertex_collections, edge_collections))
+}
+
 pub async fn fetch_graph_from_arangodb(
     user: String,
     req: GraphAnalyticsEngineLoadDataRequest,
@@ -515,35 +552,28 @@ pub async fn fetch_graph_from_arangodb(
         handle_arangodb_response_with_parsed_body::<ShardDistribution>(resp, StatusCode::OK)
             .await?;
 
-    let mut vertex_coll_list = req.vertex_collections.clone();
-    let mut edge_coll_list = req.edge_collections.clone();
-
-    if !req.graph_name.is_empty() {
-        if !req.vertex_collections.is_empty() || !req.edge_collections.is_empty() {
-            let error_message =
-                "Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.";
-            error!("{:?}", error_message);
-            return Err(error_message.to_string());
+    let vertex_coll_list;
+    let edge_coll_list;
+    let param_url = format!("/_api/gharial/{}", req.graph_name);
+    let url = make_url(&param_url);
+    match get_collections(
+        url,
+        req.graph_name.clone(),
+        req.vertex_collections.clone(),
+        req.edge_collections.clone(),
+        client,
+        jwt_token.clone(),
+        begin,
+    )
+    .await
+    {
+        Ok((vertex_collections, edge_collections)) => {
+            vertex_coll_list = vertex_collections;
+            edge_coll_list = edge_collections;
         }
-
-        // in case a graph name has been give, we need to fetch the vertex and edge collections from ArangoDB
-        let graph_name = req.graph_name.clone();
-        let param_url = format!("/_api/gharial/{}", graph_name);
-        let url = make_url(&param_url);
-        let (vertices, edges) =
-            fetch_edge_and_vertex_collections_by_graph(client, &jwt_token, url).await?;
-        info!(
-            "{:?} Got vertex collections: {:?}, edge collections: {:?} from graph definition for: {:?}.",
-            std::time::SystemTime::now().duration_since(begin).unwrap(),
-            vertices, edges, graph_name
-        );
-        vertex_coll_list.extend(vertices);
-        edge_coll_list.extend(edges);
-    } else if req.vertex_collections.is_empty() || req.edge_collections.is_empty() {
-        let error_message =
-                "Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.";
-        error!("{:?}", error_message);
-        return Err(error_message.to_string());
+        Err(err) => {
+            return Err(err);
+        }
     }
 
     // Compute which shard we must get from which dbserver, we do vertices
