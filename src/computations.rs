@@ -77,7 +77,7 @@ impl Computation for ComponentsComputation {
         self.components.is_some()
     }
     fn get_error(&self) -> (i32, String) {
-        (0, "".to_string())
+        (self.error_code, self.error_message.clone())
     }
     fn cancel(&mut self) {
         self.shall_stop = true;
