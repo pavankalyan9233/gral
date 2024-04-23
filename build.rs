@@ -18,6 +18,7 @@ fn main() -> Result<()> {
     let mut prost_build = prost_build::Config::new();
     prost_build
         .type_attribute(".", "#[derive(serde::Serialize,serde::Deserialize)]")
+        .type_attribute(".", "#[serde(default)]")
         // Save descriptors to file
         .file_descriptor_set_path(&descriptor_path)
         // Generate prost structs
