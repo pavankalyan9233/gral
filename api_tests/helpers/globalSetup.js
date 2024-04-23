@@ -9,23 +9,21 @@ export async function setup() {
 }
 
 export async function teardown() {
-  console.warn("TODO: Shutting down all valid gral instances... <known_bug>");
-  return;
-
   const gral_valid_auth_endpoints = [
     config.gral_instances.arangodb_auth, config.gral_instances.service_auth
   ];
 
   const jwt = await arangodb.getArangoJWT();
 
+  // Note: Currently, we cannot shut down instances via API which are wrongly configured and cannot reach the auth service
   for (const endpoint of gral_valid_auth_endpoints) {
-    gral.shutdownInstance(endpoint, jwt)
+    await gral.shutdownInstance(endpoint, jwt)
       .then((response) => {
-        console.log('Shutdown successful:', response);
+        console.log(`Instance ${endpoint} Shutdown successful`);
         // Handle the response here
       })
       .catch((error) => {
-        console.error('Error during shutdown:', error);
+        console.error(`Instance ${endpoint} Error during shutdown:`, error);
         // Handle the error here
       });
   }
