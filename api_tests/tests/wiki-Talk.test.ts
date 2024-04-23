@@ -239,7 +239,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     expect(body.length).toBeGreaterThan(0);
   });
 
-  test('run the pagerank algorithm one on of the created graphs', async () => {
+  test('run the pagerank algorithm on one of the created graphs', async () => {
     const url = gral.buildUrl(gralEndpoint, '/v1/pagerank');
     const graphAnalyticsEngineRunPageRank = {
       "graphId": graphIdForComputation,
