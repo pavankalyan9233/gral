@@ -31,10 +31,17 @@ $ npm install
 $ npm test
 ```
 
+Important: Execute tests like this, requires you to start the gral binary and an ArangoDB instance on your own.
+
 `npm install` only needs to be executed once.
 
-`npm test` will start multiple gral instances as binaries. Also it will use  docker-compose.yml
-to start a docker container with an ArangoDB Cluster and the additional authentication service.  
+`npm run test_full` will start multiple gral instances as binaries. Also, it will use  docker-compose.yml
+to start a docker container with an ArangoDB Cluster and the additional authentication service.
+
+Additional:
+
+In case you want to see how the integration tests are being executed, see the included `package.json` file
+in the `api_tests` directory.
 
 #### Prerequisites
 
