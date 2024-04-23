@@ -26,12 +26,12 @@ describe('API tests based on wiki-Talk graph dataset', () => {
       expect(error.response.status).toBe(404);
       const body = error.response.data;
       expect(body).toBeInstanceOf(Object);
-      expect(body).toHaveProperty('errorCode');
-      expect(body).toHaveProperty('errorMessage');
-      expectTypeOf(body.errorCode).toBeNumber();
-      expectTypeOf(body.errorMessage).toBeString();
-      expect(body.errorCode).toBe(404);
-      expect(body.errorMessage).toBe('Graph 1337 not found!');
+      expect(body).toHaveProperty('error_code');
+      expect(body).toHaveProperty('error_message');
+      expectTypeOf(body.error_code).toBeNumber();
+      expectTypeOf(body.error_message).toBeString();
+      expect(body.error_code).toBe(404);
+      expect(body.error_message).toBe('Graph 1337 not found!');
     });
   });
 
@@ -42,13 +42,15 @@ describe('API tests based on wiki-Talk graph dataset', () => {
       "graph_name": "doesNotExist"
     };
 
+
     const response = await axios.post(
       url, graphAnalyticsEngineLoadDataRequest, gral.buildHeaders(jwt)
     );
-    const body = response.data;
+    let body = response.data;
+
 
     try {
-      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.jobId);
+      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
     } catch (error) {
       expect(error).toBeInstanceOf(Error);
       expect(error.message).toContain("graph 'doesNotExist' not found");
@@ -67,7 +69,7 @@ describe('API tests based on wiki-Talk graph dataset', () => {
     const body = response.data;
 
     try {
-      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.jobId);
+      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
     } catch (error) {
       expect(error).toBeInstanceOf(Error);
       expect(error.message).toContain('Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.');
@@ -88,7 +90,7 @@ describe('API tests based on wiki-Talk graph dataset', () => {
     const body = response.data;
 
     try {
-      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.jobId);
+      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
     } catch (error) {
       expect(error).toBeInstanceOf(Error);
       expect(error.message).toContain('Either specify the graph_name or ensure that vertex_collections and edge_collections are not empty.');
