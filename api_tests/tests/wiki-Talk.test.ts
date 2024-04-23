@@ -87,7 +87,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     });
   });
 
-  test('load the wiki-Talk graph without graph_name and vertex and edge collections given', async () => {
+  test('load graph without any graph_name or vertex or edge collections given', async () => {
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
     const graphAnalyticsEngineLoadDataRequest = {
       "database": "_system"
