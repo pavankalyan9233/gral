@@ -38,6 +38,9 @@ async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: stri
           throw new Error(`Job <${jobId}> failed: ${body.errorMessage}`)
         } else if (body.progress >= body.total) {
           return {result: body, retriesNeeded: retries};
+        } else {
+          retries++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       } else {
         retries++;
