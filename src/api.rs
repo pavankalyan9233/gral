@@ -1231,6 +1231,7 @@ async fn api_get_arangodb_graph(
         body.parallelism = 5;
     }
 
+    let graphsclone = graphs.clone(); // for later removal in subthread
     let graph = Arc::new(RwLock::new(Graph::new(
         true,
         body.vertex_attributes.clone(),
@@ -1274,8 +1275,20 @@ async fn api_get_arangodb_graph(
                         comp.error_message = "".to_string();
                     }
                     Err(e) => {
+                        info!("Could not load graph successfully: {}", e);
                         comp.error_code = 1;
                         comp.error_message = e;
+                        // Get rid of graph again:
+                        let graph_id;
+                        {
+                            let graphguard = graph.read().unwrap();
+                            graph_id = graphguard.graph_id;
+                        }
+                        let mut graphsguard = graphsclone.lock().unwrap();
+                        graphsguard.remove(graph_id);
+                        // Note that the graph will still be attached to
+                        // the computation! Once the computation is
+                        // deleted, the graph will be freed!
                     }
                 }
             });
