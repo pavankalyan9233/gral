@@ -414,7 +414,7 @@ mod tests {
                 j >>= 1;
                 log += 1;
             }
-            assert_eq!(labels[i].len(), 5 - log);
+            assert_eq!(labels[i].len(), 2usize.pow(5 - log as u32) - 1);
         }
         // Sync:
         let (labels, _size, steps) = attribute_propagation_sync(&g, 6, "startlabel", true).unwrap();
@@ -426,7 +426,7 @@ mod tests {
                 j >>= 1;
                 log += 1;
             }
-            assert_eq!(labels[i].len(), 5 - log);
+            assert_eq!(labels[i].len(), 2usize.pow(5 - log as u32) - 1);
         }
     }
 
