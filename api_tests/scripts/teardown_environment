@@ -10,5 +10,8 @@ cecho(){
 }
 
 cecho "CYAN" "Killing gral instances and shutting down docker containers..."
+# Even if we shutdown properly with the API, there is still one gral service left
+# which is configured against an invalid authentication endpoint. In that case, we cannot
+# shutdown the service properly, so we kill it.
 killall -9 gral &> /dev/null
 docker compose down &> logs/docker_shutdown.txt

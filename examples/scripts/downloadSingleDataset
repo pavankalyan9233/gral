@@ -18,7 +18,13 @@ if [ -z "$line" ]; then
     exit 1
 fi
 
-# Create the directory if it doesn't exist
+# Only continue if the directory does not exist, otherwise the data is already downloaded
+if [ -d "data/$graphName" ]; then
+    echo "Data for graph $graphName already downloaded."
+    exit 0
+fi
+
+# Create the directory
 mkdir -p "data/$graphName"
 
 # Extract the wget command from the line

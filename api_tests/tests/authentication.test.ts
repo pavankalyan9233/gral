@@ -14,7 +14,7 @@ describe.concurrent('Authentication tests', () => {
       jwt = await arangodb.getArangoJWT();
       expect(jwt).not.toBe('');
       expect(jwt).not.toBeUndefined();
-    }, config.test_configuration.timeout);
+    }, config.test_configuration.medium_timeout);
 
     test('JWT token should be generated via call to ArangoDB itself', () => {
       expect(jwt).not.toBe('');

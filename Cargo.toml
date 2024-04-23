@@ -45,3 +45,6 @@ prost-build = "0.12.4"
 prost-wkt-build = "0.5.1"
 tonic = "0.11.0"
 tonic-build = "0.11.0"
+
+[dev-dependencies]
+approx = "0.5.1"

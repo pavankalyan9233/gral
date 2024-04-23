@@ -52,6 +52,14 @@ export class GraphImporter {
     return fs.existsSync(dataPath);
   }
 
+  async checkIfFirstVertexIdIsZero(filePath) {
+    const file = fs.readFileSync(filePath, 'utf-8');
+    const lines = file.split('\n');
+    const firstLine = lines[0];
+    const firstVertexId = parseInt(firstLine.split(' ')[0]);
+    return firstVertexId === 0;
+  }
+
   async countLinesUsingWc(filePath) {
     let lineCount;
     try {
@@ -72,7 +80,7 @@ export class GraphImporter {
     return lineCount;
   }
 
-  insertManyDocumentsIntoCollection = async (db, coll, maker, limit, batchSize, vertexInsert = true) => {
+  insertManyDocumentsIntoCollection = async (db, coll, maker, limit, batchSize, vertexInsert = true, startAtZero = false) => {
     // This function uses the asynchronous API of `arangod` to quickly
     // insert a lot of documents into a collection. You can control which
     // documents to insert with the `maker` function. The arguments are:
@@ -100,7 +108,15 @@ export class GraphImporter {
     let done = false;
     let l = [];
     let jobs = [];
+
     let counter = 1;
+    if (startAtZero) {
+      // Some datasets we want to import start with 0 vertex IDs, some with 1.
+      // This flat allows us to start at 0 if needed. This depends on the dataset.
+      // The conventions are not consistent, we need to handle this here.
+      counter = 0;
+    }
+
     let documentCount = 0;
 
     const {expectedAmountOfVertices, expectedAmountOfEdges} = await this.getVertexAndEdgeCountsToInsert();
@@ -270,13 +286,14 @@ export class GraphImporter {
   async insertVertices() {
     const filePath = new URL(`../data/${this.graphName}/${this.graphName}.v`, import.meta.url).pathname;
     const lineCount = await this.countLinesUsingWc(filePath);
-
+    const startsWithZero = await this.checkIfFirstVertexIdIsZero(filePath);
     console.log(`Will now insert vertices into collection ${this.graphName}_v. This will take a while...`)
+
     await this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
       function (i) {
         return {_key: JSON.stringify(i)};
       },
-      lineCount, 10000, true);
+      lineCount, 10000, true, startsWithZero);
   }
 
   async insertVerticesArray(vList) {

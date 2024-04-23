@@ -141,6 +141,8 @@ jobs:
           keys:
             - v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}
 
+      # It is important that this importer runs first, before integration tests are being executed as that data
+      # is being used in the integration tests
       - run:
           name: Test ArangoDB Importer
           command: |
@@ -156,8 +158,6 @@ jobs:
       - run:
           name: Integration Tests ArangoDB Auth
           command: |
-            ls -ltrh ~/app/examples
-            ls -ltrh ~/app/examples/modules
             mkdir -p ~/app/api_tests/logs
             /tmp/workspace/target/release/gral --bind-port 9999 --arangodb-jwt-secrets ./secrets.jwt --arangodb-endpoints http://localhost:8529 &> api_tests/logs/arangodb_auth.txt &
             /tmp/workspace/target/release/gral --bind-port 1337 --arangodb-jwt-secrets ./secrets.jwt --auth-service authservice:9092 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth.txt &
