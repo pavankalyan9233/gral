@@ -6,7 +6,7 @@ import axios from 'axios';
 
 const gralEndpoint = config.gral_instances.arangodb_auth;
 
-describe.sequential('API tests based on wiki-Talk graph dataset', () => {
+describe('API tests based on wiki-Talk graph dataset', () => {
 
   let jwt: string;
 
@@ -15,6 +15,10 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     expect(jwt).not.toBe('');
     expect(jwt).not.toBeUndefined();
   }, config.test_configuration.medium_timeout);
+
+  // TODO: Add test for: a non-existing vertex collection and
+  // TODO: Add test for: a non-existing edge collection
+
 
   test('get information about a graph, before created', async () => {
     const url = gral.buildUrl(gralEndpoint, `/v1/graphs/1337`);
@@ -29,6 +33,26 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
       expect(body.errorCode).toBe(404);
       expect(body.errorMessage).toBe('Graph 1337 not found!');
     });
+  });
+
+  test('load graph with graph_name that does not exist in the database', async () => {
+    const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
+    const graphAnalyticsEngineLoadDataRequest = {
+      "database": "_system",
+      "graph_name": "doesNotExist"
+    };
+
+    const response = await axios.post(
+      url, graphAnalyticsEngineLoadDataRequest, gral.buildHeaders(jwt)
+    );
+    const body = response.data;
+
+    try {
+      await gral.waitForJobToBeFinished(gralEndpoint, jwt, body.jobId);
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toContain("graph 'doesNotExist' not found");
+    }
   });
 
   test('load graph without any graph_name or vertex or edge collections given', async () => {
