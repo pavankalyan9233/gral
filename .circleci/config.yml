@@ -143,9 +143,11 @@ jobs:
 
       # It is important that this importer runs first, before integration tests are being executed as that data
       # is being used in the integration tests
+      # TODO: Sleep 10 is a workaround to get branch stable ASAP. We need a proper mechanism to wait for ArangoDB to be ready
       - run:
           name: Test ArangoDB Importer
           command: |
+            sleep 10
             sudo apt-get update -y && sudo apt-get install zstd -y
             cd ~/app/examples && npm install
             ./scripts/downloadSingleDataset wiki-Talk
