@@ -439,9 +439,10 @@ mod tests {
         for _i in 1..3 {
             g.vertex_json[0].push(json!(null));
         }
-        for _i in 3..6 {
+        for _i in 3..5 {
             g.vertex_json[0].push(json!([]));
         }
+        g.vertex_json[0].push(json!(""));
         for _i in 6..8 {
             g.vertex_json[0].push(json!(["X"]));
         }
@@ -523,5 +524,7 @@ mod tests {
         let (k, v) = apc.get_result(0);
         assert_eq!(k, "V/A");
         assert_eq!(v, json!(["X"]));
+        assert!(apc.memory_usage() > 0);
+        let _a = apc.as_any();
     }
 }
