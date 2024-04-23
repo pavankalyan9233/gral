@@ -269,7 +269,7 @@ async fn api_wcc(
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let res = algorithms::conncomp::weakly_connected_components(&graph);
+        let res = algorithms::wcc::weakly_connected_components(&graph);
         let mut comp = comp_arc.write().unwrap();
         match res {
             Ok((nr, components, next)) => {
@@ -352,7 +352,7 @@ async fn api_scc(
             graph.index_edges(true, false);
         }
         let graph = graph_arc.read().unwrap();
-        let res = algorithms::conncomp::strongly_connected_components(&graph);
+        let res = algorithms::scc::strongly_connected_components(&graph);
         let mut comp = comp_arc.write().unwrap();
         match res {
             Ok((nr, components, next)) => {
