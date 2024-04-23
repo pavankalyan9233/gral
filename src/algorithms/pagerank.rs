@@ -61,29 +61,8 @@ pub fn page_rank(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph_store::examples::make_cyclic_graph;
-    use crate::graph_store::examples::make_star_graph;
-
-    #[test]
-    fn test_pagerank_cyclic() {
-        let g = make_cyclic_graph(10);
-        let (rank, steps) = page_rank(&g, 5, 0.85).unwrap();
-        assert_eq!(steps, 1);
-        for i in 0..10 {
-            assert!((rank[i] - 1.0 / 10.0).abs() < 0.000001);
-        }
-        println!("{:?}", rank);
-    }
-
-    #[test]
-    fn test_pagerank_star() {
-        let g = make_star_graph(10);
-        let (rank, steps) = page_rank(&g, 100, 0.85).unwrap();
-        assert!(steps > 50 && steps < 70);
-        assert!(0.49 < rank[9] && rank[9] < 0.50);
-        assert!(0.05 < rank[0] && rank[0] < 0.06);
-        println!("{:?}", rank);
-    }
+    use crate::graph_store::examples::{make_cyclic_graph, make_star_graph};
+    use approx::assert_ulps_eq;
 
     #[test]
     fn does_not_run_when_graph_has_no_from_neighbour_index() {
@@ -93,5 +72,147 @@ mod tests {
         );
 
         assert!(page_rank(&g, 100, 0.85).is_err());
+    }
+
+    mod ranks {
+        use super::*;
+
+        #[test]
+        fn gives_empty_results_on_empty_graph() {
+            let mut g = Graph::create(vec![], vec![]);
+            g.index_edges(true, false);
+
+            let (rank, steps) = page_rank(&g, 100, 0.85).unwrap();
+
+            assert_eq!(rank, Vec::<f64>::new());
+            assert_eq!(steps, 1);
+        }
+
+        #[test]
+        fn ranks_of_unconnected_graph_are_all_equal() {
+            let mut g = Graph::create(vec!["V/A".to_string(), "V/B".to_string()], vec![]);
+            g.index_edges(true, false);
+
+            let (rank, steps) = page_rank(&g, 100, 0.85).unwrap();
+
+            assert_ulps_eq!(rank[0], 0.5);
+            assert_ulps_eq!(rank[1], 0.5);
+            assert_eq!(steps, 1);
+        }
+
+        #[test]
+        fn rank_depends_on_number_of_incoming_edges() {
+            let mut g = Graph::create(
+                vec![
+                    "V/A".to_string(),
+                    "V/B".to_string(),
+                    "V/C".to_string(),
+                    "V/D".to_string(),
+                ],
+                vec![
+                    ("V/A".to_string(), "V/A".to_string()),
+                    ("V/A".to_string(), "V/B".to_string()),
+                    ("V/A".to_string(), "V/C".to_string()),
+                    ("V/C".to_string(), "V/B".to_string()),
+                ],
+            );
+            g.index_edges(true, false);
+
+            let (rank, _steps) = page_rank(&g, 100, 0.85).unwrap();
+
+            assert_ulps_eq!(rank[0], rank[2]);
+            assert!(rank[1] > rank[0]);
+            assert!(rank[1] > rank[3]);
+            assert!(rank[3] < rank[0]);
+        }
+
+        #[test]
+        fn cyclic_graph_has_equal_ranks() {
+            let g = make_cyclic_graph(10);
+            let (rank, steps) = page_rank(&g, 5, 0.85).unwrap();
+            assert_eq!(steps, 1);
+            for i in 0..10 {
+                assert_ulps_eq!(rank[i], 1.0 / 10.0);
+            }
+        }
+
+        #[test]
+        fn star_graph_has_one_large_rank_vertex() {
+            let g = make_star_graph(10);
+            let (rank, steps) = page_rank(&g, 100, 0.85).unwrap();
+            assert!(steps > 50 && steps < 70);
+            assert!(0.49 < rank[9] && rank[9] < 0.50);
+            assert!(0.05 < rank[0] && rank[0] < 0.06);
+            assert_ulps_eq!(rank[1], rank[0]);
+            assert_ulps_eq!(rank[2], rank[0]);
+            assert_ulps_eq!(rank[3], rank[0]);
+            assert_ulps_eq!(rank[4], rank[0]);
+            assert_ulps_eq!(rank[5], rank[0]);
+            assert_ulps_eq!(rank[6], rank[0]);
+            assert_ulps_eq!(rank[7], rank[0]);
+            assert_ulps_eq!(rank[8], rank[0]);
+        }
+
+        #[test]
+        fn sum_of_ranks_is_normalized() {
+            let g = make_star_graph(10);
+
+            let (rank, _steps) = page_rank(&g, 100, 0.85).unwrap();
+
+            assert_ulps_eq!(rank.iter().sum::<f64>(), 1.0);
+        }
+    }
+
+    mod supersteps {
+        use super::*;
+
+        #[test]
+        fn stops_maximally_after_given_supersteps() {
+            let g = make_star_graph(10);
+
+            let max_supersteps = 5;
+            let (_rank, steps) = page_rank(&g, max_supersteps, 0.85).unwrap();
+
+            assert_eq!(steps, max_supersteps);
+        }
+
+        #[test]
+        fn stops_earlier_then_maximal_supersteps_when_converging() {
+            let g = make_star_graph(10);
+
+            let max_supersteps = 100;
+            let (_rank, steps) = page_rank(&g, max_supersteps, 0.85).unwrap();
+
+            assert!(steps < max_supersteps);
+        }
+    }
+
+    mod damping_factor {
+        use super::*;
+
+        #[test]
+        fn damping_factor_determines_impact_of_neighbours() {
+            let g = make_star_graph(10);
+
+            let (rank_lower_damping, steps_lower_damping) = dbg!(page_rank(&g, 100, 0.4).unwrap());
+            let (rank_larger_damping, steps_larger_damping) =
+                dbg!(page_rank(&g, 100, 0.85).unwrap());
+
+            assert!(rank_lower_damping[9] < rank_larger_damping[9]);
+            assert!(rank_lower_damping[0] > rank_larger_damping[0]);
+            assert!(steps_lower_damping < steps_larger_damping);
+        }
+
+        #[test]
+        fn damping_factor_zero_gives_equal_ranks() {
+            let g = make_star_graph(10);
+
+            let (rank, steps) = page_rank(&g, 100, 0.0).unwrap();
+
+            for i in 0..10 {
+                assert_ulps_eq!(rank[i], 1.0 / 10.0);
+            }
+            assert_eq!(steps, 1);
+        }
     }
 }
