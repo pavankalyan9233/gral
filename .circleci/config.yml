@@ -67,7 +67,7 @@ jobs:
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-1-76-0-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Clippy
@@ -84,7 +84,7 @@ jobs:
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-1-76-0-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Format check
@@ -186,7 +186,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-1-76-0-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Run tests
@@ -195,7 +195,7 @@ jobs:
       # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
       # be cached (target/debug/build, target/debug/deps, ...).
       - save_cache:
-          key: v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          key: v1-cargo-debug-deps-cache-1-76-0-{{ .Branch }}-{{ checksum "Cargo.lock" }}
           paths: [ "target/debug/deps" ]
 
   build:
