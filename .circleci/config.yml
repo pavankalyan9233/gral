@@ -45,7 +45,7 @@ commands:
 jobs:
   do_copy_workspace:
     docker:
-      - image: cimg/rust:1.76.0
+      - image: cimg/rust:1.77.2
     working_directory: ~/app
     steps:
       - checkout
