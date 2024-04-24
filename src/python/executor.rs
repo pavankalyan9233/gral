@@ -10,8 +10,8 @@ use tempfile::Builder;
 
 pub struct Executor {
     pub g_arc: Arc<RwLock<Graph>>,
-    pub result_file: tempfile::NamedTempFile, // file to store the result of the script
-    pub graph_file: tempfile::NamedTempFile,  // file to store the result of the script
+    pub result_file: tempfile::NamedTempFile, // file to store the computation result (as parquet)
+    pub graph_file: tempfile::NamedTempFile,  // file to store the graph itself (as parquet)
     pub graph_exporter: GraphExporter,        // exports a graph to a parquet file
     pub result_importer: ResultImporter,      // imports a computed dictionary from a parquet file
     pub script: Script,                       // builds the python3 execution script
