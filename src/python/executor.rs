@@ -21,7 +21,7 @@ pub struct Executor {
 impl Executor {
     pub fn new(
         graph: Arc<RwLock<Graph>>,
-        computations: Arc<Mutex<Computations>>,
+        _computations: Arc<Mutex<Computations>>, // will be used in follow up pr
         user_script_snippet: String,
     ) -> Executor {
         let result_file = Builder::new()
@@ -47,11 +47,7 @@ impl Executor {
         Executor {
             g_arc: graph.clone(),
             graph_exporter,
-            result_importer: ResultImporter::new(
-                graph.clone(),
-                computations,
-                result_file.path().to_str().unwrap().to_string(),
-            ),
+            result_importer: ResultImporter::new(result_file.path().to_str().unwrap().to_string()),
             script: Script::new(
                 user_script_snippet,
                 result_file.path().to_str().unwrap().to_string(),

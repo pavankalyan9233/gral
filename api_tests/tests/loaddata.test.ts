@@ -46,7 +46,7 @@ describe('API tests based on wiki-Talk graph dataset', () => {
     const response = await axios.post(
       url, graphAnalyticsEngineLoadDataRequest, gral.buildHeaders(jwt)
     );
-    let body = response.data;
+    const body = response.data;
 
 
     try {
