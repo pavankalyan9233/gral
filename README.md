@@ -31,6 +31,12 @@ $ npm install
 $ npm test
 ```
 
+You can also run the same with:
+
+```bash
+$ npm run test
+``` 
+
 Important: Execute tests like this, requires you to start the gral binary and an ArangoDB instance on your own.
 
 `npm install` only needs to be executed once.
