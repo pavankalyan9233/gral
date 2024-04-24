@@ -27,17 +27,22 @@ impl Script {
         script
     }
 
-    pub fn write_to_file(&mut self) -> String {
+    pub fn write_to_file(&mut self) -> Result<String, String> {
         // Create a temporary directory
 
         for line in &self.lines {
             let line_with_newline = format!("{}\n", line);
-            self.temp_file
-                .write_all(line_with_newline.as_bytes())
-                .expect("Failed to write to file");
+            let res = self.temp_file.write_all(line_with_newline.as_bytes());
+            if res.is_err() {
+                return Err("Could not write script to file".to_string());
+            }
         }
 
-        return self.temp_file.path().to_str().unwrap().to_string();
+        let file_path = self.temp_file.path().to_str().unwrap();
+        if file_path.is_empty() {
+            return Err("Could not resolve script file path".to_string());
+        }
+        Ok(file_path.to_string().clone())
     }
 
     pub fn get_file_path(&self) -> String {
@@ -87,7 +92,7 @@ mod tests {
         );
         assert_eq!(script.graph_file_path, graph_path_file);
 
-        let file_path = script.write_to_file();
+        let file_path = script.write_to_file().unwrap();
 
         // expect that file exists
         assert!(std::path::Path::new(&file_path).exists());

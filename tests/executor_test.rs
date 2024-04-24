@@ -6,6 +6,8 @@ mod tests {
     use super::*;
     use gral::computations::Computations;
     use gral::graph_store::graph::Graph;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+    use std::fs::File;
     use std::sync::Mutex;
 
     #[cfg(target_os = "macos")]
@@ -74,5 +76,41 @@ mod tests {
         // assert that all temporary files got deleted
         assert!(!std::path::Path::new(&result_path_file).exists());
         assert!(!std::path::Path::new(&graph_path_file).exists());
+    }
+
+    #[test]
+    fn test_export_graph_into_parquet_file() {
+        let g = Graph::create(
+            vec![
+                "V/A".to_string(),
+                "V/B".to_string(),
+                "V/C".to_string(),
+                "V/D".to_string(),
+                "V/E".to_string(),
+                "V/F".to_string(),
+            ],
+            vec![
+                ("V/D".to_string(), "V/B".to_string()),
+                ("V/A".to_string(), "V/D".to_string()),
+                ("V/A".to_string(), "V/C".to_string()),
+                ("V/B".to_string(), "V/F".to_string()),
+            ],
+        );
+        let g_arc = Arc::new(RwLock::new(g));
+        let computations = Arc::new(Mutex::new(Computations::new()));
+        let user_snippet = "def worker(graph): return nx.pagerank(graph, 0.85)".to_string();
+        let executor = Executor::new(g_arc, computations, user_snippet);
+        executor.write_graph_to_file().unwrap();
+        let file_path = executor.graph_file.path().to_str().unwrap().to_string();
+
+        let file = File::open(file_path).unwrap();
+        let builder = ParquetRecordBatchReaderBuilder::try_new(file).unwrap();
+
+        assert_eq!(builder.schema().field(0).name(), "_from");
+        assert_eq!(builder.schema().field(1).name(), "_to");
+
+        let mut reader = builder.build().unwrap();
+        let record_batch = reader.next().unwrap().unwrap();
+        assert_eq!(record_batch.num_rows(), 4);
     }
 }
