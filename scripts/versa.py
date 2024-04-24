@@ -49,36 +49,36 @@ what = { "database": DATABASE, \
          "vertex_attributes": ["_id", "@collectionname"], \
          "edge_collections": ["APPLICATION_FROM_URL", "URL_ACCESSES_DESTADDRESS", "USER_ACCESSES_APPLICATION", "USER_ACCESSES_DESTADDRESS", "USER_ACCESSES_URL", "USER_ACCESSESFROM_LOCATION", "USER_BELONGSTO_TENANT", "USER_CONNECTSTO_APPLIANCE", "USER_CONNECTSTO_GATEWAY", "TENANT_ON_APPLIANCE"], \
          "parallelism": 10, \
-         "batchSize": 4000000 }
+         "batch_size": 4000000 }
 graph_id = post("/v1/loaddata", what)
-load_job_id = int(graph_id["jobId"])
-graph_id = int(graph_id["graphId"])
+load_job_id = int(graph_id["job_id"])
+graph_id = int(graph_id["graph_id"])
 
 wait_job_complete(load_job_id)
 
 # Run algorithms:
-body_wcc = {"graphId": graph_id}
-wcc_job_id = int(post("/v1/wcc", body_wcc)["jobId"])
+body_wcc = {"graph_id": graph_id}
+wcc_job_id = int(post("/v1/wcc", body_wcc)["job_id"])
 
-body_irank = {"graphId": graph_id, "damping_factor": 0.85, "maximum_supersteps": 64}
-irank_job_id = int(post("/v1/irank", body_irank)["jobId"])
+body_irank = {"graph_id": graph_id, "damping_factor": 0.85, "maximum_supersteps": 64}
+irank_job_id = int(post("/v1/irank", body_irank)["job_id"])
 
-body_labelprop = {"graphId": graph_id, "start_label_attribute": "_id", "synchronous": False, "random_tiebreak": False}
-labelprop_job_id = int(post("/v1/labelpropagation", body_labelprop)["jobId"])
+body_labelprop = {"graph_id": graph_id, "start_label_attribute": "_id", "synchronous": False, "random_tiebreak": False}
+labelprop_job_id = int(post("/v1/labelpropagation", body_labelprop)["job_id"])
 
 wait_job_complete(wcc_job_id)
 wait_job_complete(irank_job_id)
 wait_job_complete(labelprop_job_id)
 
 # Write result back to another collection:
-body = { "jobIds": [wcc_job_id, irank_job_id, labelprop_job_id], \
-  "attributeNames": ["wcc", "irank", "lab"], \
-  "vertexCollections": {}, \
+body = { "job_ids": [wcc_job_id, irank_job_id, labelprop_job_id], \
+  "attribute_names": ["wcc", "irank", "lab"], \
+  "vertex_collections": {}, \
   "database": DATABASE, \
-  "targetCollection": "results", \
+  "target_collection": "results", \
   "parallelism": 4, \
-  "batchSize": 10000 }
-store_job_id = int(post("/v1/storeresults", body)["jobId"])
+  "batch_size": 10000 }
+store_job_id = int(post("/v1/storeresults", body)["job_id"])
 
 wait_job_complete(store_job_id)
 

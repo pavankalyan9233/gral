@@ -47,28 +47,28 @@ what = { "database": DATABASE, \
          "vertex_attributes": ["_id"], \
          "edge_collections": ["helper_similarity_fields_3"], \
          "parallelism": 10, \
-         "batchSize": 4000000 }
+         "batch_size": 4000000 }
 graph_id = post("/v1/loaddata", what)
-load_job_id = int(graph_id["jobId"])
-graph_id = int(graph_id["graphId"])
+load_job_id = int(graph_id["job_id"])
+graph_id = int(graph_id["graph_id"])
 
 wait_job_complete(load_job_id)
 
 # Run algorithm:
-body = {"graphId": graph_id}
-wcc_job_id = int(post("/v1/wcc", body)["jobId"])
+body = {"graph_id": graph_id}
+wcc_job_id = int(post("/v1/wcc", body)["job_id"])
 
 wait_job_complete(wcc_job_id)
 
 # Write result back to another collection:
-body = { "jobIds": [wcc_job_id], \
-  "attributeNames": ["wcc"], \
-  "vertexCollections": {}, \
+body = { "job_ids": [wcc_job_id], \
+  "attribute_names": ["wcc"], \
+  "vertex_collections": {}, \
   "database": DATABASE, \
-  "targetCollection": "helper_wcc_3", \
+  "target_collection": "helper_wcc_3", \
   "parallelism": 4, \
-  "batchSize": 10000 }
-store_job_id = int(post("/v1/storeresults", body)["jobId"])
+  "batch_size": 10000 }
+store_job_id = int(post("/v1/storeresults", body)["job_id"])
 
 wait_job_complete(store_job_id)
 
