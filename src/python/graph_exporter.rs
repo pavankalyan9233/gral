@@ -9,8 +9,8 @@ use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 
 pub struct GraphExporter {
-    pub g_arc: Arc<RwLock<Graph>>,
-    pub graph_file_path: String,
+    g_arc: Arc<RwLock<Graph>>,
+    graph_file_path: String,
 }
 
 impl GraphExporter {
