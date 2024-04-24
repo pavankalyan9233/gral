@@ -2,35 +2,35 @@ import {config} from '../environment.config';
 import ngGenerator = require('ngraph.generators');
 import {GraphImporter} from "../../examples/modules/graphImporter.js";
 
-function getGraphConfig() {
-  const arangoConfig = {
+function getArangoConfig() {
+  return {
     url: config.arangodb.endpoint,
     database: config.arangodb.database,
     username: config.arangodb.username,
     password: config.arangodb.password
   };
-  const dropGraph = true;
-  const importOptions = {
+}
+
+function getImportOptions() {
+  return {
     concurrency: null,
     max_queue_size: null,
   };
-  return {arangoConfig, dropGraph, importOptions};
 }
 
 async function writeGraphToArangoDB(graph: any, graphName: string) {
-  const {arangoConfig, dropGraph, importOptions} = getGraphConfig();
-  let graphImporter = new GraphImporter(arangoConfig, graphName, dropGraph, importOptions);
+  const arangoConfig = getArangoConfig();
+  const importOptions = getImportOptions();
+  let graphImporter = new GraphImporter(arangoConfig, graphName, true, importOptions);
   const vertexCollectionName = graphImporter.getVertexCollectionName();
   await graphImporter.createGraph();
 
-  const nodes = [];
+  const vertices = [];
   graph.forEachNode((node) => {
-    nodes.push({
+    vertices.push({
       _key: `${node.id.toString()}`
     });
   });
-  await graphImporter.insertVerticesArray(nodes)
-
   const edges = [];
   graph.forEachLink((edge) => {
     edges.push({
@@ -39,14 +39,14 @@ async function writeGraphToArangoDB(graph: any, graphName: string) {
     });
   });
 
-  await graphImporter.insertEdgesArray(edges);
+  await graphImporter.createGraphWithVerticesAndEdges(vertices, edges);
 
   return graph;
 }
 
-async function generateCompleteGraph(k: number = 5, graphName: string = 'test_graph') {
+async function generateCompleteGraph(amountOfNodes: number = 5, graphName: string = 'test_graph') {
   // @ts-ignore
-  const graph = ngGenerator.complete(k);
+  const graph = ngGenerator.complete(amountOfNodes);
   return await writeGraphToArangoDB(graph, graphName);
 }
 

@@ -296,6 +296,11 @@ export class GraphImporter {
       lineCount, 10000, true, startsWithZero);
   }
 
+  async createGraphWithVerticesAndEdges(vertices, edges) {
+    await this.insertVertices(vertices);
+    await this.insertEdges(edges);
+  }
+
   async insertVerticesArray(vList) {
     const vertexCollection = this.db.collection(this.getVertexCollectionName());
     await vertexCollection.saveAll(vList);
