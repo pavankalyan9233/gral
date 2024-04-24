@@ -1,4 +1,4 @@
-import {Database, aql} from 'arangojs';
+import {Database} from 'arangojs';
 import fs from 'fs';
 import path from 'path';
 import {promisify} from 'util';
@@ -9,7 +9,6 @@ import axios from 'axios';
 import readline from 'readline';
 import PQueue from "p-queue";
 import * as https from "https";
-import * as environment from "../config/environment.js";
 
 // Parameter for the queue update log messages
 let printMessages = true; // Flag to control printing messages
@@ -119,7 +118,7 @@ export class GraphImporter {
 
     let documentCount = 0;
 
-    const {expectedAmountOfVertices, expectedAmountOfEdges} = await this.getVertexAndEdgeCountsToInsert();
+    const {expectedAmountOfVertices, _} = await this.getVertexAndEdgeCountsToInsert();
 
     let docsToBeInserted;
     if (vertexInsert) {
@@ -200,7 +199,6 @@ export class GraphImporter {
         } catch (error) {
           if (error.response && error.response.status === 404) {
             // Ignore and continue to the next iteration
-            continue;
           } else {
             // If the error is not a 404 error, rethrow it
             console.log(`Error: ${error.message}`);
@@ -225,7 +223,6 @@ export class GraphImporter {
       crlfDelay: Infinity, // Recognize all line breaks
     });
 
-    let counter = 0;
     let docs = [];
     const queue = new PQueue({concurrency: this.concurrency});
 
@@ -269,7 +266,6 @@ export class GraphImporter {
       const copyDocs = [...docs];
       queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
         copyDocs, copyDocs.length, batchSize, false));
-      docs = [];
     }
 
     // wait for all futures
