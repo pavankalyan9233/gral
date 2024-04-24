@@ -6,9 +6,9 @@ use std::fs::File;
 use std::sync::{Arc, Mutex, RwLock};
 
 pub struct ResultImporter {
-    pub g_arc: Arc<RwLock<Graph>>, // TODO: might not be required
-    pub computations: Arc<Mutex<Computations>>,
-    pub file_path: String,
+    g_arc: Arc<RwLock<Graph>>, // TODO: might not be required
+    computations: Arc<Mutex<Computations>>,
+    file_path: String,
 }
 
 impl ResultImporter {
