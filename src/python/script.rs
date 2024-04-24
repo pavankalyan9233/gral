@@ -40,7 +40,7 @@ impl Script {
         return self.temp_file.path().to_str().unwrap().to_string();
     }
 
-    pub(crate) fn get_file_path(&self) -> String {
+    pub fn get_file_path(&self) -> String {
         self.temp_file.path().to_str().unwrap().to_string()
     }
 
