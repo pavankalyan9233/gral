@@ -22,7 +22,7 @@ impl GraphExporter {
     }
 
     pub fn write_parquet_file(&self) -> Result<String, String> {
-        let graph = self.g_arc.read().unwrap();
+        let graph = self.g_arc.read().unwrap()?;
 
         let (from_values, to_values): (Vec<u64>, Vec<u64>) = graph
             .edges
@@ -37,16 +37,16 @@ impl GraphExporter {
             ("_from", Arc::new(arrow_from) as ArrayRef),
             ("_to", Arc::new(arrow_to) as ArrayRef),
         ])
-        .unwrap();
+        .unwrap()?;
 
-        let file = File::create(&self.graph_file_path).unwrap();
+        let file = File::create(&self.graph_file_path).unwrap()?;
         let props = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build();
 
-        let mut writer = ArrowWriter::try_new(file, batch.schema(), Some(props)).unwrap();
-        writer.write(&batch).expect("Writing batch");
-        writer.close().unwrap();
+        let mut writer = ArrowWriter::try_new(file, batch.schema(), Some(props)).unwrap()?;
+        writer.write(&batch).expect("Writing batch")?;
+        writer.close().unwrap()?;
 
         Ok(self.graph_file_path.clone())
     }
