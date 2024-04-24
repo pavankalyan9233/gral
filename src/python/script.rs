@@ -1,98 +1,91 @@
 use std::io::Write;
-use tempfile::Builder;
+use tempfile::NamedTempFile;
 
 pub struct Script {
-    pub user_script: String,
     pub lines: Vec<String>,
-    pub temp_file: tempfile::NamedTempFile,
-    pub result_file_path: String,
-    pub graph_file_path: String,
 }
 
 impl Script {
-    pub fn new(user_script: String, result_file_path: String, graph_file_path: String) -> Script {
-        let mut script = Script {
-            user_script,
-            lines: Vec::new(),
-            temp_file: Builder::new()
-                .prefix("gral_script_")
-                .suffix(".py")
-                .tempfile()
-                .expect("Failed to create temporary file"),
-            result_file_path,
-            graph_file_path,
-        };
-
-        script.generate_python_script();
-        script
+    fn add_line(&mut self, line: String) {
+        self.lines.push(line.to_string());
     }
 
-    pub fn write_to_file(&mut self) -> Result<String, String> {
-        // Create a temporary directory
+    fn add_graph_file_path(&mut self, graph_file_path: String) {
+        self.add_line(format!("graph_file_path = \"{}\"", graph_file_path));
+    }
 
+    pub fn write_to_file(&self, file: &mut NamedTempFile) -> Result<(), String> {
         for line in &self.lines {
             let line_with_newline = format!("{}\n", line);
-            let res = self.temp_file.write_all(line_with_newline.as_bytes());
+            let res = file.write_all(line_with_newline.as_bytes());
             if res.is_err() {
                 return Err("Could not write script to file".to_string());
             }
         }
 
-        let file_path = self.temp_file.path().to_str().unwrap();
-        if file_path.is_empty() {
-            return Err("Could not resolve script file path".to_string());
+        Ok(())
+    }
+}
+
+fn read_base_script() -> Result<String, String> {
+    let res = std::str::from_utf8(include_bytes!(concat!(
+        env!("OUT_DIR"),
+        "/base_functions.py"
+    )));
+    if res.is_err() {
+        return Err("Failed to read base script".to_string());
+    }
+    Ok(res.unwrap().to_string())
+}
+
+pub fn generate_script(
+    user_script: String,
+    result_file_path: String,
+    graph_file_path: String,
+) -> Result<Script, String> {
+    let mut script = Script { lines: vec![] };
+    let base_script_str = read_base_script()?;
+
+    for line in base_script_str.lines() {
+        if line.contains("<Placeholder for graph_file_path>") {
+            script.add_graph_file_path(graph_file_path.clone());
+            continue;
+        } else if line.contains("<Placeholder for user injected script>") {
+            script.add_line(user_script.clone());
+            continue;
+        } else if line.contains("<Placeholder for result file path>") {
+            script.add_line(format!("result_file_path = \"{}\"", result_file_path));
+            continue;
         }
-        Ok(file_path.to_string().clone())
+        script.add_line(line.to_string());
     }
 
-    pub fn get_file_path(&self) -> String {
-        self.temp_file.path().to_str().unwrap().to_string()
-    }
-
-    fn add_line(&mut self, line: &str) {
-        self.lines.push(line.to_string());
-    }
-
-    fn add_graph_file_path(&mut self) {
-        self.add_line(&format!("graph_file_path = \"{}\"", self.graph_file_path));
-    }
-
-    fn generate_python_script(&mut self) {
-        let script_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/base_functions.py"));
-        let script_str = std::str::from_utf8(script_bytes).unwrap();
-        for line in script_str.lines() {
-            if line.contains("<Placeholder for graph_file_path>") {
-                self.add_graph_file_path();
-                continue;
-            } else if line.contains("<Placeholder for user injected script>") {
-                self.add_line(&self.user_script.clone());
-                continue;
-            } else if line.contains("<Placeholder for result file path>") {
-                self.add_line(&format!("result_file_path = \"{}\"", self.result_file_path));
-                continue;
-            }
-            self.add_line(line);
-        }
-    }
+    Ok(script)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::Builder;
 
     #[test]
     fn test_hello_world_script() {
         let user_script_snippet = "def worker(): print('Hello, World!')".to_string();
         let result_path_file = "result.parquet".to_string();
         let graph_path_file = "graph.parquet".to_string();
-        let mut script = Script::new(
-            user_script_snippet,
-            result_path_file,
-            graph_path_file.clone(),
-        );
-        assert_eq!(script.graph_file_path, graph_path_file);
+        let script =
+            generate_script(user_script_snippet, result_path_file, graph_path_file).unwrap();
 
-        let file_path = script.write_to_file().unwrap();
+        let mut script_file = Builder::new()
+            .prefix("gral_script_")
+            .suffix(".py")
+            .tempfile()
+            .unwrap();
+
+        let res = script.write_to_file(&mut script_file);
+        assert!(res.is_ok());
+
+        let file_path = script_file.path().to_str().unwrap().to_string();
 
         // expect that file exists
         assert!(std::path::Path::new(&file_path).exists());
@@ -102,7 +95,7 @@ mod tests {
         assert!(!content.is_empty());
 
         // destroy script
-        drop(script);
+        drop(script_file);
 
         // expect that the temp file automatically is removed during destruction
         assert!(!std::path::Path::new(&file_path).exists());
