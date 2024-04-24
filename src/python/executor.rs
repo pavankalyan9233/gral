@@ -111,13 +111,21 @@ mod tests {
     #[test]
     fn test_full_executor_run() {
         let g = Graph::create(
-          vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string(), "V/D".to_string(), "V/E".to_string(), "V/F".to_string()], 
-          vec![
-            ("V/D".to_string(), "V/B".to_string()), 
-            ("V/A".to_string(), "V/D".to_string()), 
-            ("V/A".to_string(), "V/C".to_string()), 
-            ("V/B".to_string(), "V/F".to_string())
-          ]);
+            vec![
+                "V/A".to_string(),
+                "V/B".to_string(),
+                "V/C".to_string(),
+                "V/D".to_string(),
+                "V/E".to_string(),
+                "V/F".to_string(),
+            ],
+            vec![
+                ("V/D".to_string(), "V/B".to_string()),
+                ("V/A".to_string(), "V/D".to_string()),
+                ("V/A".to_string(), "V/C".to_string()),
+                ("V/B".to_string(), "V/F".to_string()),
+            ],
+        );
 
         let g_arc = Arc::new(RwLock::new(g));
         let computations = Arc::new(Mutex::new(Computations::new()));
