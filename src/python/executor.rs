@@ -110,23 +110,14 @@ mod tests {
 
     #[test]
     fn test_full_executor_run() {
-        let mut g = Graph::create(vec![], vec![]);
-        {
-            g.insert_vertex(b"V/A".to_vec(), vec![]);
-            g.insert_vertex(b"V/B".to_vec(), vec![]);
-            g.insert_vertex(b"V/C".to_vec(), vec![]);
-            g.insert_vertex(b"V/D".to_vec(), vec![]);
-            g.insert_vertex(b"V/E".to_vec(), vec![]);
-            g.insert_vertex(b"V/F".to_vec(), vec![]);
-            g.seal_vertices();
-
-            // add edges
-            let _ = g.insert_edge_between_vertices(b"V/D", b"V/B");
-            let _ = g.insert_edge_between_vertices(b"V/A", b"V/D");
-            let _ = g.insert_edge_between_vertices(b"V/A", b"V/C");
-            let _ = g.insert_edge_between_vertices(b"V/B", b"V/F");
-            g.seal_edges();
-        }
+        let g = Graph::create(
+          vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string(), "V/D".to_string(), "V/E".to_string(), "V/F".to_string()], 
+          vec![
+            ("V/D".to_string(), "V/B".to_string()), 
+            ("V/A".to_string(), "V/D".to_string()), 
+            ("V/A".to_string(), "V/C".to_string()), 
+            ("V/B".to_string(), "V/F".to_string())
+          ]);
 
         let g_arc = Arc::new(RwLock::new(g));
         let computations = Arc::new(Mutex::new(Computations::new()));
