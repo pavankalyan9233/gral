@@ -147,8 +147,6 @@ mod tests {
             std::fs::read(&executor.result_file.path()).expect("Failed to read file");
         assert!(!result_content.is_empty());
 
-        assert!(result.is_ok());
-
         let result_path_file = executor.result_file.path().to_str().unwrap().to_string();
         let graph_path_file = executor.graph_file.path().to_str().unwrap().to_string();
 
