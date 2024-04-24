@@ -22,7 +22,7 @@ impl GraphExporter {
     }
 
     pub fn write_parquet_file(&self) -> Result<String, String> {
-        let graph = self.g_arc.read().unwrap()?;
+        let graph = self.g_arc.read().unwrap();
 
         let (from_values, to_values): (Vec<u64>, Vec<u64>) = graph
             .edges
@@ -37,16 +37,16 @@ impl GraphExporter {
             ("_from", Arc::new(arrow_from) as ArrayRef),
             ("_to", Arc::new(arrow_to) as ArrayRef),
         ])
-        .unwrap()?;
+        .unwrap();
 
-        let file = File::create(&self.graph_file_path).unwrap()?;
+        let file = File::create(&self.graph_file_path).unwrap();
         let props = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build();
 
-        let mut writer = ArrowWriter::try_new(file, batch.schema(), Some(props)).unwrap()?;
-        writer.write(&batch).expect("Writing batch")?;
-        writer.close().unwrap()?;
+        let mut writer = ArrowWriter::try_new(file, batch.schema(), Some(props)).unwrap();
+        writer.write(&batch).expect("Writing batch");
+        writer.close().unwrap();
 
         Ok(self.graph_file_path.clone())
     }
@@ -62,41 +62,35 @@ mod tests {
 
     #[test]
     fn test_export_graph_into_parquet_file() {
-        let mut g = Graph::create(vec![], vec![]);
-        {
-            g.insert_vertex(b"V/A".to_vec(), vec![]);
-            g.insert_vertex(b"V/B".to_vec(), vec![]);
-            g.insert_vertex(b"V/C".to_vec(), vec![]);
-            g.insert_vertex(b"V/D".to_vec(), vec![]);
-            g.insert_vertex(b"V/E".to_vec(), vec![]);
-            g.insert_vertex(b"V/F".to_vec(), vec![]);
-            g.seal_vertices();
-
-            // add edges
-            let _ = g.insert_edge_between_vertices(b"V/D", b"V/B");
-            let _ = g.insert_edge_between_vertices(b"V/A", b"V/D");
-            let _ = g.insert_edge_between_vertices(b"V/A", b"V/C");
-            let _ = g.insert_edge_between_vertices(b"V/B", b"V/F");
-            g.seal_edges();
-        }
+        let g = Graph::create(
+            vec![
+                "V/A".to_string(),
+                "V/B".to_string(),
+                "V/C".to_string(),
+                "V/D".to_string(),
+                "V/E".to_string(),
+                "V/F".to_string(),
+            ],
+            vec![
+                ("V/D".to_string(), "V/B".to_string()),
+                ("V/A".to_string(), "V/D".to_string()),
+                ("V/A".to_string(), "V/C".to_string()),
+                ("V/B".to_string(), "V/F".to_string()),
+            ],
+        );
 
         let g_arc = Arc::new(RwLock::new(g));
         let exporter = GraphExporter::new(g_arc, "/tmp/dont_care.parquet".to_string());
-        match exporter.write_parquet_file() {
-            Ok(file_path) => {
-                let file = File::open(file_path).unwrap();
-                let builder = ParquetRecordBatchReaderBuilder::try_new(file).unwrap();
+        let file_path = exporter.write_parquet_file().unwrap();
 
-                assert_eq!(builder.schema().field(0).name(), "_from");
-                assert_eq!(builder.schema().field(1).name(), "_to");
+        let file = File::open(file_path).unwrap();
+        let builder = ParquetRecordBatchReaderBuilder::try_new(file).unwrap();
 
-                let mut reader = builder.build().unwrap();
-                let record_batch = reader.next().unwrap().unwrap();
-                assert_eq!(record_batch.num_rows(), 4);
-            }
-            Err(e) => {
-                assert!(false, "{}", e);
-            }
-        }
+        assert_eq!(builder.schema().field(0).name(), "_from");
+        assert_eq!(builder.schema().field(1).name(), "_to");
+
+        let mut reader = builder.build().unwrap();
+        let record_batch = reader.next().unwrap().unwrap();
+        assert_eq!(record_batch.num_rows(), 4);
     }
 }
