@@ -27,7 +27,7 @@ impl Script {
         script
     }
 
-    pub(crate) fn write_to_file(&mut self) -> String {
+    pub fn write_to_file(&mut self) -> String {
         // Create a temporary directory
 
         for line in &self.lines {
