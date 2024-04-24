@@ -297,8 +297,8 @@ export class GraphImporter {
   }
 
   async createGraphWithVerticesAndEdges(vertices, edges) {
-    await this.insertVertices(vertices);
-    await this.insertEdges(edges);
+    await this.insertVerticesArray(vertices);
+    await this.insertEdgesArray(edges);
   }
 
   async insertVerticesArray(vList) {
