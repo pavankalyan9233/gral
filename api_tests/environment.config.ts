@@ -8,6 +8,7 @@ export const config = {
     endpoint: "http://localhost:8529",
     username: "root",
     password: "",
+    database: "_system"
   },
   // The default timeout is 5000 ms (vitest default).
   // This applies when no specific timeout is set.

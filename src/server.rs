@@ -1,5 +1,5 @@
 use http::Error;
-use log::{debug, info, warn, LevelFilter};
+use log::{debug, info, warn};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
@@ -12,15 +12,12 @@ use crate::args::parse_args;
 use crate::auth::with_auth;
 use crate::computations::Computations;
 use crate::graph_store::graphs::Graphs;
+use crate::logging::{api_logs, initialize_logging};
 use crate::metrics;
 
 #[tokio::main]
 pub async fn run() {
-    env_logger::Builder::new()
-        .format_timestamp(Some(env_logger::fmt::TimestampPrecision::Micros))
-        .filter_level(LevelFilter::Info)
-        .parse_env("RUST_LOG")
-        .init();
+    let memlog = initialize_logging();
     info!("Hello, this is gral!");
     let prom_builder = PrometheusBuilder::new();
     let metrics_handle = prom_builder
@@ -86,7 +83,6 @@ pub async fn run() {
             let out = metrics_handle.render();
             warp::reply::with_status(out, StatusCode::OK)
         });
-
     let apifilters = shutdown
         .with(log_incoming)
         .or(api_filter(
@@ -95,6 +91,7 @@ pub async fn run() {
             the_args.clone(),
         ))
         .or(api_metrics)
+        .or(api_logs(memlog))
         .recover(handle_errors);
     let ip_addr: IpAddr = args
         .bind_addr
