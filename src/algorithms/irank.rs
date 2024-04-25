@@ -121,23 +121,23 @@ mod tests {
     use approx::assert_ulps_eq;
     use serde_json::json;
 
-    fn give_collectionname_column(g: &mut Graph, collname: &str) {
+    fn give_collection_name_column(g: &mut Graph, coll_name: &str) {
         g.vertex_column_names = vec!["@collectionname".to_string()];
         g.vertex_json = vec![Vec::new()];
         for _i in 0..g.number_of_vertices() {
-            g.vertex_json[0].push(json!(collname));
+            g.vertex_json[0].push(json!(coll_name));
         }
         g.vertex_column_types = vec!["string".to_string()];
     }
 
-    mod ranks {
+    mod ranks_one_collection {
         use super::*;
 
         #[test]
         fn gives_empty_results_on_empty_graph() {
             let mut g = Graph::create(vec![], vec![]);
             g.index_edges(true, false);
-            give_collectionname_column(&mut g, "c");
+            give_collection_name_column(&mut g, "c");
 
             let (rank, steps) = i_rank(&g, 100, 0.85).unwrap();
 
@@ -149,7 +149,7 @@ mod tests {
         fn ranks_of_unconnected_graph_are_all_equal_if_same_collection() {
             let mut g = Graph::create(vec!["V/A".to_string(), "V/B".to_string()], vec![]);
             g.index_edges(true, false);
-            give_collectionname_column(&mut g, "V");
+            give_collection_name_column(&mut g, "V");
 
             let (rank, steps) = i_rank(&g, 100, 0.85).unwrap();
 
@@ -157,6 +157,45 @@ mod tests {
             assert_ulps_eq!(rank[1], 0.5);
             assert_eq!(steps, 1);
         }
+
+        #[test]
+        fn test_irank_cyclic() {
+            let mut g = make_cyclic_graph(10);
+            give_collection_name_column(&mut g, "c");
+
+            let (rank, steps) = i_rank(&g, 5, 0.85).unwrap();
+            assert_eq!(steps, 1);
+            for i in 0..10 {
+                assert!((rank[i] - 1.0 / 10.0).abs() < 0.000001);
+            }
+            println!("{:?}", rank);
+        }
+
+        #[test]
+        fn test_irank_star() {
+            let mut g = make_star_graph(10);
+            give_collection_name_column(&mut g, "c");
+
+            let (rank, steps) = i_rank(&g, 100, 0.85).unwrap();
+            assert!(steps > 50 && steps < 70);
+            assert!(0.49 < rank[9] && rank[9] < 0.50);
+            assert!(0.05 < rank[0] && rank[0] < 0.06);
+            println!("{:?}", rank);
+        }
+
+        #[test]
+        fn sum_of_ranks_is_normalized() {
+            let mut g = make_star_graph(10);
+            give_collection_name_column(&mut g, "c");
+
+            let (rank, _steps) = i_rank(&g, 100, 0.85).unwrap();
+
+            assert_ulps_eq!(rank.iter().sum::<f64>(), 1.0);
+        }
+    }
+
+    mod ranks_multiple_collections {
+        use super::*;
 
         #[test]
         fn ranks_of_unconnected_graph_are_not_all_equal_if_different_collections() {
@@ -175,41 +214,6 @@ mod tests {
             assert_ulps_eq!(rank[1], 0.5);
             assert_ulps_eq!(rank[2], 1.0);
             assert_eq!(steps, 0);
-        }
-
-        #[test]
-        fn test_irank_cyclic() {
-            let mut g = make_cyclic_graph(10);
-            give_collectionname_column(&mut g, "c");
-
-            let (rank, steps) = i_rank(&g, 5, 0.85).unwrap();
-            assert_eq!(steps, 1);
-            for i in 0..10 {
-                assert!((rank[i] - 1.0 / 10.0).abs() < 0.000001);
-            }
-            println!("{:?}", rank);
-        }
-
-        #[test]
-        fn test_irank_star() {
-            let mut g = make_star_graph(10);
-            give_collectionname_column(&mut g, "c");
-
-            let (rank, steps) = i_rank(&g, 100, 0.85).unwrap();
-            assert!(steps > 50 && steps < 70);
-            assert!(0.49 < rank[9] && rank[9] < 0.50);
-            assert!(0.05 < rank[0] && rank[0] < 0.06);
-            println!("{:?}", rank);
-        }
-
-        #[test]
-        fn sum_of_ranks_is_normalized() {
-            let mut g = make_star_graph(10);
-            give_collectionname_column(&mut g, "c");
-
-            let (rank, _steps) = i_rank(&g, 100, 0.85).unwrap();
-
-            assert_ulps_eq!(rank.iter().sum::<f64>(), 1.0);
         }
 
         #[test]
@@ -237,7 +241,7 @@ mod tests {
         #[test]
         fn stops_maximally_after_given_supersteps() {
             let mut g = make_star_graph(10);
-            give_collectionname_column(&mut g, "c");
+            give_collection_name_column(&mut g, "c");
 
             let max_supersteps = 5;
             let (_rank, steps) = i_rank(&g, max_supersteps, 0.85).unwrap();
@@ -248,7 +252,7 @@ mod tests {
         #[test]
         fn stops_earlier_then_maximal_supersteps_when_converging() {
             let mut g = make_star_graph(10);
-            give_collectionname_column(&mut g, "c");
+            give_collection_name_column(&mut g, "c");
 
             let max_supersteps = 100;
             let (_rank, steps) = i_rank(&g, max_supersteps, 0.85).unwrap();
@@ -263,7 +267,7 @@ mod tests {
         #[test]
         fn damping_factor_determines_impact_of_neighbours() {
             let mut g = make_star_graph(10);
-            give_collectionname_column(&mut g, "c");
+            give_collection_name_column(&mut g, "c");
 
             let (rank_lower_damping, steps_lower_damping) = dbg!(i_rank(&g, 100, 0.4).unwrap());
             let (rank_larger_damping, steps_larger_damping) = dbg!(i_rank(&g, 100, 0.85).unwrap());
@@ -276,7 +280,7 @@ mod tests {
         #[test]
         fn damping_factor_zero_gives_equal_ranks() {
             let mut g = make_star_graph(10);
-            give_collectionname_column(&mut g, "c");
+            give_collection_name_column(&mut g, "c");
 
             let (rank, steps) = i_rank(&g, 100, 0.0).unwrap();
 
