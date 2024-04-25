@@ -971,9 +971,9 @@ pub async fn write_result_to_arangodb(
                 }
                 cur_batch.extend_from_slice(b",\"");
                 cur_batch.extend_from_slice(attribute_names[j].as_bytes());
-                cur_batch.extend_from_slice(b"\":\"");
-                cur_batch.extend_from_slice(value.as_bytes());
-                cur_batch.extend_from_slice(b"\"");
+                cur_batch.extend_from_slice(b"\":");
+                cur_batch.extend_from_slice(&serde_json::to_vec(&value).unwrap());
+                cur_batch.extend_from_slice(b"");
             }
             cur_batch.extend_from_slice(b"}");
             count += 1;

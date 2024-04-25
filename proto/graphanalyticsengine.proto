@@ -7,7 +7,7 @@
 /**
  * GraphAnalyticsEngineService is an API for interacting with graph analytics engines. Each engine corresponds to a deployment on AG, granting direct database access for loading graphs and storing results. A single database deployment can accommodate multiple graph analytics engines (GAEs).
  *
- * Every call, which can take longer to complete, is asynchronous in the sense that it returns a jobId and the result can/must be retrieved separately. Please note that these results must be deleted explicitly to free the memory used, since all results are stored in RAM.
+ * Every call, which can take longer to complete, is asynchronous in the sense that it returns a job id and the result can/must be retrieved separately. Please note that these results must be deleted explicitly to free the memory used, since all results are stored in RAM.
  *
  * The following trigger asynchronous operations, which might take longer to complete:
  * <ul>
@@ -29,10 +29,13 @@ service GraphAnalyticsEngineService {
     // or a list of vertex collections and a list of edge collections.
     // Currently, the API call always loads all vertices and edges from these
     // collections. However, it is possible to select which attribute data
-    // is loaded alongside the vertices and the edge topology.
+    // is loaded alongside the vertices and the edge topology. These
+    // attribute values are stored into a column store, in which
+    // each column corresponds to an attribute and has as many rows as there
+    // are vertices in the graph.
     // Each loaded graph will get a numerical ID, with which it can be used
     // in computations.
-    // This is an asynchronous job which returns the jobId immediately. Use the GET
+    // This is an asynchronous job which returns the job id immediately. Use the GET
     // graph API with the returned graph ID to get information on errors and the outcome
     // of the loading.
     rpc GraphAnalyticsEngineLoadData(GraphAnalyticsEngineLoadDataRequest) returns (GraphAnalyticsEngineLoadDataResponse) {
@@ -51,12 +54,14 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Process a graph which was previously loaded with the weakly connected
-    // components algorithm (WCC) and store the results in-memory. The
-    // computation will return a numerical job Id, with which
+    // Process a previously loaded graph with the weakly connected
+    // components algorithm (WCC) and store the results in-memory. This
+    // essentially means that the direction of edges is ignored and then 
+    // the connected components of the undirected graph are computed. The
+    // computation will return a numerical job id, with which
     // the results can later be queried or written back to the database.
-    // This is an asynchronous job which returns the jobId immediately. Use the GET
-    // job API with the job Id to get information on progress, errors and
+    // This is an asynchronous job which returns the job id immediately. Use the GET
+    // job API with the job id to get information on progress, errors and
     // the outcome of the computation.
     rpc GraphAnalyticsEngineRunWcc(GraphAnalyticsEngineWccSccRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
@@ -65,13 +70,16 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Process a graph which was previously loaded with the strongly connected
-    // components algorithm (SCC) and store the results in-memory. The
-    // computation will return a numerical job Id, with which
+    // Process a previously loaded graph with the strongly connected
+    // components algorithm (SCC) and store the results in-memory. This means
+    // that the direction of the edges is taken into account and two vertices
+    // A and B will be in the same strongly connected component if and
+    // only if there is a directed path from A to B and from B to A. The
+    // computation will return a numerical job id, with which
     // the results can later be queried or written back to the database.
-    // This is an asynchronous job which returns the jobId immediately. Use the GET
-    // job API with the job Id to get information on progress, errors and
-    // the outcome of the computation.
+    // This is an asynchronous job which returns the job id immediately.
+    // Use the GET job API with the job id to get information on
+    // progress, errors and the outcome of the computation.
     rpc GraphAnalyticsEngineRunScc(GraphAnalyticsEngineWccSccRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
             post: "/v1/scc"
@@ -79,15 +87,15 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Process a graph which was previously loaded and a computation which 
+    // Process a previously loaded graph and a computation which 
     // has computed connected components (weakly or strongly) by aggregating
     // some vertex data over each component found. The result will be one
     // distribution map for each connected component. It is stored in memory.
-    // The computation will return a numerical job Id, with which the
+    // The computation will return a numerical job id, with which the
     // results can later be queried or written back to the database.
-    // This is an asynchronous job which returns the jobId immediately. Use the
-    // GET job API with the job Id to get information on progress,
-    // errors and the outcome of the computation.
+    // This is an asynchronous job which returns the job id immediately.
+    // Use the GET job API with the job id to get information on
+    // progress, errors and the outcome of the computation.
     rpc GraphAnalyticsEngineRunCompAggregation(GraphAnalyticsEngineAggregateComponentsRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
             post: "/v1/aggregatecomponents"
@@ -95,15 +103,15 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Process a graph which was previously loaded with the pagerank
+    // Process a previously loaded graph with the pagerank
     // algorithm and store the results in-memory. There are some parameters
     // controlling the computation like the damping factor and the maximal
     // number of supersteps. See the input message documentation for details.
-    // The computation will return a numerical job Id, with which the
+    // The computation will return a numerical job id, with which the
     // results can later be queried or written back to the database.
-    // This is an asynchronous job which returns the jobId immediately. Use the
-    // GET job API with the job Id to get information on progress,
-    // errors and the outcome of the computation.
+    // This is an asynchronous job which returns the job id immediately.
+    // Use the GET job API with the job id to get information on
+    // progress, errors and the outcome of the computation.
     rpc GraphAnalyticsEngineRunPageRank(GraphAnalyticsEnginePageRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
             post: "/v1/pagerank"
@@ -111,21 +119,23 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Process a graph which was previously loaded with the irank
+    // Process a previously loaded graph with the irank
     // algorithm and store the results in-memory. The "irank" algorithms
     // is a variant of pagerank, which changes the initial weight of each
     // vertex. Rather than being 1/N where N is the number of vertices,
     // the value is here different depending on from which vertex collection
     // the vertex comes. If V is from vertex collection C and N is the number
     // of vertices in C, then the initial weight of V is 1/N. 
-    // There are some parameters
-    // controlling the computation like the damping factor and the maximal
-    // number of supersteps. See the input message documentation for details.
-    // The computation will return a numerical job Id, with which the
-    // results can later be queried or written back to the database.
-    // This is an asynchronous job which returns the jobId immediately. Use the
-    // GET job API with the job Id to get information on progress,
-    // errors and the outcome of the computation.
+    // As with pagerank, the total sum of ranks stays the same as an
+    // invariant of the algorithm.
+    // There are some parameters controlling the computation like the
+    // damping factor and the maximal number of supersteps. See the
+    // input message documentation for details. The computation will
+    // return a numerical job id, with which the results can later be
+    // queried or written back to the database.
+    // This is an asynchronous job which returns the job id immediately.
+    // Use the GET job API with the job id to get information on
+    // progress, errors and the outcome of the computation.
     rpc GraphAnalyticsEngineRunIRank(GraphAnalyticsEnginePageRankRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
             post: "/v1/irank"
@@ -133,17 +143,18 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Process a graph which was previously loaded with the label
+    // Process a previously loaded graph with the label
     // propagation algorithm and store the results in-memory. There are
     // some parameters controlling the computation like the name of the
     // attribute to choose the start label from, a flag to indicate
     // if the synchronous or the asynchronous variant is used and the
     // maximal number of supersteps. See the input message documentation
-    // for details. The computation will return a numerical job Id, with
+    // for details. The computation will return a numerical job id, with
     // which the results can later be queried or written back to the
-    // database. This is an asynchronous job which returns the jobId immediately.
-    // Use the GET job API with the job Id to get information on
-    // progress, errors and the outcome of the computation.
+    // database. This is an asynchronous job which returns the job id
+    // immediately. Use the GET job API with the job id to get
+    // information on progress, errors and the outcome of the
+    // computation.
     rpc GraphAnalyticsEngineRunLabelPropagation(GraphAnalyticsEngineLabelPropagationRequest) returns (GraphAnalyticsEngineProcessResponse) {
         option (google.api.http) = {
             post: "/v1/labelpropagation"
@@ -151,9 +162,53 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Stores the results from the previous process into the deployment.
-    // Required permissions:
-    // - graphanalytics.engine.store-results on the graph analytics engine identified by the given ID.
+    // Process a previously loaded graph with the attribute
+    // propagation algorithm and store the results in-memory.
+    // The algorithm basically reads a list of labels from a column for each 
+    // vertex (see the loaddata operation, for which one can configure
+    // which attributes are loaded into the column store).
+    // The value can be empty or a string or a list of strings
+    // and the set of labels for each vertex is initialized accordingly. The
+    // algorithm will then simply propagate each label in each label set
+    // along the edges to all reachable vertices and thus compute a new
+    // set of labels. After a specified maximal number of steps or if no
+    // label set changes any more the algorithm stops.
+    //
+    // BEWARE: If there are many labels in the system and the graph is
+    // well-connected then the result can be huge!
+    //
+    // There are some parameters controlling the computation like the
+    // name of the attribute to choose the start label from, whether
+    // the synchronous or the asynchronous variant is to be used, if
+    // we propagate along the the edges forwards or backwards and the
+    // maximal number of supersteps. See the input message documentation
+    // for details. The computation will return a numerical job id,
+    // with which the results can later be queried or written back
+    // to the database. This is an asynchronous job which returns
+    // the job id immediately. Use the GET job API with the job id to
+    // get information on progress, errors and the outcome of the
+    // computation.
+    rpc GraphAnalyticsEngineRunAttributePropagation(GraphAnalyticsEngineAttributePropagationRequest) returns (GraphAnalyticsEngineProcessResponse) {
+        option (google.api.http) = {
+            post: "/v1/attributepropagation"
+            body: "*"
+        };
+    }
+
+    // Stores the results from previous jobs into the deployment.
+    // One can specify a number of job ids but the requirement is that
+    // they produce the same number of results. For example, results from
+    // different algorithms which produce one result per vertex can be
+    // written to the database together. The target collection must already
+    // exist and must be writable. The job produces one document per result
+    // and one can prescribe which attribute names should be used for which
+    // result.
+    // There are some parameters controlling the computation. See
+    // the input message description for details. The computation
+    // will return a numerical job id, with which the progress can
+    // be monitored. This is an asynchronous job which returns the
+    // job id immediately. Use the GET job API with the job id to get
+    // information on progress, errors and the outcome of the job.
     rpc GraphAnalyticsEngineStoreResults(GraphAnalyticsEngineStoreResultsRequest) returns (GraphAnalyticsEngineStoreResultsResponse) {
         option (google.api.http) = {
             post: "/v1/storeresults"
@@ -239,6 +294,8 @@ message GraphAnalyticsEngineLoadDataRequest {
     // List of edge collections. Must be set, if `graph_name` is not given.
     repeated string vertex_attributes = 4;
     // List of attributes to load into the column store for vertices.
+    // The column store of the graph will contain one column for each
+    // attribute listed here.
     repeated string vertex_attribute_types = 5;
     // Types for the vertex attributes. These values are allowed:
     //  - "string"
@@ -340,8 +397,8 @@ message GraphAnalyticsEnginePageRankRequest {
 message GraphAnalyticsEngineLabelPropagationRequest {    
     // Graph ID
     uint64 graph_id = 1;
-    // Start label attribute, must be stored in one column. Use id of vertex
-    // if set to "@id".
+    // Start label attribute, must be stored in one column of the column
+    // store of the graph. Use id of vertex if set to "@id".
     string start_label_attribute = 2;
     // Flag to indicate whether synchronous (true) or asynchronous label
     // propagation is used:
@@ -350,6 +407,26 @@ message GraphAnalyticsEngineLabelPropagationRequest {
     // (uniform distribution) or deterministically (smallest label amongst
     // the most frequent ones):
     bool random_tiebreak = 4;
+}
+
+// Request arguments for GraphAnalyticsEngineRunAttributePropagation.
+message GraphAnalyticsEngineAttributePropagationRequest {    
+    // Graph ID. This attribute must be given.
+    uint64 graph_id = 1;
+    // Start label attribute, must be stored in one column of the column
+    // store of the graph. Use id of vertex if set to "@id". Values can
+    // be empty or a string or a list of strings. All other values are
+    // transformed into a string. This attribute must be given.
+    string start_label_attribute = 2;
+    // Flag to indicate whether synchronous (true) or asynchronous label
+    // propagation is used. The default is asynchronous, i.e. `false`.
+    bool synchronous = 3;
+    // Flag to indicate whether the propagation happens forwards (along the
+    // directed edges) or backwards (in the opposite direction). The default
+    // is forwards, i.e. `false`.
+    bool backwards = 4;
+    // Maximum number of steps to do:
+    uint32 maximum_supersteps = 5;
 }
 
 // Request arguments for GraphAnalyticsEngineStoreResults.
