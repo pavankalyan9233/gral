@@ -16,6 +16,7 @@ export async function teardown() {
   const jwt = await arangodb.getArangoJWT();
 
   // Note: Currently, we cannot shut down instances via API which are wrongly configured and cannot reach the auth service
+  // TODO: Implement a way to not execute this particular method whenever we run only `npm run test`
   for (const endpoint of gral_valid_auth_endpoints) {
     await gral.shutdownInstance(endpoint, jwt)
       .then((response) => {

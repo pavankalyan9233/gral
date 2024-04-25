@@ -18,6 +18,7 @@ fn main() -> Result<()> {
     let mut prost_build = prost_build::Config::new();
     prost_build
         .type_attribute(".", "#[derive(serde::Serialize,serde::Deserialize)]")
+        .type_attribute(".", "#[serde(default)]")
         // Save descriptors to file
         .file_descriptor_set_path(&descriptor_path)
         // Generate prost structs
@@ -35,6 +36,15 @@ fn main() -> Result<()> {
         .protoc_arg("--experimental_allow_proto3_optional")
         .compile(&["proto/definition.proto"], &["proto"])
         .unwrap();
+
+    // Produce byte representation of our python script for the executor:
+    std::fs::copy(
+        "src/python/assets/base_functions.py",
+        out_dir.join("base_functions.py"),
+    )
+    .expect("Failed to copy Python script to output directory");
+
+    println!("cargo:rerun-if-changed=src/python/snippets/base_functions.py");
 
     Ok(())
 }

@@ -35,7 +35,7 @@ async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: stri
       const body = response.data;
       if (body !== undefined) {
         if (body.error) {
-          throw new Error(`Job <${jobId}> failed: ${body.errorMessage}`)
+          throw new Error(`Job <${jobId}> failed: ${body.error_message}`)
         } else if (body.progress >= body.total) {
           return {result: body, retriesNeeded: retries};
         } else {
