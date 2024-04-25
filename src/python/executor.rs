@@ -26,35 +26,15 @@ pub fn execute_python_script_on_graph_with_bin(
     execute_python_script_on_graph_internal(g_arc, user_script, Some(python3_binary_path))
 }
 
-fn create_temporary_files() -> Result<(NamedTempFile, NamedTempFile, NamedTempFile), String> {
-    let result_file_res = Builder::new()
-        .prefix("gral_computation_result_")
-        .suffix(".parquet")
-        .tempfile();
-    if result_file_res.is_err() {
-        return Err("Failed to create temporary file for computation result".to_string());
-    }
-    let result_file = result_file_res.unwrap();
-
-    let graph_file_res = Builder::new()
-        .prefix("gral_graph_")
-        .suffix(".parquet")
-        .tempfile();
-    if graph_file_res.is_err() {
-        return Err("Failed to create temporary file for graph".to_string());
-    }
-    let graph_file = graph_file_res.unwrap();
-
-    let script_file_res = Builder::new()
-        .prefix("gral_script_")
-        .suffix(".py")
-        .tempfile();
-    if script_file_res.is_err() {
-        return Err("Failed to create temporary file for script".to_string());
-    }
-    let script_file = script_file_res.unwrap();
-
-    Ok((result_file, graph_file, script_file))
+pub(crate) fn create_temporary_file(
+    file_prefix: String,
+    file_suffix: String,
+) -> Result<NamedTempFile, String> {
+    Builder::new()
+        .prefix(&file_prefix)
+        .suffix(&file_suffix)
+        .tempfile()
+        .map_err(|e| e.to_string())
 }
 
 fn execute_python_script_on_graph_internal(
@@ -63,23 +43,21 @@ fn execute_python_script_on_graph_internal(
     python3_binary_path: Option<String>,
 ) -> Result<(), String> {
     let python3_bin = python3_binary_path.unwrap_or_else(|| "python3".to_string());
-    // Initialize temporary files
 
-    let (result_file, graph_file, mut script_file) = create_temporary_files()?;
-    let result_file_path = result_file.path().to_str().unwrap().to_string();
+    // Write graph to disk
+    let graph_file = write_graph_to_file(g_arc)?;
     let graph_file_path = graph_file.path().to_str().unwrap().to_string();
 
     // Initialize script instance
-    let script_res = script::generate_script(user_script, result_file_path, graph_file_path);
-    if script_res.is_err() {
-        return Err("Failed to generate script".to_string());
-    }
+    let result_file = create_temporary_file(
+        "gral_computation_result_".to_string(),
+        ".parquet".to_string(),
+    )?;
+    let result_file_path = result_file.path().to_str().unwrap().to_string();
+    let script_res = script::generate_script(user_script, result_file_path, graph_file_path)
+        .map_err(|e| e.to_string());
     let script = script_res.unwrap();
-    script.write_to_file(&mut script_file)?;
-
-    // Write graph to disk
-    write_graph_to_file(g_arc, &graph_file)?;
-
+    let script_file = script.write_to_file()?;
     let script_file_path = script_file.path().to_str().unwrap().to_string();
 
     // Execute generated script
@@ -96,7 +74,8 @@ fn execute_python_script_on_graph_internal(
     }
 }
 
-pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>, file: &NamedTempFile) -> Result<(), String> {
+pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>) -> Result<NamedTempFile, String> {
+    let file = create_temporary_file("gral_graph_".to_string(), ".parquet".to_string())?;
     let graph = g_arc.read().unwrap();
 
     let (from_values, to_values): (Vec<u64>, Vec<u64>) = graph
@@ -114,16 +93,16 @@ pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>, file: &NamedTempFile) -> R
     ])
     .unwrap();
 
-    let file = File::create(file).unwrap();
+    let io_file = File::create(file.path()).unwrap();
     let props = WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
         .build();
 
-    let mut writer = ArrowWriter::try_new(file, batch.schema(), Some(props)).unwrap();
+    let mut writer = ArrowWriter::try_new(io_file, batch.schema(), Some(props)).unwrap();
     writer.write(&batch).expect("Writing batch");
     writer.close().unwrap();
 
-    Ok(())
+    Ok(file)
 }
 
 pub fn read_computation_result_from_file(result_file: &NamedTempFile) -> Result<(), String> {
