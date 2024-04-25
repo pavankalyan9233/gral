@@ -140,7 +140,7 @@ fn load_labels(g: &Graph, pos: usize) -> LabelList {
 
 // The following is the main propagation function, it is used twice
 // in the algorithm below:
-fn do_propagate_work_async(sets: &mut Vec<HashSet<u64>>, from: usize, to: usize) -> u64 {
+fn do_propagate_work_async(sets: &mut [HashSet<u64>], from: usize, to: usize) -> u64 {
     let mut diff_count: u64 = 0;
     let labvec: Vec<u64> = sets[from].iter().copied().collect();
     for l in labvec {
@@ -318,10 +318,19 @@ mod tests {
     use crate::graph_store::examples::make_star_graph;
     use serde_json::json;
 
+    fn add_vertex_id_as_label(g: &mut Graph) {
+        let nr_vertices = g.number_of_vertices();
+        g.vertex_json = vec![Vec::new()];
+        for i in 0..nr_vertices {
+            g.vertex_json[0].push(json!(format!("K{i}")));
+        }
+        g.vertex_column_types = vec!["string".to_string()];
+    }
+
     #[test]
-    fn test_attribute_propagation_cyclic() {
+    fn propagates_one_label_to_all_vertices_in_cyclic_graph() {
         let mut g = make_cyclic_graph(10);
-        g.vertex_column_names = vec!["startlabel".to_string()];
+        g.vertex_column_names = vec!["start_label".to_string()];
         g.vertex_json = vec![Vec::new()];
         g.vertex_json[0].push(json!("X"));
         for _i in 1..10 {
@@ -329,66 +338,66 @@ mod tests {
         }
         g.vertex_column_types = vec!["string".to_string()];
         g.index_edges(false, true);
+
         // Async:
-        let x = "X".to_string();
-        let vx = vec![x];
-        let (labels, _size, _steps) =
-            attribute_propagation_async(&g, 10, "startlabel", false).unwrap();
+        let (labels, size, _steps) =
+            attribute_propagation_async(&g, 10, "start_label", false).unwrap();
+        assert!(size > 0);
+
         for i in 0..10 {
-            assert_eq!(labels[i], vx);
+            assert_eq!(labels[i], vec!["X".to_string()]);
         }
+
         // Sync:
-        let (labels, _size, steps) =
-            attribute_propagation_sync(&g, 10, "startlabel", false).unwrap();
+        let (labels, size, steps) =
+            attribute_propagation_sync(&g, 10, "start_label", false).unwrap();
         assert_eq!(steps, 10);
         for i in 0..10 {
-            assert_eq!(labels[i], vx);
+            assert_eq!(labels[i], vec!["X".to_string()]);
         }
+        assert!(size > 0);
     }
 
     #[test]
-    fn test_label_propagation_star() {
+    fn propagates_all_labels_to_center_vertex_in_star_graph() {
         let mut g = make_star_graph(10);
-        g.vertex_column_names = vec!["startlabel".to_string()];
-        g.vertex_json = vec![Vec::new()];
-        for i in 0..10 {
-            g.vertex_json[0].push(json!(format!("K{i}")));
-        }
-        g.vertex_column_types = vec!["string".to_string()];
+        g.vertex_column_names = vec!["start_label".to_string()];
+        add_vertex_id_as_label(&mut g);
         g.index_edges(true, true);
+
         // Sync:
-        let (labels, _size, steps) =
-            attribute_propagation_sync(&g, 5, "startlabel", false).unwrap();
+        let (labels, size, steps) =
+            attribute_propagation_sync(&g, 5, "start_label", false).unwrap();
         assert_eq!(steps, 2);
         for i in 0..9 {
             let v = vec![format!("K{i}")];
             assert_eq!(labels[i], v);
         }
         assert_eq!(labels[9].len(), 10);
+        assert!(size > 0);
+
         // Async:
-        let (labels, _size, steps) =
-            attribute_propagation_async(&g, 5, "startlabel", false).unwrap();
+        let (labels, size, steps) =
+            attribute_propagation_async(&g, 5, "start_label", false).unwrap();
         assert_eq!(steps, 2);
         for i in 0..9 {
             let v = vec![format!("K{i}")];
             assert_eq!(labels[i], v);
         }
         assert_eq!(labels[9].len(), 10);
+        assert!(size > 0);
     }
 
     #[test]
-    fn test_attribute_propagation_btree() {
+    fn propagates_labels_down_a_btree() {
         let mut g = make_btree_graph(5);
-        g.vertex_column_names = vec!["startlabel".to_string()];
-        g.vertex_json = vec![Vec::new()];
-        for i in 0..31 {
-            g.vertex_json[0].push(json!(format!("K{i}")));
-        }
-        g.vertex_column_types = vec!["string".to_string()];
+        g.vertex_column_names = vec!["start_label".to_string()];
+        add_vertex_id_as_label(&mut g);
         g.index_edges(false, true);
+
         // Async:
-        let (labels, _size, _steps) =
-            attribute_propagation_async(&g, 6, "startlabel", false).unwrap();
+        let (labels, size, _steps) =
+            attribute_propagation_async(&g, 6, "start_label", false).unwrap();
         for i in 0..31 {
             let mut log: usize = 0;
             let mut j = i + 1;
@@ -398,9 +407,11 @@ mod tests {
             }
             assert_eq!(labels[i].len(), log + 1);
         }
+        assert!(size > 0);
+
         // Sync:
-        let (labels, _size, steps) =
-            attribute_propagation_sync(&g, 6, "startlabel", false).unwrap();
+        let (labels, size, steps) =
+            attribute_propagation_sync(&g, 6, "start_label", false).unwrap();
         assert_eq!(steps, 5);
         for i in 0..31 {
             let mut log: usize = 0;
@@ -411,21 +422,19 @@ mod tests {
             }
             assert_eq!(labels[i].len(), log + 1);
         }
+        assert!(size > 0);
     }
 
     #[test]
-    fn test_attribute_propagation_btree_backwards() {
+    fn propagates_labels_up_in_btree_with_backwards() {
         let mut g = make_btree_graph(5);
-        g.vertex_column_names = vec!["startlabel".to_string()];
-        g.vertex_json = vec![Vec::new()];
-        for i in 0..31 {
-            g.vertex_json[0].push(json!(format!("K{i}")));
-        }
-        g.vertex_column_types = vec!["string".to_string()];
+        g.vertex_column_names = vec!["start_label".to_string()];
+        add_vertex_id_as_label(&mut g);
         g.index_edges(true, false);
+
         // Async:
-        let (labels, _size, _steps) =
-            attribute_propagation_async(&g, 6, "startlabel", true).unwrap();
+        let (labels, size, _steps) =
+            attribute_propagation_async(&g, 6, "start_label", true).unwrap();
         for i in 0..31 {
             let mut log: usize = 0;
             let mut j = i + 1;
@@ -435,8 +444,10 @@ mod tests {
             }
             assert_eq!(labels[i].len(), 2usize.pow(5 - log as u32) - 1);
         }
+        assert!(size > 0);
+
         // Sync:
-        let (labels, _size, steps) = attribute_propagation_sync(&g, 6, "startlabel", true).unwrap();
+        let (labels, size, steps) = attribute_propagation_sync(&g, 6, "start_label", true).unwrap();
         assert_eq!(steps, 5);
         for i in 0..31 {
             let mut log: usize = 0;
@@ -447,12 +458,13 @@ mod tests {
             }
             assert_eq!(labels[i].len(), 2usize.pow(5 - log as u32) - 1);
         }
+        assert!(size > 0);
     }
 
     #[test]
     fn test_graph_with_lists_and_nulls() {
         let mut g = make_cyclic_graph(10);
-        g.vertex_column_names = vec!["startlabel".to_string()];
+        g.vertex_column_names = vec!["start_label".to_string()];
         g.vertex_json = vec![Vec::new()];
         g.vertex_json[0].push(json!("X"));
         for _i in 1..3 {
@@ -472,19 +484,21 @@ mod tests {
         // Async:
         let x = "X".to_string();
         let y = "Y".to_string();
-        let vx = vec![x.clone(), y.clone()];
-        let vy = vec![y, x];
-        let (labels, _size, _steps) =
-            attribute_propagation_async(&g, 10, "startlabel", false).unwrap();
+        let v_xy = vec![x.clone(), y.clone()];
+        let v_yx = vec![y, x];
+        let (labels, size, _steps) =
+            attribute_propagation_async(&g, 10, "start_label", false).unwrap();
         for i in 0..10 {
-            assert!((labels[i] == vx) || (labels[i] == vy));
+            assert!((labels[i] == v_xy) || (labels[i] == v_yx));
         }
+        assert!(size > 0);
         // Sync:
-        let (labels, _size, _steps) =
-            attribute_propagation_sync(&g, 10, "startlabel", false).unwrap();
+        let (labels, size, _steps) =
+            attribute_propagation_sync(&g, 10, "start_label", false).unwrap();
         for i in 0..10 {
-            assert!((labels[i] == vx) || (labels[i] == vy));
+            assert!((labels[i] == v_xy) || (labels[i] == v_yx));
         }
+        assert!(size > 0);
     }
 
     #[test]
@@ -494,8 +508,8 @@ mod tests {
             vec![("V/A".to_string(), "V/A".to_string())],
         );
 
-        assert!(attribute_propagation_sync(&g, 10, "startlabel", false).is_err());
-        assert!(attribute_propagation_async(&g, 10, "startlabel", false).is_err());
+        assert!(attribute_propagation_sync(&g, 10, "start_label", false).is_err());
+        assert!(attribute_propagation_async(&g, 10, "start_label", false).is_err());
     }
 
     #[test]
@@ -505,8 +519,8 @@ mod tests {
             vec![("V/A".to_string(), "V/A".to_string())],
         );
 
-        assert!(attribute_propagation_sync(&g, 10, "startlabel", true).is_err());
-        assert!(attribute_propagation_async(&g, 10, "startlabel", true).is_err());
+        assert!(attribute_propagation_sync(&g, 10, "start_label", true).is_err());
+        assert!(attribute_propagation_async(&g, 10, "start_label", true).is_err());
     }
 
     #[test]
@@ -517,8 +531,8 @@ mod tests {
         );
         g.index_edges(false, true);
 
-        assert!(attribute_propagation_sync(&g, 10, "startlabel", false).is_err());
-        assert!(attribute_propagation_async(&g, 10, "startlabel", false).is_err());
+        assert!(attribute_propagation_sync(&g, 10, "start_label", false).is_err());
+        assert!(attribute_propagation_async(&g, 10, "start_label", false).is_err());
     }
 
     #[test]
