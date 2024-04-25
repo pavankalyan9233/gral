@@ -6,7 +6,7 @@
   "dependencies": {
     "arangojs": "^8.8.1",
     "axios": "^1.6.8",
-    "vitest": "^1.4.0"
+    "vitest": "^1.5.0"
   },
   "scripts": {
     "test_full": "./scripts/prepare_environment && vitest --config vitest.config.ts run --pool=forks && ./scripts/teardown_environment",
@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@grpc/grpc-js": "^1.10.6",
-    "@grpc/proto-loader": "^0.7.12"
+    "@grpc/proto-loader": "^0.7.12",
+    "ngraph.generators": "^20.1.0"
   }
 }
