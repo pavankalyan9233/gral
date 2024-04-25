@@ -33,10 +33,19 @@ commands:
             sudo apt update -y
             sudo apt install protobuf-compiler -y
 
+  install_python:
+    steps:
+      - run:
+          name: Install Python 3 and dependencies
+          command: |
+            sudo apt-get update -y
+            sudo apt-get install python3 python3-pip -y
+            pip3 install -r ~/app/src/python/assets/requirements.txt
+
 jobs:
   do_copy_workspace:
     docker:
-      - image: cimg/rust:1.76.0
+      - image: cimg/rust:1.77.2
     working_directory: ~/app
     steps:
       - checkout
@@ -51,14 +60,14 @@ jobs:
 
   lint:
     docker:
-      - image: cimg/rust:1.76.0
+      - image: cimg/rust:1.77.2
     working_directory: ~/app
     steps:
       - get_code
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-1-76-0-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Clippy
@@ -68,14 +77,14 @@ jobs:
 
   formatter:
     docker:
-      - image: cimg/rust:1.76.0
+      - image: cimg/rust:1.77.2
     working_directory: ~/app
     steps:
       - get_code
       - install_protobuf
       - restore_cache:
           keys:
-            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-1-76-0-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Format check
@@ -85,11 +94,13 @@ jobs:
 
   coverage:
     docker:
-      - image: cimg/rust:1.76.0
+      - image: cimg/rust:1.77.2
+    resource_class: arm.large
     working_directory: ~/app
     steps:
       - get_code
       - install_protobuf
+      - install_python
       - restore_cache:
           keys:
             - v1-coverage-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
@@ -106,7 +117,7 @@ jobs:
 
       - save_cache:
           key: v1-coverage-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-          paths: ["target/debug/deps"]
+          paths: [ "target/debug/deps" ]
           # TODO Later - *notify_slack_on_fail
 
   integration:
@@ -133,9 +144,11 @@ jobs:
 
       # It is important that this importer runs first, before integration tests are being executed as that data
       # is being used in the integration tests
+      # TODO: Sleep 10 is a workaround to get branch stable ASAP. We need a proper mechanism to wait for ArangoDB to be ready
       - run:
           name: Test ArangoDB Importer
           command: |
+            sleep 10
             sudo apt-get update -y && sudo apt-get install zstd -y
             cd ~/app/examples && npm install
             ./scripts/downloadSingleDataset wiki-Talk
@@ -158,22 +171,23 @@ jobs:
 
       - save_cache:
           key: v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}
-          paths: ["~/app/api_tests/node_modules"]
+          paths: [ "~/app/api_tests/node_modules" ]
 
       - store_artifacts:
           path: api_tests/logs
 
   unittests:
     docker:
-      - image: cimg/rust:1.76.0
+      - image: cimg/rust:1.77.2
     working_directory: ~/app
     steps:
       - get_code
       - install_protobuf
+      - install_python
 
       - restore_cache:
           keys:
-            - v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+            - v1-cargo-debug-deps-cache-1-76-0-{{ .Branch }}-{{ checksum "Cargo.lock" }}
 
       - run:
           name: Run tests
@@ -182,12 +196,12 @@ jobs:
       # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
       # be cached (target/debug/build, target/debug/deps, ...).
       - save_cache:
-          key: v1-cargo-debug-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-          paths: ["target/debug/deps"]
+          key: v1-cargo-debug-deps-cache-1-76-0-{{ .Branch }}-{{ checksum "Cargo.lock" }}
+          paths: [ "target/debug/deps" ]
 
   build:
     docker:
-      - image: cimg/rust:1.76.0
+      - image: cimg/rust:1.77.2
     working_directory: ~/app
     steps:
       - get_code
@@ -206,7 +220,7 @@ jobs:
       # be cached (target/debug/build, target/debug/deps, ...).
       - save_cache:
           key: v1-cargo-release-deps-cache-{{ .Branch }}-{{ checksum "Cargo.lock" }}
-          paths: ["target/release/deps"]
+          paths: [ "target/release/deps" ]
 
       - persist_to_workspace:
           root: .
@@ -272,7 +286,7 @@ workflows:
   pr:
     when:
       not:
-        equal: [main, << pipeline.git.branch >>]
+        equal: [ main, << pipeline.git.branch >> ]
     jobs:
       - do_copy_workspace
       - lint:
