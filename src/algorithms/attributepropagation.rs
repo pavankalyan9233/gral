@@ -388,6 +388,18 @@ mod tests {
         assert!(size > 0);
     }
 
+    fn check_forwards_btree_result(labels: &[Vec<String>]) {
+        for i in 0..31 {
+            let mut log: usize = 0;
+            let mut j = i + 1;
+            while j > 1 {
+                j >>= 1;
+                log += 1;
+            }
+            assert_eq!(labels[i].len(), log + 1);
+        }
+    }
+
     #[test]
     fn propagates_labels_down_a_btree() {
         let mut g = make_btree_graph(5);
@@ -398,21 +410,18 @@ mod tests {
         // Async:
         let (labels, size, _steps) =
             attribute_propagation_async(&g, 6, "start_label", false).unwrap();
-        for i in 0..31 {
-            let mut log: usize = 0;
-            let mut j = i + 1;
-            while j > 1 {
-                j >>= 1;
-                log += 1;
-            }
-            assert_eq!(labels[i].len(), log + 1);
-        }
+        check_forwards_btree_result(&labels);
         assert!(size > 0);
 
         // Sync:
         let (labels, size, steps) =
             attribute_propagation_sync(&g, 6, "start_label", false).unwrap();
         assert_eq!(steps, 5);
+        check_forwards_btree_result(&labels);
+        assert!(size > 0);
+    }
+
+    fn check_backwards_btree_result(labels: &[Vec<String>]) {
         for i in 0..31 {
             let mut log: usize = 0;
             let mut j = i + 1;
@@ -420,9 +429,8 @@ mod tests {
                 j >>= 1;
                 log += 1;
             }
-            assert_eq!(labels[i].len(), log + 1);
+            assert_eq!(labels[i].len(), 2usize.pow(5 - log as u32) - 1);
         }
-        assert!(size > 0);
     }
 
     #[test]
@@ -435,29 +443,13 @@ mod tests {
         // Async:
         let (labels, size, _steps) =
             attribute_propagation_async(&g, 6, "start_label", true).unwrap();
-        for i in 0..31 {
-            let mut log: usize = 0;
-            let mut j = i + 1;
-            while j > 1 {
-                j >>= 1;
-                log += 1;
-            }
-            assert_eq!(labels[i].len(), 2usize.pow(5 - log as u32) - 1);
-        }
+        check_backwards_btree_result(&labels);
         assert!(size > 0);
 
         // Sync:
         let (labels, size, steps) = attribute_propagation_sync(&g, 6, "start_label", true).unwrap();
         assert_eq!(steps, 5);
-        for i in 0..31 {
-            let mut log: usize = 0;
-            let mut j = i + 1;
-            while j > 1 {
-                j >>= 1;
-                log += 1;
-            }
-            assert_eq!(labels[i].len(), 2usize.pow(5 - log as u32) - 1);
-        }
+        check_backwards_btree_result(&labels);
         assert!(size > 0);
     }
 
@@ -465,39 +457,41 @@ mod tests {
     fn test_graph_with_lists_and_nulls() {
         let mut g = make_cyclic_graph(10);
         g.vertex_column_names = vec!["start_label".to_string()];
-        g.vertex_json = vec![Vec::new()];
-        g.vertex_json[0].push(json!("X"));
-        for _i in 1..3 {
-            g.vertex_json[0].push(json!(null));
-        }
-        for _i in 3..5 {
-            g.vertex_json[0].push(json!([]));
-        }
-        g.vertex_json[0].push(json!(""));
-        for _i in 6..8 {
-            g.vertex_json[0].push(json!(["X"]));
-        }
-        g.vertex_json[0].push(json!(["X", "Y"]));
-        g.vertex_json[0].push(json!("Y"));
+        g.vertex_json = vec![vec![
+            json!("X"),
+            json!(null),
+            json!(null),
+            json!([]),
+            json!([]),
+            json!(""),
+            json!("X"),
+            json!("X"),
+            json!(["X", "Y"]),
+            json!("Y"),
+        ]];
         g.vertex_column_types = vec!["string".to_string()];
         g.index_edges(false, true);
-        // Async:
         let x = "X".to_string();
         let y = "Y".to_string();
         let v_xy = vec![x.clone(), y.clone()];
         let v_yx = vec![y, x];
+
+        let check = |labels: &[Vec<String>]| {
+            for i in 0..10 {
+                assert!((labels[i] == v_xy) || (labels[i] == v_yx));
+            }
+        };
+
+        // Async:
         let (labels, size, _steps) =
             attribute_propagation_async(&g, 10, "start_label", false).unwrap();
-        for i in 0..10 {
-            assert!((labels[i] == v_xy) || (labels[i] == v_yx));
-        }
+        check(&labels);
         assert!(size > 0);
+
         // Sync:
         let (labels, size, _steps) =
             attribute_propagation_sync(&g, 10, "start_label", false).unwrap();
-        for i in 0..10 {
-            assert!((labels[i] == v_xy) || (labels[i] == v_yx));
-        }
+        check(&labels);
         assert!(size > 0);
     }
 
@@ -556,18 +550,18 @@ mod tests {
             label_size_sum: 0,
         };
         assert!(apc.is_ready());
-        let (c, m) = apc.get_error();
-        assert_eq!(c, 0);
-        assert_eq!(m, "");
+        let (code, message) = apc.get_error();
+        assert_eq!(code, 0);
+        assert_eq!(message, "");
         apc.cancel();
         assert_eq!(apc.algorithm_name(), "Attribute Propagation");
         let _gg = apc.get_graph();
         assert_eq!(apc.get_total(), 100);
         assert_eq!(apc.get_progress(), 100);
         assert_eq!(apc.nr_results(), 1);
-        let (k, v) = apc.get_result(0);
-        assert_eq!(k, "V/A");
-        assert_eq!(v, json!(["X"]));
+        let (key, value) = apc.get_result(0);
+        assert_eq!(key, "V/A");
+        assert_eq!(value, json!(["X"]));
         assert!(apc.memory_usage() > 0);
         let _a = apc.as_any();
     }
