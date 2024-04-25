@@ -170,42 +170,9 @@ pub fn strongly_connected_components(g: &Graph) -> Result<(u64, Vec<u64>, Vec<i6
 
 #[cfg(test)]
 mod tests {
+    use crate::graph_store::examples::make_cyclic_graph;
+
     use super::*;
-
-    #[test]
-    fn test_scc_simple() {
-        let mut g = Graph::create(
-            vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
-            vec![("V/A".to_string(), "V/B".to_string())],
-        );
-        g.index_edges(true, false);
-        let (numb, comp, next) = strongly_connected_components(&g).unwrap();
-        assert_eq!(numb, 3);
-        assert_eq!(comp.len(), 3);
-        assert_eq!(next.len(), 0); // Not yet implemented!
-        assert_eq!(comp[0], 0);
-        assert_eq!(comp[1], 1);
-        assert_eq!(comp[2], 2);
-    }
-
-    #[test]
-    fn test_scc_simple2() {
-        let mut g = Graph::create(
-            vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
-            vec![
-                ("V/A".to_string(), "V/B".to_string()),
-                ("V/B".to_string(), "V/A".to_string()),
-            ],
-        );
-        g.index_edges(true, false);
-        let (numb, comp, next) = strongly_connected_components(&g).unwrap();
-        assert_eq!(numb, 2);
-        assert_eq!(comp.len(), 3);
-        assert_eq!(next.len(), 0); // Not yet implemented!
-        assert_eq!(comp[0], 1);
-        assert_eq!(comp[1], 1);
-        assert_eq!(comp[2], 2);
-    }
 
     #[test]
     fn does_not_run_when_graph_has_no_from_neighbour_index() {
@@ -215,5 +182,87 @@ mod tests {
         );
 
         assert!(strongly_connected_components(&g).is_err());
+    }
+
+    #[test]
+    fn gives_empty_results_on_empty_graph() {
+        let mut g = Graph::create(vec![], vec![]);
+        g.index_edges(true, false);
+
+        let (components_count, components, next_in_component) =
+            strongly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 0);
+        assert_eq!(components, Vec::<u64>::new());
+        assert_eq!(next_in_component, Vec::<i64>::new())
+    }
+
+    #[test]
+    fn in_unconnected_graph_each_vertex_is_its_own_component() {
+        let mut g = Graph::create(
+            vec!["V/A".to_string(), "V/B".to_string(), "V/C".to_string()],
+            vec![],
+        );
+        g.index_edges(true, false);
+
+        let (components_count, components, _next_in_component) =
+            strongly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 3);
+        assert_eq!(components, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn strongly_connected_vertices_lie_in_one_component() {
+        let mut g = Graph::create(
+            vec!["V/A".to_string(), "V/B".to_string()],
+            vec![
+                ("V/A".to_string(), "V/B".to_string()),
+                ("V/B".to_string(), "V/A".to_string()),
+            ],
+        );
+        g.index_edges(true, false);
+
+        let (components_count, components, _next_in_component) =
+            strongly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 1);
+        assert_eq!(components.len(), 2);
+        assert_eq!(components[0], components[1]);
+    }
+
+    #[test]
+    fn vertices_connected_by_one_directed_edge_are_not_strongly_connected() {
+        let mut g = Graph::create(
+            vec!["V/A".to_string(), "V/B".to_string()],
+            vec![("V/A".to_string(), "V/B".to_string())],
+        );
+        g.index_edges(true, false);
+
+        let (components_count, components, _next_in_component) =
+            strongly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 2);
+        assert_eq!(components, vec![0, 1]);
+    }
+
+    #[test]
+    fn cyclic_graph_has_one_component() {
+        let g = make_cyclic_graph(10);
+
+        let (components_count, components, _next_in_component) =
+            strongly_connected_components(&g).unwrap();
+
+        assert_eq!(components_count, 1);
+        assert_eq!(components.len(), 10);
+        assert_eq!(components[1], components[0]);
+        assert_eq!(components[2], components[0]);
+        assert_eq!(components[3], components[0]);
+        assert_eq!(components[4], components[0]);
+        assert_eq!(components[5], components[0]);
+        assert_eq!(components[6], components[0]);
+        assert_eq!(components[7], components[0]);
+        assert_eq!(components[8], components[0]);
+        assert_eq!(components[9], components[0]);
     }
 }
