@@ -1,5 +1,6 @@
 use crate::algorithms;
 use crate::algorithms::aggregation::aggregate_over_components;
+use crate::algorithms::attributepropagation::AttributePropagationComputation;
 use crate::arangodb::{fetch_graph_from_arangodb, write_result_to_arangodb};
 use crate::args::{with_args, GralArgs};
 use crate::auth::{with_auth, Unauthorized};
@@ -90,6 +91,13 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_label_propagation);
+    let attr_prop = warp::path!("v1" / "attributepropagation")
+        .and(warp::post())
+        .and(with_auth(args.clone()))
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_attribute_propagation);
     let get_arangodb_graph = warp::path!("v1" / "loaddata")
         .and(warp::post())
         .and(with_auth(args.clone()))
@@ -147,6 +155,7 @@ pub fn api_filter(
         .or(pagerank)
         .or(irank)
         .or(label_prop)
+        .or(attr_prop)
         .or(get_arangodb_graph)
         .or(write_result_back_arangodb)
         .or(get_arangodb_graph_aql)
@@ -716,6 +725,121 @@ async fn api_label_propagation(
             )
         };
         info!("Finished label propagation computation!");
+        let mut comp = comp_arc.write().unwrap();
+        match res {
+            Ok((label, label_size, _steps)) => {
+                comp.label = label;
+                comp.label_size_sum = label_size;
+                comp.error_code = 0;
+            }
+            Err(e) => {
+                comp.error_message = e;
+                comp.error_code = 1;
+            }
+        }
+        comp.progress = 100;
+    });
+
+    let comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        comp_id = comps.register(generic_comp_arc.clone());
+    }
+    let response = GraphAnalyticsEngineProcessResponse {
+        job_id: comp_id,
+        error_code: 0,
+        error_message: "".to_string(),
+    };
+
+    // Write response:
+    let v = serde_json::to_vec(&response).expect("Should be serializable!");
+    Ok(warp::reply::with_status(v, StatusCode::OK))
+}
+
+/// This function triggers an attribute propagation computation:
+async fn api_attribute_propagation(
+    _user: String,
+    graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
+    // Parse body and extract integers:
+    let parsed: serde_json::Result<GraphAnalyticsEngineAttributePropagationRequest> =
+        serde_json::from_slice(&bytes[..]);
+    if let Err(e) = parsed {
+        return Ok(err_bad_req_process(
+            format!("Cannot parse JSON body of request: {}", e),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    let mut body = parsed.unwrap();
+
+    // Check arguments or set defaults:
+    if body.graph_id == 0 {
+        return Ok(err_bad_req_process(
+            "Attribute 'graph_id' must be non-empty".to_string(),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    if body.start_label_attribute.is_empty() {
+        return Ok(err_bad_req_process(
+            "Attribute 'start_label_attribute' must be non-empty".to_string(),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    if body.maximum_supersteps == 0 {
+        body.maximum_supersteps = 64;
+    }
+
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
+        Err(r) => {
+            return Ok(r);
+        }
+        Ok(g) => g,
+    };
+
+    {
+        // Make sure we have an edge index:
+        let mut graph = graph_arc.write().unwrap();
+        graph.index_edges(false, true);
+    }
+
+    let comp_arc = Arc::new(RwLock::new(AttributePropagationComputation {
+        graph: graph_arc.clone(),
+        sync: body.synchronous,
+        backwards: body.backwards,
+        shall_stop: false,
+        total: 100,
+        progress: 0,
+        error_code: 0,
+        error_message: "".to_string(),
+        label: vec![],
+        result_position: 0,
+        label_size_sum: 0,
+    }));
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
+    let startlabel = body.start_label_attribute.clone();
+    std::thread::spawn(move || {
+        let graph = graph_arc.read().unwrap();
+        let res = if body.synchronous {
+            algorithms::attributepropagation::attribute_propagation_async(
+                &graph,
+                body.maximum_supersteps,
+                &startlabel,
+                body.backwards,
+            )
+        } else {
+            algorithms::attributepropagation::attribute_propagation_sync(
+                &graph,
+                body.maximum_supersteps,
+                &startlabel,
+                body.backwards,
+            )
+        };
+        info!("Finished attribute propagation computation!");
         let mut comp = comp_arc.write().unwrap();
         match res {
             Ok((label, label_size, _steps)) => {

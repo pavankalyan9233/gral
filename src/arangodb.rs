@@ -198,7 +198,7 @@ async fn get_all_shard_data(
     endpoints: &[String],
     jwt_token: &String,
     shard_map: &ShardMap,
-    result_channels: Vec<std::sync::mpsc::Sender<Bytes>>,
+    result_channels: Vec<tokio::sync::mpsc::Sender<Bytes>>,
 ) -> Result<(), String> {
     let begin = SystemTime::now();
 
@@ -381,6 +381,7 @@ async fn get_all_shard_data(
                         .map_err(|e| format!("Error in body: {:?}", e))?;
                     result_channel_clone
                         .send(body)
+                        .await
                         .expect("Could not send to channel!");
                 }
             });
@@ -600,18 +601,18 @@ pub async fn fetch_graph_from_arangodb(
     // Let's first get the vertices:
     {
         // We use multiple threads to receive the data in batches:
-        let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
+        let mut senders: Vec<tokio::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
         let prog_reported = Arc::new(Mutex::new(0_u64));
         for _i in 0..req.parallelism {
-            let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
+            let (sender, mut receiver) = tokio::sync::mpsc::channel::<Bytes>(10);
             senders.push(sender);
             let graph_clone = graph_arc.clone();
             let prog_reported_clone = prog_reported.clone();
             let fields = req.vertex_attributes.clone();
             let consumer = std::thread::spawn(move || -> Result<(), String> {
                 let begin = std::time::SystemTime::now();
-                while let Ok(resp) = receiver.recv() {
+                while let Some(resp) = receiver.blocking_recv() {
                     let body = std::str::from_utf8(resp.as_ref())
                         .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
                     debug!(
@@ -707,16 +708,16 @@ pub async fn fetch_graph_from_arangodb(
 
     // And now the edges:
     {
-        let mut senders: Vec<std::sync::mpsc::Sender<Bytes>> = vec![];
+        let mut senders: Vec<tokio::sync::mpsc::Sender<Bytes>> = vec![];
         let mut consumers: Vec<JoinHandle<Result<(), String>>> = vec![];
         let prog_reported = Arc::new(Mutex::new(0_u64));
         for _i in 0..req.parallelism {
-            let (sender, receiver) = std::sync::mpsc::channel::<Bytes>();
+            let (sender, mut receiver) = tokio::sync::mpsc::channel::<Bytes>(10);
             senders.push(sender);
             let graph_clone = graph_arc.clone();
             let prog_reported_clone = prog_reported.clone();
             let consumer = std::thread::spawn(move || -> Result<(), String> {
-                while let Ok(resp) = receiver.recv() {
+                while let Some(resp) = receiver.blocking_recv() {
                     let body = std::str::from_utf8(resp.as_ref())
                         .map_err(|e| format!("UTF8 error when parsing body: {:?}", e))?;
                     let mut froms: Vec<Vec<u8>> = Vec::with_capacity(1000000);
@@ -971,9 +972,9 @@ pub async fn write_result_to_arangodb(
                 }
                 cur_batch.extend_from_slice(b",\"");
                 cur_batch.extend_from_slice(attribute_names[j].as_bytes());
-                cur_batch.extend_from_slice(b"\":\"");
-                cur_batch.extend_from_slice(value.as_bytes());
-                cur_batch.extend_from_slice(b"\"");
+                cur_batch.extend_from_slice(b"\":");
+                cur_batch.extend_from_slice(&serde_json::to_vec(&value).unwrap());
+                cur_batch.extend_from_slice(b"");
             }
             cur_batch.extend_from_slice(b"}");
             count += 1;
