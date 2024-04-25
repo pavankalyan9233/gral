@@ -4,8 +4,10 @@ use std::sync::{Arc, RwLock};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gral::computations::Computations;
     use gral::graph_store::graph::Graph;
     use gral::python::script::generate_script;
+    use std::sync::Mutex;
 
     #[cfg(target_os = "macos")]
     fn return_python_environment() -> Result<String, String> {
@@ -52,12 +54,14 @@ mod tests {
         if python_path_res.is_err() {
             println!("Failed to get python3 binary path: {:?}", python_path_res);
         }
+        // let the_computations = Arc::new(Mutex::new(Computations::new()));
         assert!(python_path_res.is_ok());
-        let res = executor::execute_python_script_on_graph_with_bin(
+        let res = (executor::execute_python_script_on_graph_with_bin(
             g_arc,
             user_snippet,
             python_path_res.unwrap(),
-        );
+        ));
+
         assert!(res.is_ok());
     }
 

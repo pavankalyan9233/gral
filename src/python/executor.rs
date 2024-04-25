@@ -1,15 +1,25 @@
 use crate::graph_store::graph::Graph;
+use crate::python::pythoncomputation::PythonComputation;
 use crate::python::script;
-use arrow::array::{ArrayRef, RecordBatch, RecordBatchReader, UInt64Array};
-use parquet::arrow::arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder};
+use arrow::array::{ArrayRef, RecordBatch, UInt64Array};
+use log::info;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
+use parquet::file::reader::{FileReader, SerializedFileReader};
+use parquet::record::RowAccessor;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::process::{Command, Stdio};
 use std::string::ToString;
 use std::sync::{Arc, RwLock};
 use tempfile::{Builder, NamedTempFile};
+
+#[derive(Serialize, Deserialize)]
+struct ResultValue {
+    vertex_id: u64,
+    result: serde_json::Value,
+}
 
 pub fn execute_python_script_on_graph(
     g_arc: Arc<RwLock<Graph>>,
@@ -45,7 +55,7 @@ fn execute_python_script_on_graph_internal(
     let python3_bin = python3_binary_path.unwrap_or_else(|| "python3".to_string());
 
     // Write graph to disk
-    let graph_file = write_graph_to_file(g_arc)?;
+    let graph_file = write_graph_to_file(g_arc.clone())?;
     let graph_file_path = graph_file.path().to_str().unwrap().to_string();
 
     // Initialize script instance
@@ -61,17 +71,19 @@ fn execute_python_script_on_graph_internal(
     let script_file_path = script_file.path().to_str().unwrap().to_string();
 
     // Execute generated script
-    let mut child = Command::new(python3_bin)
+    let mut process = Command::new(python3_bin)
         .arg(&script_file_path)
         .stdout(Stdio::piped())
         .spawn()
         .expect("Failed to execute command");
 
-    if child.wait().unwrap().success() {
-        Ok(())
-    } else {
-        Err("Failed to execute the script".to_string())
+    let process_result = process.wait();
+    if process_result.is_err() {
+        return Err("Failed to execute Python script".to_string());
     }
+
+    // Read computation result from disk
+    store_computation_result(g_arc, result_file)
 }
 
 pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>) -> Result<NamedTempFile, String> {
@@ -97,6 +109,7 @@ pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>) -> Result<NamedTempFile, S
     let props = WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
         .build();
+    info!("Finished custom script computation!");
 
     let mut writer = ArrowWriter::try_new(io_file, batch.schema(), Some(props)).unwrap();
     writer.write(&batch).expect("Writing batch");
@@ -105,18 +118,54 @@ pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>) -> Result<NamedTempFile, S
     Ok(file)
 }
 
-pub fn read_computation_result_from_file(result_file: &NamedTempFile) -> Result<(), String> {
-    let file = File::open(result_file).expect("Failed to open Parquet file");
-    let builder = ParquetRecordBatchReaderBuilder::try_new(file).unwrap();
+pub fn store_computation_result(
+    g_arc: Arc<RwLock<Graph>>,
+    result_file: NamedTempFile,
+) -> Result<(), String> {
+    let comp_arc = Arc::new(RwLock::new(PythonComputation {
+        graph: g_arc,
+        algorithm: "Custom".to_string(),
+        total: 0,
+        progress: 0,
+        error_code: 0,
+        error_message: "".to_string(),
+        result: Default::default(),
+    }));
 
-    let record_reader: ParquetRecordBatchReader = builder.with_row_groups(vec![0]).build().unwrap();
-    println!("Schema: {:?}", record_reader.schema());
-    assert_eq!(record_reader.schema().fields().len(), 2);
-    assert_eq!(record_reader.schema().field(0).name(), "Node");
-    assert_eq!(record_reader.schema().field(1).name(), "Result");
+    let path = result_file.path().to_str().unwrap().to_string();
+    if let Ok(file) = File::open(&path) {
+        let reader = SerializedFileReader::new(file).unwrap();
 
-    for batch in record_reader {
-        println!("RecordBatch: {:?}", batch);
+        let parquet_metadata = reader.metadata();
+        assert_eq!(parquet_metadata.num_row_groups(), 1);
+
+        // Currently we only support reading two columns
+        // It is expected that the first column is the node id and the second column is the result
+        let row_group_reader = reader.get_row_group(0).unwrap();
+        assert_eq!(row_group_reader.num_columns(), 2);
+
+        // get write lock on comp arc
+        let mut comp_arc = comp_arc.write().unwrap();
+
+        reader.get_row_iter(None).unwrap().try_for_each(|row| {
+            let mut vertex_id = 0;
+            let mut result = serde_json::Value::Null;
+
+            let row_res = row.map_err(|e| e.to_string())?;
+            let row_as_json = row_res.to_json_value();
+
+            row_as_json.get("Node").map(|v| {
+                vertex_id = v.as_u64().unwrap()?;
+            });
+            row_as_json.get("Result").map(|v| {
+                result = v.clone();
+            });
+
+            comp_arc.result.insert(vertex_id, result);
+            Ok::<(), String>(())
+        })?;
+    } else {
+        return Err("Failed to open result file".to_string());
     }
 
     Ok(())

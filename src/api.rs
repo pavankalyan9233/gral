@@ -569,7 +569,7 @@ async fn api_pagerank(
     let comp_id: u64;
     {
         let mut comps = computations.lock().unwrap();
-        comp_id = comps.register(generic_comp_arc.clone());
+        comp_id = comps.register(generic_comp_arc);
     }
     let response = GraphAnalyticsEngineProcessResponse {
         job_id: comp_id,
