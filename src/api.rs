@@ -278,7 +278,7 @@ async fn api_wcc(
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
         let graph = graph_arc.read().unwrap();
-        let res = algorithms::conncomp::weakly_connected_components(&graph);
+        let res = algorithms::wcc::weakly_connected_components(&graph);
         let mut comp = comp_arc.write().unwrap();
         match res {
             Ok((nr, components, next)) => {
@@ -361,7 +361,7 @@ async fn api_scc(
             graph.index_edges(true, false);
         }
         let graph = graph_arc.read().unwrap();
-        let res = algorithms::conncomp::strongly_connected_components(&graph);
+        let res = algorithms::scc::strongly_connected_components(&graph);
         let mut comp = comp_arc.write().unwrap();
         match res {
             Ok((nr, components, next)) => {
@@ -1355,6 +1355,7 @@ async fn api_get_arangodb_graph(
         body.parallelism = 5;
     }
 
+    let graphsclone = graphs.clone(); // for later removal in subthread
     let graph = Arc::new(RwLock::new(Graph::new(
         true,
         body.vertex_attributes.clone(),
@@ -1398,8 +1399,20 @@ async fn api_get_arangodb_graph(
                         comp.error_message = "".to_string();
                     }
                     Err(e) => {
+                        info!("Could not load graph successfully: {}", e);
                         comp.error_code = 1;
                         comp.error_message = e;
+                        // Get rid of graph again:
+                        let graph_id;
+                        {
+                            let graphguard = graph.read().unwrap();
+                            graph_id = graphguard.graph_id;
+                        }
+                        let mut graphsguard = graphsclone.lock().unwrap();
+                        graphsguard.remove(graph_id);
+                        // Note that the graph will still be attached to
+                        // the computation! Once the computation is
+                        // deleted, the graph will be freed!
                     }
                 }
             });
