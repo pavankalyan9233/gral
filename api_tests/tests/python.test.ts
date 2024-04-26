@@ -111,5 +111,5 @@ describe('Python integration', () => {
       expect(doc.iResult).toBeTypeOf('number');
       expect(doc.iResult).toBe(0.2);
     });
-  });
+  }, config.test_configuration.short_timeout);
 });
