@@ -40,11 +40,11 @@ async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: stri
           return {result: body, retriesNeeded: retries};
         } else {
           retries++;
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 250));
         }
       } else {
         retries++;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 250));
       }
     } catch (error) {
       throw new Error(`Job <${jobId}> did not finish in time: ${error}`);
