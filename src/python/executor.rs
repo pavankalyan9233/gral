@@ -2,16 +2,16 @@ use crate::graph_store::graph::Graph;
 use crate::python::pythoncomputation::PythonComputation;
 use crate::python::script;
 use arrow::array::{ArrayRef, RecordBatch, UInt64Array};
+use log::error;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 use parquet::file::reader::{FileReader, SerializedFileReader};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::process::{Command};
+use std::process::Command;
 use std::string::ToString;
 use std::sync::{Arc, RwLock};
-use log::{error};
 use tempfile::{Builder, NamedTempFile};
 
 #[derive(Serialize, Deserialize)]
@@ -100,7 +100,9 @@ fn execute_python_script_on_graph_internal(
 
     // Execute generated script
     let process = Command::new(python3_bin)
-        .arg(&script_file_path).output().map_err(|err| format!("Failed to execute Python script: {}", err))?;
+        .arg(&script_file_path)
+        .output()
+        .map_err(|err| format!("Failed to execute Python script: {}", err))?;
 
     if !process.status.success() {
         let stderr = String::from_utf8_lossy(&process.stderr);
@@ -133,7 +135,8 @@ pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>) -> Result<NamedTempFile, S
     let batch = RecordBatch::try_from_iter(vec![
         ("_from", Arc::new(arrow_from) as ArrayRef),
         ("_to", Arc::new(arrow_to) as ArrayRef),
-    ]).unwrap();
+    ])
+    .unwrap();
 
     let io_file = File::create(file.path()).unwrap();
     let props = WriterProperties::builder()
