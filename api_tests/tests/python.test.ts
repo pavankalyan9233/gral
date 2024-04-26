@@ -19,7 +19,7 @@ describe('Python integration', () => {
     await graphGenerator.generateCompleteGraph(5, 'complete_graph_5');
   }, config.test_configuration.medium_timeout);
 
-  test('Load a graph and do a python3 based pagerank computation on it', async () => {
+  test('Full execution (custom pagerank) including results', async () => {
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
     const postBody = {
       database: '_system',
@@ -111,5 +111,54 @@ describe('Python integration', () => {
       expect(doc.iResult).toBeTypeOf('number');
       expect(doc.iResult).toBe(0.2);
     });
+  }, config.test_configuration.medium_timeout);
+
+  test('Invalid function input for script', async () => {
+    const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
+    const postBody = {
+      database: '_system',
+      vertex_collections: ['complete_graph_5_v'],
+      edge_collections: ['complete_graph_5_e'],
+    }
+    const response = await axios.post(url, postBody, gral.buildHeaders(jwt));
+    const body = response.data;
+    const graph_id = body.graph_id;
+    const job_id = body.job_id;
+
+    await gral.waitForJobToBeFinished(gralEndpoint, jwt, job_id);
+
+    let pythonUrl = gral.buildUrl(gralEndpoint, '/v1/python');
+
+    const pythonFunctionsToTest = [
+      ";'./,234180", // invalid python code
+      "def worker(graph): return undefinedMethod()", // call an undefined method
+      "def worker(graph): print(123)", // do not return anything (dict expected)
+      "def worker(graph): return 123", // return a number (dict expected)
+      "def worker(graph): return '123'", // return a string (dict expected)
+      "def worker(graph): return true", // return true (dict expected)
+      "def worker(graph): return false", // return false (dict expected)
+      "def worker(graph): return None", // return None (dict expected)
+    ];
+
+    for (const pythonFunction of pythonFunctionsToTest) {
+      const pythonPostBody = {
+        "graph_id": graph_id,
+        "function": pythonFunction
+      };
+      const pythonResponse = await axios.post(pythonUrl, pythonPostBody, gral.buildHeaders(jwt));
+      expect(pythonResponse.status).toBe(200);
+      expect(pythonResponse.data.job_id).toBeTypeOf('number');
+      expect(pythonResponse.data.job_id).toBeGreaterThan(0);
+      expect(pythonResponse.data.error_code).toBeTypeOf('number');
+      expect(pythonResponse.data.error_code).toBe(0);
+      expect(pythonResponse.data.error_message).toBe('');
+
+      const pythonResponseJobId = pythonResponse.data.job_id;
+      try {
+        await gral.waitForJobToBeFinished(gralEndpoint, jwt, pythonResponseJobId);
+      } catch (error) {
+        expect(error.message).toContain('Failed to execute Python script');
+      }
+    }
   }, config.test_configuration.medium_timeout);
 });
