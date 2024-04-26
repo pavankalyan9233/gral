@@ -2,16 +2,16 @@ use crate::graph_store::graph::Graph;
 use crate::python::pythoncomputation::PythonComputation;
 use crate::python::script;
 use arrow::array::{ArrayRef, RecordBatch, UInt64Array};
-use log::info;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 use parquet::file::reader::{FileReader, SerializedFileReader};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::process::{Command, Stdio};
+use std::process::{Command};
 use std::string::ToString;
 use std::sync::{Arc, RwLock};
+use log::{error};
 use tempfile::{Builder, NamedTempFile};
 
 #[derive(Serialize, Deserialize)]
@@ -99,14 +99,12 @@ fn execute_python_script_on_graph_internal(
     let script_file_path = script_file.path().to_str().unwrap().to_string();
 
     // Execute generated script
-    let mut process = Command::new(python3_bin)
-        .arg(&script_file_path)
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to execute command");
+    let process = Command::new(python3_bin)
+        .arg(&script_file_path).output().map_err(|err| format!("Failed to execute Python script: {}", err))?;
 
-    let process_result = process.wait();
-    if process_result.is_err() {
+    if !process.status.success() {
+        let stderr = String::from_utf8_lossy(&process.stderr);
+        error!("Python script error:\n{}", stderr);
         return Err("Failed to execute Python script".to_string());
     }
 
@@ -135,14 +133,12 @@ pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>) -> Result<NamedTempFile, S
     let batch = RecordBatch::try_from_iter(vec![
         ("_from", Arc::new(arrow_from) as ArrayRef),
         ("_to", Arc::new(arrow_to) as ArrayRef),
-    ])
-    .unwrap();
+    ]).unwrap();
 
     let io_file = File::create(file.path()).unwrap();
     let props = WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
         .build();
-    info!("Finished custom script computation!");
 
     let mut writer = ArrowWriter::try_new(io_file, batch.schema(), Some(props)).unwrap();
     writer.write(&batch).expect("Writing batch");
@@ -157,36 +153,42 @@ pub fn store_computation_result(
 ) -> Result<(), String> {
     let path = result_file.path().to_str().unwrap().to_string();
     if let Ok(file) = File::open(path) {
-        let reader = SerializedFileReader::new(file).unwrap();
+        match SerializedFileReader::new(file) {
+            Ok(reader) => {
+                let parquet_metadata = reader.metadata();
+                assert_eq!(parquet_metadata.num_row_groups(), 1);
 
-        let parquet_metadata = reader.metadata();
-        assert_eq!(parquet_metadata.num_row_groups(), 1);
+                // Currently we only support reading two columns
+                // It is expected that the first column is the node id and the second column is the result
+                let row_group_reader = reader.get_row_group(0).unwrap();
+                assert_eq!(row_group_reader.num_columns(), 2);
 
-        // Currently we only support reading two columns
-        // It is expected that the first column is the node id and the second column is the result
-        let row_group_reader = reader.get_row_group(0).unwrap();
-        assert_eq!(row_group_reader.num_columns(), 2);
+                // get write lock on comp arc
+                let mut comp_arc = c_arc.write().unwrap();
 
-        // get write lock on comp arc
-        let mut comp_arc = c_arc.write().unwrap();
+                reader.get_row_iter(None).unwrap().try_for_each(|row| {
+                    let mut vertex_id = 0;
+                    let mut result = serde_json::Value::Null;
 
-        reader.get_row_iter(None).unwrap().try_for_each(|row| {
-            let mut vertex_id = 0;
-            let mut result = serde_json::Value::Null;
+                    let row_res = row.map_err(|e| e.to_string())?;
+                    let row_as_json = row_res.to_json_value();
 
-            let row_res = row.map_err(|e| e.to_string())?;
-            let row_as_json = row_res.to_json_value();
+                    if let Some(v) = row_as_json.get("Node") {
+                        vertex_id = v.as_u64().unwrap();
+                    }
+                    if let Some(v) = row_as_json.get("Result") {
+                        result = v.clone();
+                    }
 
-            if let Some(v) = row_as_json.get("Node") {
-                vertex_id = v.as_u64().unwrap();
+                    comp_arc.result.insert(vertex_id, result);
+                    Ok::<(), String>(())
+                })?;
             }
-            if let Some(v) = row_as_json.get("Result") {
-                result = v.clone();
+            Err(err) => {
+                // Handle the error when creating the reader.
+                eprintln!("Error creating SerializedFileReader: {}", err);
             }
-
-            comp_arc.result.insert(vertex_id, result);
-            Ok::<(), String>(())
-        })?;
+        }
     } else {
         return Err("Failed to open result file".to_string());
     }

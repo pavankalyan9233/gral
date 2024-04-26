@@ -16,7 +16,7 @@ use crate::python::pythoncomputation::PythonComputation;
 use bytes::Bytes;
 use graphanalyticsengine::*;
 use http::Error;
-use log::info;
+use log::{error, info};
 use std::convert::Infallible;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
@@ -554,13 +554,15 @@ async fn api_python(
             graph_arc.clone(),
             body.function,
         );
-        info!("Finished python computation!");
+
         let mut comp = comp_arc.write().unwrap();
         match res {
             Ok(()) => {
+                info!("Finished python computation!");
                 comp.error_code = 0;
             }
             Err(e) => {
+                error!("Error during python computation: {}", e);
                 comp.error_message = e;
                 comp.error_code = 1;
             }
