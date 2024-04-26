@@ -7,7 +7,6 @@ use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 use parquet::file::reader::{FileReader, SerializedFileReader};
-use parquet::record::RowAccessor;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::process::{Command, Stdio};
@@ -22,18 +21,41 @@ struct ResultValue {
 }
 
 pub fn execute_python_script_on_graph(
+    c_arc: Arc<RwLock<PythonComputation>>,
     g_arc: Arc<RwLock<Graph>>,
     user_script: String,
 ) -> Result<(), String> {
-    execute_python_script_on_graph_internal(g_arc, user_script, None)
+    let python3_binary_path = get_python_environment()?;
+    execute_python_script_on_graph_internal(c_arc, g_arc, user_script, Some(python3_binary_path))
+}
+
+#[cfg(target_os = "macos")]
+fn get_python_environment() -> Result<String, String> {
+    match std::env::var("PYTHON3_BINARY_PATH") {
+        Ok(python_path) => {
+            println!("Python 3 binary path: {:?}", python_path);
+            Ok(python_path)
+        }
+        Err(_) => Err(
+            "Python 3 binary path not provided in PYTHON3_BINARY_PATH environment variable."
+                .to_string(),
+        ),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_python_environment() -> Result<String, ()> {
+    println!("Python 3 binary path: {:?}", "python3".to_string());
+    return Ok("python3".to_string());
 }
 
 pub fn execute_python_script_on_graph_with_bin(
+    c_arc: Arc<RwLock<PythonComputation>>,
     g_arc: Arc<RwLock<Graph>>,
     user_script: String,
     python3_binary_path: String,
 ) -> Result<(), String> {
-    execute_python_script_on_graph_internal(g_arc, user_script, Some(python3_binary_path))
+    execute_python_script_on_graph_internal(c_arc, g_arc, user_script, Some(python3_binary_path))
 }
 
 pub(crate) fn create_temporary_file(
@@ -48,6 +70,7 @@ pub(crate) fn create_temporary_file(
 }
 
 fn execute_python_script_on_graph_internal(
+    c_arc: Arc<RwLock<PythonComputation>>,
     g_arc: Arc<RwLock<Graph>>,
     user_script: String,
     python3_binary_path: Option<String>,
@@ -57,6 +80,11 @@ fn execute_python_script_on_graph_internal(
     // Write graph to disk
     let graph_file = write_graph_to_file(g_arc.clone())?;
     let graph_file_path = graph_file.path().to_str().unwrap().to_string();
+
+    {
+        let mut computation = c_arc.write().unwrap();
+        computation.progress = 1; // Graph has been written to disk
+    }
 
     // Initialize script instance
     let result_file = create_temporary_file(
@@ -82,8 +110,13 @@ fn execute_python_script_on_graph_internal(
         return Err("Failed to execute Python script".to_string());
     }
 
+    {
+        let mut computation = c_arc.write().unwrap();
+        computation.progress = 2; // Python script has been executed
+    }
+
     // Read computation result from disk
-    store_computation_result(g_arc, result_file)
+    store_computation_result(c_arc, result_file)
 }
 
 pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>) -> Result<NamedTempFile, String> {
@@ -119,21 +152,11 @@ pub fn write_graph_to_file(g_arc: Arc<RwLock<Graph>>) -> Result<NamedTempFile, S
 }
 
 pub fn store_computation_result(
-    g_arc: Arc<RwLock<Graph>>,
+    c_arc: Arc<RwLock<PythonComputation>>,
     result_file: NamedTempFile,
 ) -> Result<(), String> {
-    let comp_arc = Arc::new(RwLock::new(PythonComputation {
-        graph: g_arc,
-        algorithm: "Custom".to_string(),
-        total: 0,
-        progress: 0,
-        error_code: 0,
-        error_message: "".to_string(),
-        result: Default::default(),
-    }));
-
     let path = result_file.path().to_str().unwrap().to_string();
-    if let Ok(file) = File::open(&path) {
+    if let Ok(file) = File::open(path) {
         let reader = SerializedFileReader::new(file).unwrap();
 
         let parquet_metadata = reader.metadata();
@@ -145,7 +168,7 @@ pub fn store_computation_result(
         assert_eq!(row_group_reader.num_columns(), 2);
 
         // get write lock on comp arc
-        let mut comp_arc = comp_arc.write().unwrap();
+        let mut comp_arc = c_arc.write().unwrap();
 
         reader.get_row_iter(None).unwrap().try_for_each(|row| {
             let mut vertex_id = 0;
@@ -154,18 +177,23 @@ pub fn store_computation_result(
             let row_res = row.map_err(|e| e.to_string())?;
             let row_as_json = row_res.to_json_value();
 
-            row_as_json.get("Node").map(|v| {
-                vertex_id = v.as_u64().unwrap()?;
-            });
-            row_as_json.get("Result").map(|v| {
+            if let Some(v) = row_as_json.get("Node") {
+                vertex_id = v.as_u64().unwrap();
+            }
+            if let Some(v) = row_as_json.get("Result") {
                 result = v.clone();
-            });
+            }
 
             comp_arc.result.insert(vertex_id, result);
             Ok::<(), String>(())
         })?;
     } else {
         return Err("Failed to open result file".to_string());
+    }
+
+    {
+        let mut computation = c_arc.write().unwrap();
+        computation.progress = 3; // Computation result has been read
     }
 
     Ok(())

@@ -1,6 +1,6 @@
 use crate::computations::Computation;
 use crate::graph_store::graph::Graph;
-use serde_json::{Value};
+use serde_json::Value;
 use std::any::Any;
 use std::collections::HashMap;
 use std::mem;
@@ -55,7 +55,7 @@ impl Computation for PythonComputation {
     fn memory_usage(&self) -> usize {
         let mut total_memory = self.result.len() * mem::size_of::<u64>();
         for (_key, v) in self.result.iter() {
-            total_memory += mem::size_of_val(&v);
+            total_memory += mem::size_of_val(v);
         }
         total_memory
     }

@@ -4,29 +4,9 @@ use std::sync::{Arc, RwLock};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gral::computations::Computations;
     use gral::graph_store::graph::Graph;
+    use gral::python::pythoncomputation::PythonComputation;
     use gral::python::script::generate_script;
-    use std::sync::Mutex;
-
-    #[cfg(target_os = "macos")]
-    fn return_python_environment() -> Result<String, String> {
-        return if let Ok(python_path) = std::env::var("PYTHON3_BINARY_PATH") {
-            println!("Python 3 binary path: {:?}", python_path);
-            Ok(python_path)
-        } else {
-            Err(
-                "Python 3 binary path not provided in PYTHON3_BINARY_PATH environment variable."
-                    .to_string(),
-            )
-        };
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    fn return_python_environment() -> Result<String, ()> {
-        println!("Python 3 binary path: {:?}", "python3".to_string());
-        return Ok("python3".to_string());
-    }
 
     #[test]
     fn test_full_executor_run() {
@@ -50,18 +30,17 @@ mod tests {
         let g_arc = Arc::new(RwLock::new(g));
         let user_snippet = "def worker(graph): return nx.pagerank(graph, 0.85)".to_string();
 
-        let python_path_res = return_python_environment();
-        if python_path_res.is_err() {
-            println!("Failed to get python3 binary path: {:?}", python_path_res);
-        }
-        // let the_computations = Arc::new(Mutex::new(Computations::new()));
-        assert!(python_path_res.is_ok());
-        let res = (executor::execute_python_script_on_graph_with_bin(
-            g_arc,
-            user_snippet,
-            python_path_res.unwrap(),
-        ));
+        let comp_arc = Arc::new(RwLock::new(PythonComputation {
+            graph: g_arc.clone(),
+            algorithm: "Custom".to_string(),
+            total: 3, // 1. Write graph to disk, 2. Execute & write computation to disk, 3. Read back
+            progress: 0,
+            error_code: 0,
+            error_message: "".to_string(),
+            result: Default::default(),
+        }));
 
+        let res = executor::execute_python_script_on_graph(comp_arc, g_arc, user_snippet);
         assert!(res.is_ok());
     }
 
