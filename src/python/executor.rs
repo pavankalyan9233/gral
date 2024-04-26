@@ -44,7 +44,7 @@ fn get_python_environment() -> Result<String, String> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_python_environment() -> Result<String, ()> {
+fn get_python_environment() -> Result<String, String> {
     println!("Python 3 binary path: {:?}", "python3".to_string());
     return Ok("python3".to_string());
 }
