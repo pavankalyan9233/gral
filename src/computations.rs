@@ -19,6 +19,7 @@ pub trait Computation {
     fn algorithm_name(&self) -> String;
     fn as_any(&self) -> &dyn Any;
     fn nr_results(&self) -> u64;
+    // TODO: We should think about the get_result API (maybe it could return a Result<>)
     fn get_result(&self, which: u64) -> (String, Value);
     fn memory_usage(&self) -> usize;
 }

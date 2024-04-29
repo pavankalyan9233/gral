@@ -138,6 +138,7 @@ jobs:
     working_directory: ~/app
     steps:
       - get_code # TODO: can be optimized to only get binary and integration test folder 'api_tests"
+      - install_python
       - restore_cache:
           keys:
             - v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}
