@@ -15,5 +15,17 @@ export const config = {
   test_configuration: {
     medium_timeout: 15000,
     long_timeout: 30000
+  },
+  benchmark: {
+    // Please keep this array in sync with /api_tests/scripts/import_benchmark_datasets
+    graphs: {
+      "wiki-Talk": {
+        algos: ["pagerank", "wcc"]
+      } // we could auto-generate those properties from the `*.properties` file
+      // TODO: Found a bug in our import. The assumption I had about the first dataset is wrong. Vertex IDs do not
+      //  begin either with 0 or 1 and increment. This needs to be fixed first. Then we can re-enable next two datasets.
+      //"dota-league",
+      //"graph500-23",
+    }
   }
 };

@@ -11,6 +11,9 @@
   "scripts": {
     "test_full": "./scripts/prepare_environment && vitest --config vitest.ci.config.ts run --pool=forks && ./scripts/teardown_environment",
     "test": "vitest --config vitest.config.ts run --pool=forks",
+    "benchmark_full": "./scripts/prepare_environment && vitest bench -c vitest.bm.config.ts && ./scripts/teardown_environment",
+    "benchmark": "vitest bench",
+    "benchmark_import_data": "./scripts/import_benchmark_datasets",
     "prepare_env": "./scripts/prepare_environment",
     "teardown_env": "./scripts/teardown_environment"
   },

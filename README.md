@@ -49,6 +49,27 @@ Additional:
 In case you want to see how the integration tests are being executed, see the included `package.json` file
 in the `api_tests` directory.
 
+### Benchmark Tests
+
+To execute the full benchmark tests including data import, run the following command:
+    
+```bash
+$ cd api_tests  
+$ npm run benchmark_full
+```
+
+This will start ArangoDB, gral instances, download the data, import the data, and execute the benchmark tests.
+
+In case you already inserted all data and started the gral binary, you can execute the benchmark tests with. 
+This will be faster if you already have the data in the database and want to develop new benchmarks e.g.
+
+```bash
+$ cd api_tests
+$ npm run benchmark
+```
+
+This will only execute the benchmark tests.
+
 #### Prerequisites
 
 Applications you need on your machine to run the integration tests:

@@ -63,8 +63,74 @@ async function shutdownInstance(endpoint: string, jwt: string) {
   });
 }
 
+async function loadGraph(
+  jwt: string,
+  gralEndpoint: string,
+  graphName: string,
+  vertexCollections: string[] = [],
+  edgeCollections: string[] = []) {
+  const url = buildUrl(gralEndpoint, '/v1/loaddata');
+  const graphAnalyticsEngineLoadDataRequest = {
+    "database": "_system",
+    "graph_name": graphName,
+    // "vertex_collections": vertexCollections,
+    // "edge_collections": edgeCollections
+  };
+
+  const response = await axios.post(
+    url, graphAnalyticsEngineLoadDataRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function runPagerank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {
+  const url = buildUrl(gralEndpoint, '/v1/pagerank');
+  const pagerankRequest = {
+    "graph_id": graphId,
+    "maximum_supersteps": maxSupersteps,
+    "damping_factor": dampingFactor
+  };
+
+  const response = await axios.post(
+    url, pagerankRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function runPythonPagerank(jwt: string, gralEndpoint: string, algorithm: string, graphId: number) {
+  const url = buildUrl(gralEndpoint, '/v1/python');
+  const algorithmRequest = {
+    "graph_id": graphId,
+    "algorithm": algorithm
+  };
+
+  const response = await axios.post(
+    url, algorithmRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+
+}
+
 export const gral = {
-  buildUrl, buildHeaders, shutdownInstance, waitForJobToBeFinished
+  buildUrl, buildHeaders, shutdownInstance, waitForJobToBeFinished, loadGraph, runPagerank
 };
 
 module.exports = gral;
