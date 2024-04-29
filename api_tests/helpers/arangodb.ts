@@ -1,12 +1,12 @@
 const axios = require('axios');
 import {config} from '../environment.config';
+import {Database} from 'arangojs';
 
 function buildArangoDBUrl(path: string) {
   if (path[0] !== '/') {
     throw new Error('Path must start with a "/" character.');
   }
   return `${config.arangodb.endpoint}${path}`;
-
 }
 
 async function getArangoJWT(maxRetries: number = 1) {
@@ -30,8 +30,33 @@ async function getArangoJWT(maxRetries: number = 1) {
   }
 }
 
+function getArangoJSDatabaseInstance() {
+  return new Database({
+    url: config.arangodb.endpoint,
+    databaseName: config.arangodb.database,
+    auth: {
+      username: config.arangodb.username,
+      password: config.arangodb.password
+    }
+  });
+}
+
+async function createDocumentCollection(collectionName: string, tryDrop: boolean = true) {
+  const db = getArangoJSDatabaseInstance();
+
+  if (tryDrop) {
+    try {
+      await db.collection(collectionName).drop();
+    } catch (ignore) {
+      // Do nothing
+    }
+  }
+  await db.collection(collectionName).create();
+  return db.collection(collectionName);
+}
+
 export const arangodb = {
-  getArangoJWT
+  getArangoJWT, createDocumentCollection, getArangoJSDatabaseInstance
 };
 
 

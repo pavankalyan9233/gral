@@ -56,7 +56,7 @@ service GraphAnalyticsEngineService {
 
     // Process a previously loaded graph with the weakly connected
     // components algorithm (WCC) and store the results in-memory. This
-    // essentially means that the direction of edges is ignored and then 
+    // essentially means that the direction of edges is ignored and then
     // the connected components of the undirected graph are computed. The
     // computation will return a numerical job id, with which
     // the results can later be queried or written back to the database.
@@ -87,7 +87,7 @@ service GraphAnalyticsEngineService {
         };
     }
 
-    // Process a previously loaded graph and a computation which 
+    // Process a previously loaded graph and a computation which
     // has computed connected components (weakly or strongly) by aggregating
     // some vertex data over each component found. The result will be one
     // distribution map for each connected component. It is stored in memory.
@@ -119,13 +119,28 @@ service GraphAnalyticsEngineService {
         };
     }
 
+    // Process a previously loaded graph with custom python based execution
+    // algorithm and store the results in-memory. See the input message
+    // documentation for details.
+    // The computation will return a numerical job id, with which the
+    // results can later be queried or written back to the database.
+    // This is an asynchronous job which returns the job id immediately.
+    // Use the GET job API with the job id to get information on
+    // progress, errors and the outcome of the computation.
+    rpc GraphAnalyticsEngineRunPythonFunction(GraphAnalyticsEnginePythonFunctionRequest) returns (GraphAnalyticsEngineProcessResponse) {
+        option (google.api.http) = {
+            post: "/v1/python"
+            body: "*"
+        };
+    }
+
     // Process a previously loaded graph with the irank
     // algorithm and store the results in-memory. The "irank" algorithms
     // is a variant of pagerank, which changes the initial weight of each
     // vertex. Rather than being 1/N where N is the number of vertices,
     // the value is here different depending on from which vertex collection
     // the vertex comes. If V is from vertex collection C and N is the number
-    // of vertices in C, then the initial weight of V is 1/N. 
+    // of vertices in C, then the initial weight of V is 1/N.
     // As with pagerank, the total sum of ranks stays the same as an
     // invariant of the algorithm.
     // There are some parameters controlling the computation like the
@@ -164,7 +179,7 @@ service GraphAnalyticsEngineService {
 
     // Process a previously loaded graph with the attribute
     // propagation algorithm and store the results in-memory.
-    // The algorithm basically reads a list of labels from a column for each 
+    // The algorithm basically reads a list of labels from a column for each
     // vertex (see the loaddata operation, for which one can configure
     // which attributes are loaded into the column store).
     // The value can be empty or a string or a list of strings
@@ -222,7 +237,7 @@ service GraphAnalyticsEngineService {
             get: "/v1/graphs"
         };
     }
-   
+
     // Get information about a specific graph.
     rpc GraphAnalyticsEngineGetGraph(GraphAnalyticsEngineGraphId) returns (GraphAnalyticsEngineGetGraphResponse) {
         option (google.api.http) = {
@@ -243,7 +258,7 @@ service GraphAnalyticsEngineService {
             get: "/v1/jobs"
         };
     }
-   
+
     // Get information about a specific job (in particular progress and result when done).
     rpc GraphAnalyticsEngineGetJob(GraphAnalyticsEngineJobId) returns (GraphAnalyticsEngineJob) {
         option (google.api.http) = {
@@ -354,10 +369,10 @@ message GraphAnalyticsEngineLoadDataAqlRequest {
 }
 
 // Request arguments for WCC or SCC:
-message GraphAnalyticsEngineWccSccRequest {    
+message GraphAnalyticsEngineWccSccRequest {
     // Graph ID
     uint64 graph_id = 1;
-   
+
     // Map of engine-type and algorithm-type specific custom fields (dynamic
     // for this process operation)
     map<string, string> custom_fields = 2;
@@ -374,7 +389,7 @@ message GraphAnalyticsEngineProcessResponse {
 }
 
 // Request arguments for GraphAnalyticsEngineRunCompAggregation:
-message GraphAnalyticsEngineAggregateComponentsRequest {    
+message GraphAnalyticsEngineAggregateComponentsRequest {
     // Graph ID
     uint64 graph_id = 1;
     // Job ID
@@ -384,7 +399,7 @@ message GraphAnalyticsEngineAggregateComponentsRequest {
 }
 
 // Request arguments for GraphAnalyticsEngineRunPageRank:
-message GraphAnalyticsEnginePageRankRequest {    
+message GraphAnalyticsEnginePageRankRequest {
     // Graph ID
     uint64 graph_id = 1;
     // Damping factor:
@@ -393,8 +408,19 @@ message GraphAnalyticsEnginePageRankRequest {
     uint32 maximum_supersteps = 3;
 }
 
+// Request arguments for GraphAnalyticsEngineRunPageRank:
+message GraphAnalyticsEnginePythonFunctionRequest {
+    // Graph ID
+    uint64 graph_id = 1;
+    // The python-based code to be executed. A method called `def worker(graph)`
+    // must be defined. The method must return a dictionary with the
+    // results. The key inside that dict must represent the vertex id,
+    // the value (actual computation result) can be of any type.
+    string function = 2;
+}
+
 // Request arguments for GraphAnalyticsEngineRunLabelPropagation.
-message GraphAnalyticsEngineLabelPropagationRequest {    
+message GraphAnalyticsEngineLabelPropagationRequest {
     // Graph ID
     uint64 graph_id = 1;
     // Start label attribute, must be stored in one column of the column
@@ -410,7 +436,7 @@ message GraphAnalyticsEngineLabelPropagationRequest {
 }
 
 // Request arguments for GraphAnalyticsEngineRunAttributePropagation.
-message GraphAnalyticsEngineAttributePropagationRequest {    
+message GraphAnalyticsEngineAttributePropagationRequest {
     // Graph ID. This attribute must be given.
     uint64 graph_id = 1;
     // Start label attribute, must be stored in one column of the column

@@ -8,14 +8,15 @@ use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
     LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
 };
+use crate::constants;
 use crate::graph_store::graph::Graph;
 use crate::graph_store::graphs::{with_graphs, Graphs};
-
-use crate::constants;
+use crate::python::executor;
+use crate::python::pythoncomputation::PythonComputation;
 use bytes::Bytes;
 use graphanalyticsengine::*;
 use http::Error;
-use log::info;
+use log::{error, info};
 use std::convert::Infallible;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, RwLock};
@@ -77,6 +78,13 @@ pub fn api_filter(
         .and(with_computations(computations.clone()))
         .and(warp::body::bytes())
         .and_then(api_pagerank);
+    let python = warp::path!("v1" / "python")
+        .and(warp::post())
+        .and(with_auth(args.clone()))
+        .and(with_graphs(graphs.clone()))
+        .and(with_computations(computations.clone()))
+        .and(warp::body::bytes())
+        .and_then(api_python);
     let irank = warp::path!("v1" / "irank")
         .and(warp::post())
         .and(with_auth(args.clone()))
@@ -153,6 +161,7 @@ pub fn api_filter(
         .or(scc)
         .or(aggregation_components)
         .or(pagerank)
+        .or(python)
         .or(irank)
         .or(label_prop)
         .or(attr_prop)
@@ -502,6 +511,80 @@ async fn api_aggregate_components(
     Ok(warp::reply::with_status(v, StatusCode::OK))
 }
 
+/// This function triggers a python based computation:
+async fn api_python(
+    _user: String,
+    graphs: Arc<Mutex<Graphs>>,
+    computations: Arc<Mutex<Computations>>,
+    bytes: Bytes,
+) -> Result<warp::reply::WithStatus<Vec<u8>>, Rejection> {
+    // Parse body and extract integers:
+    let parsed: serde_json::Result<GraphAnalyticsEnginePythonFunctionRequest> =
+        serde_json::from_slice(&bytes[..]);
+    if let Err(e) = parsed {
+        return Ok(err_bad_req_process(
+            format!("Cannot parse JSON body of request: {}", e),
+            400,
+            StatusCode::BAD_REQUEST,
+        ));
+    }
+    let body = parsed.unwrap();
+
+    let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
+        Err(r) => {
+            return Ok(r);
+        }
+        Ok(g) => g,
+    };
+
+    let comp_arc = Arc::new(RwLock::new(PythonComputation {
+        graph: graph_arc.clone(),
+        algorithm: "Custom".to_string(),
+        total: 3, // 1. Write graph to disk, 2. Execute & write computation to disk, 3. Read back
+        progress: 0,
+        error_code: 0,
+        error_message: "".to_string(),
+        result: Default::default(),
+    }));
+    let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
+
+    std::thread::spawn(move || {
+        let res = executor::execute_python_script_on_graph(
+            comp_arc.clone(),
+            graph_arc.clone(),
+            body.function,
+        );
+
+        let mut comp = comp_arc.write().unwrap();
+        match res {
+            Ok(()) => {
+                info!("Finished python computation!");
+                comp.error_code = 0;
+            }
+            Err(e) => {
+                error!("Error during python computation: {}", e);
+                comp.error_message = e;
+                comp.error_code = 1;
+            }
+        }
+    });
+
+    let comp_id: u64;
+    {
+        let mut comps = computations.lock().unwrap();
+        comp_id = comps.register(generic_comp_arc);
+    }
+    let response = GraphAnalyticsEngineProcessResponse {
+        job_id: comp_id,
+        error_code: 0,
+        error_message: "".to_string(),
+    };
+
+    // Write response:
+    let v = serde_json::to_vec(&response).expect("Should be serializable!");
+    Ok(warp::reply::with_status(v, StatusCode::OK))
+}
+
 /// This function triggers a pagerank computation:
 async fn api_pagerank(
     _user: String,
@@ -569,7 +652,7 @@ async fn api_pagerank(
     let comp_id: u64;
     {
         let mut comps = computations.lock().unwrap();
-        comp_id = comps.register(generic_comp_arc.clone());
+        comp_id = comps.register(generic_comp_arc);
     }
     let response = GraphAnalyticsEngineProcessResponse {
         job_id: comp_id,
