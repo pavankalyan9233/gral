@@ -311,87 +311,263 @@ mod tests {
     use crate::graph_store::examples::make_star_graph;
     use serde_json::json;
 
+    fn add_vertex_id_as_label_with_prefix(g: &mut Graph, label: String, prefix: String) {
+        let vertex_column_position = g.vertex_column_names.len();
+        g.vertex_column_names.push(label);
+        let nr_vertices = g.number_of_vertices();
+        g.vertex_json.push(Vec::new());
+        for i in 0..nr_vertices {
+            g.vertex_json[vertex_column_position].push(json!(format!("{}{}", prefix, i)));
+        }
+        g.vertex_column_types.push("string".to_string());
+    }
+    fn add_vertex_id_as_label(g: &mut Graph, label: String) {
+        add_vertex_id_as_label_with_prefix(g, label, "K".to_string());
+    }
+    fn assert_labels_are_in_same_component(labels: &Vec<String>) {
+        if labels.len() > 0 {
+            labels
+                .iter()
+                .for_each(|label| assert_eq!(label, &labels[0]));
+        }
+    }
+
+    #[test]
+    fn does_not_run_when_graph_has_no_from_neighbour_index() {
+        let mut g = Graph::create(
+            vec!["V/A".to_string()],
+            vec![("V/A".to_string(), "V/A".to_string())],
+        );
+        g.index_edges(false, true);
+
+        assert!(labelpropagation_sync(&g, 10, "startlabel", false).is_err());
+        assert!(labelpropagation_async(&g, 10, "startlabel", false).is_err());
+    }
+
+    #[test]
+    fn does_not_run_when_graph_has_no_to_neighbour_index() {
+        let mut g = Graph::create(
+            vec!["V/A".to_string()],
+            vec![("V/A".to_string(), "V/A".to_string())],
+        );
+        g.index_edges(true, false);
+
+        assert!(labelpropagation_sync(&g, 10, "startlabel", false).is_err());
+        assert!(labelpropagation_async(&g, 10, "startlabel", false).is_err());
+    }
+
+    #[test]
+    fn requires_graph_with_requested_label_name() {
+        let mut g = Graph::create(vec!["V/A".to_string()], vec![]);
+        g.index_edges(true, true);
+        add_vertex_id_as_label(&mut g, "other_label".to_string());
+
+        assert!(labelpropagation_sync(&g, 100, "start_label", false).is_err());
+        assert!(labelpropagation_async(&g, 100, "start_label", false).is_err());
+    }
+
+    #[test]
+    fn runs_on_given_label() {
+        let mut g = Graph::create(vec!["V/A".to_string()], vec![]);
+        g.index_edges(true, true);
+        add_vertex_id_as_label_with_prefix(&mut g, "other_label".to_string(), "K".to_string());
+        add_vertex_id_as_label_with_prefix(&mut g, "start_label".to_string(), "L".to_string());
+
+        let (labels, _label_size, _step) =
+            labelpropagation_sync(&g, 100, "start_label", false).unwrap();
+
+        assert_eq!(labels, vec!["L0"]);
+
+        let (labels, _label_size, _step) =
+            labelpropagation_async(&g, 100, "start_label", false).unwrap();
+
+        assert_eq!(labels, vec!["L0"]);
+    }
+
+    #[test]
+    fn gives_empty_results_on_empty_graph() {
+        let mut g = Graph::create(vec![], vec![]);
+        add_vertex_id_as_label(&mut g, "start_label".to_string());
+        g.index_edges(true, true);
+
+        let (labels, _label_size, step) =
+            labelpropagation_sync(&g, 100, "start_label", false).unwrap();
+
+        assert_eq!(step, 1);
+        assert_eq!(labels, Vec::<String>::new());
+
+        let (labels, _label_size, step) =
+            labelpropagation_async(&g, 100, "start_label", false).unwrap();
+
+        assert_eq!(step, 1);
+        assert_eq!(labels, Vec::<String>::new());
+    }
+
+    #[test]
+    fn labels_of_unconnected_graph_are_start_labels() {
+        let mut g = Graph::create(vec!["V/A".to_string(), "V/B".to_string()], vec![]);
+        add_vertex_id_as_label_with_prefix(&mut g, "start_label".to_string(), "V".to_string());
+        g.index_edges(true, true);
+
+        let (labels, _label_size, step) =
+            labelpropagation_sync(&g, 100, "start_label", false).unwrap();
+
+        assert_eq!(step, 1);
+        assert_eq!(labels, vec!["V0", "V1"]);
+
+        let (labels, _label_size, step) =
+            labelpropagation_async(&g, 100, "start_label", false).unwrap();
+
+        assert_eq!(step, 1);
+        assert_eq!(labels, vec!["V0", "V1"]);
+    }
+
     mod sync_version {
         use super::*;
 
         #[test]
-        fn test_label_propagation_sync_cyclic() {
-            let mut g = make_cyclic_graph(10);
-            g.vertex_column_names = vec!["startlabel".to_string()];
-            g.vertex_json = vec![Vec::new()];
-            for i in 0..10 {
-                g.vertex_json[0].push(json!(format!("K{i}")));
-            }
-            g.vertex_column_types = vec!["string".to_string()];
-            g.index_edges(true, true);
-            let (labels, _size, _steps) =
-                labelpropagation_sync(&g, 10, "startlabel", false).unwrap();
-            println!("{:?}", labels);
-        }
-
-        #[test]
-        fn test_label_propagation_sync_star() {
-            let mut g = make_star_graph(10);
-            g.vertex_column_names = vec!["startlabel".to_string()];
-            g.vertex_json = vec![Vec::new()];
-            for i in 0..10 {
-                g.vertex_json[0].push(json!(format!("K{i}")));
-            }
-            g.vertex_column_types = vec!["string".to_string()];
-            g.index_edges(true, true);
-            let (labels, _size, _steps) =
-                labelpropagation_sync(&g, 5, "startlabel", false).unwrap();
-            println!("{:?}", labels);
-        }
-
-        #[test]
-        fn does_not_run_when_graph_has_no_from_neighbour_index() {
+        fn does_not_converge_on_alternating_graph() {
             let mut g = Graph::create(
-                vec!["V/A".to_string()],
-                vec![("V/A".to_string(), "V/A".to_string())],
+                vec!["V/A".to_string(), "V/B".to_string()],
+                vec![("V/A".to_string(), "V/B".to_string())],
             );
-            g.index_edges(false, true);
+            g.index_edges(true, true);
+            add_vertex_id_as_label(&mut g, "start_label".to_string());
 
-            assert!(labelpropagation_sync(&g, 10, "startlabel", false).is_err());
+            let (labels, _label_size, step) =
+                labelpropagation_sync(&g, 100, "start_label", false).unwrap();
+
+            assert_eq!(step, 100);
+            assert!(labels[0] != labels[1]);
         }
 
         #[test]
-        fn does_not_run_when_graph_has_no_to_neighbour_index() {
+        fn gives_results_of_ldbc_example_directed() {
             let mut g = Graph::create(
-                vec!["V/A".to_string()],
-                vec![("V/A".to_string(), "V/A".to_string())],
+                vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "3".to_string(),
+                    "4".to_string(),
+                    "5".to_string(),
+                    "6".to_string(),
+                    "7".to_string(),
+                    "8".to_string(),
+                    "9".to_string(),
+                    "10".to_string(),
+                ],
+                vec![
+                    ("1".to_string(), "3".to_string()),
+                    ("1".to_string(), "5".to_string()),
+                    ("2".to_string(), "4".to_string()),
+                    ("2".to_string(), "5".to_string()),
+                    ("2".to_string(), "10".to_string()),
+                    ("3".to_string(), "1".to_string()),
+                    ("3".to_string(), "5".to_string()),
+                    ("3".to_string(), "8".to_string()),
+                    ("3".to_string(), "10".to_string()),
+                    ("5".to_string(), "3".to_string()),
+                    ("5".to_string(), "4".to_string()),
+                    ("5".to_string(), "8".to_string()),
+                    ("6".to_string(), "3".to_string()),
+                    ("6".to_string(), "4".to_string()),
+                    ("7".to_string(), "4".to_string()),
+                    ("8".to_string(), "1".to_string()),
+                    ("9".to_string(), "4".to_string()),
+                ],
             );
-            g.index_edges(true, false);
+            g.vertex_column_names.push("start_label".to_string());
+            g.vertex_json = vec![vec![
+                json!("A1"),
+                json!("B2"),
+                json!("C3"),
+                json!("D4"),
+                json!("E5"),
+                json!("F6"),
+                json!("G7"),
+                json!("H8"),
+                json!("I9"),
+                json!("J10"),
+            ]];
+            g.index_edges(true, true);
 
-            assert!(labelpropagation_sync(&g, 10, "startlabel", false).is_err());
+            let (labels, _label_size, steps) =
+                (labelpropagation_sync(&g, 2, "start_label", false).unwrap());
+
+            assert_eq!(steps, 2);
+            assert_eq!(
+                labels,
+                vec!["A1", "B2", "C3", "D4", "A1", "A1", "B2", "C3", "B2", "A1"]
+            );
         }
     }
 
     mod async_version {
         use super::*;
 
-        // TODO write tests for async version
-
         #[test]
-        fn does_not_run_when_graph_has_no_from_neighbour_index() {
+        fn converges_on_alternating_graph() {
             let mut g = Graph::create(
-                vec!["V/A".to_string()],
-                vec![("V/A".to_string(), "V/A".to_string())],
+                vec!["V/A".to_string(), "V/B".to_string()],
+                vec![("V/A".to_string(), "V/B".to_string())],
             );
-            g.index_edges(false, true);
+            g.index_edges(true, true);
+            add_vertex_id_as_label(&mut g, "start_label".to_string());
 
-            assert!(labelpropagation_async(&g, 10, "startlabel", false).is_err());
+            let (_labels, _label_size, step) =
+                labelpropagation_async(&g, 100, "start_label", false).unwrap();
+
+            assert!(step < 100);
         }
 
         #[test]
-        fn does_not_run_when_graph_has_no_to_neighbour_index() {
+        fn detects_community() {
             let mut g = Graph::create(
-                vec!["V/A".to_string()],
-                vec![("V/A".to_string(), "V/A".to_string())],
+                vec![
+                    "V/A".to_string(),
+                    "V/B".to_string(),
+                    "V/C".to_string(),
+                    "V/D".to_string(),
+                    "V/E".to_string(),
+                ],
+                vec![
+                    ("V/A".to_string(), "V/B".to_string()),
+                    ("V/C".to_string(), "V/B".to_string()),
+                    ("V/E".to_string(), "V/D".to_string()),
+                    ("V/D".to_string(), "V/B".to_string()),
+                ],
             );
-            g.index_edges(true, false);
+            g.index_edges(true, true);
+            add_vertex_id_as_label(&mut g, "start_label".to_string());
 
-            assert!(labelpropagation_async(&g, 10, "startlabel", false).is_err());
+            let (labels, _size, _steps) =
+                labelpropagation_async(&g, 100, "start_label", false).unwrap();
+
+            assert_labels_are_in_same_component(&labels);
+        }
+
+        #[test]
+        fn detects_one_community_on_cyclic_graph() {
+            let mut g = make_cyclic_graph(10);
+            add_vertex_id_as_label(&mut g, "start_label".to_string());
+            g.index_edges(true, true);
+
+            let (labels, _size, _steps) =
+                labelpropagation_async(&g, 100, "start_label", false).unwrap();
+
+            assert_labels_are_in_same_component(&labels);
+        }
+
+        #[test]
+        fn detects_one_community_on_star_graph() {
+            let mut g = make_star_graph(10);
+            add_vertex_id_as_label(&mut g, "start_label".to_string());
+            g.index_edges(true, true);
+
+            let (labels, _size, _steps) =
+                labelpropagation_async(&g, 100, "start_label", false).unwrap();
+
+            assert_labels_are_in_same_component(&labels);
         }
     }
 }
