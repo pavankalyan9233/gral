@@ -9,10 +9,10 @@
     "vitest": "^1.5.0"
   },
   "scripts": {
-    "test_full": "./scripts/prepare_environment && vitest --config vitest.ci.config.ts run --pool=forks && ./scripts/teardown_environment",
+    "test_full": "./scripts/prepare_environment && ./scripts/import_integration_datasets && vitest --config vitest.ci.config.ts run --pool=forks && ./scripts/teardown_environment",
     "test": "vitest --config vitest.config.ts run --pool=forks",
-    "benchmark_full": "./scripts/prepare_environment && vitest bench -c vitest.bm.config.ts && ./scripts/teardown_environment",
-    "benchmark": "vitest bench",
+    "benchmark_full": "./scripts/prepare_environment && ./scripts/import_benchmark_datasets && vitest bench -c vitest.bm.config.ts --maxConcurrency 1 && ./scripts/teardown_environment",
+    "benchmark": "vitest bench -c vitest.bm.config.ts --maxConcurrency 1",
     "benchmark_import_data": "./scripts/import_benchmark_datasets",
     "prepare_env": "./scripts/prepare_environment",
     "teardown_env": "./scripts/teardown_environment"
