@@ -73,8 +73,8 @@ async function loadGraph(
   const graphAnalyticsEngineLoadDataRequest = {
     "database": "_system",
     "graph_name": graphName,
-    // "vertex_collections": vertexCollections,
-    // "edge_collections": edgeCollections
+    "vertex_collections": vertexCollections,
+    "edge_collections": edgeCollections
   };
 
   const response = await axios.post(
@@ -109,11 +109,13 @@ async function runPagerank(jwt: string, gralEndpoint: string, graphId: number, m
   }
 }
 
-async function runPythonPagerank(jwt: string, gralEndpoint: string, algorithm: string, graphId: number) {
+async function runPythonPagerank(jwt: string, gralEndpoint: string, graphId: number,
+                                 maxSupersteps: number = 10,
+                                 dampingFactor: number = 0.85) {
   const url = buildUrl(gralEndpoint, '/v1/python');
   const algorithmRequest = {
     "graph_id": graphId,
-    "algorithm": algorithm
+    "function": `def worker(graph): return nx.pagerank(G = graph, alpha=${dampingFactor}, max_iter=${maxSupersteps})`
   };
 
   const response = await axios.post(
@@ -126,11 +128,16 @@ async function runPythonPagerank(jwt: string, gralEndpoint: string, algorithm: s
   } catch (error) {
     throw error;
   }
-
 }
 
 export const gral = {
-  buildUrl, buildHeaders, shutdownInstance, waitForJobToBeFinished, loadGraph, runPagerank
+  buildUrl,
+  buildHeaders,
+  shutdownInstance,
+  waitForJobToBeFinished,
+  loadGraph,
+  runPagerank,
+  runPythonPagerank
 };
 
 module.exports = gral;

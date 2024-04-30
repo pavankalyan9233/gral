@@ -2,7 +2,7 @@ use crate::graph_store::graph::Graph;
 use crate::python::pythoncomputation::PythonComputation;
 use crate::python::script;
 use arrow::array::{ArrayRef, RecordBatch, UInt64Array};
-use log::error;
+use log::{error, info};
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
@@ -77,6 +77,8 @@ fn execute_python_script_on_graph_internal(
 ) -> Result<(), String> {
     let python3_bin = python3_binary_path.unwrap_or_else(|| "python3".to_string());
 
+    info!("PYC: Starting Step 1: Now writing the graph to disk");
+
     // Write graph to disk
     let graph_file = write_graph_to_file(g_arc.clone())?;
     let graph_file_path = graph_file.path().to_str().unwrap().to_string();
@@ -85,6 +87,8 @@ fn execute_python_script_on_graph_internal(
         let mut computation = c_arc.write().unwrap();
         computation.progress = 1; // Graph has been written to disk
     }
+
+    info!("PYC: Finished Step 1: Wrote graph to disk");
 
     // Initialize script instance
     let result_file = create_temporary_file(
@@ -97,6 +101,8 @@ fn execute_python_script_on_graph_internal(
     let script = script_res.unwrap();
     let script_file = script.write_to_file()?;
     let script_file_path = script_file.path().to_str().unwrap().to_string();
+
+    info!("PYC: Starting Step 2: Will now the execute python script.");
 
     // Execute generated script
     let process = Command::new(python3_bin)
@@ -115,6 +121,8 @@ fn execute_python_script_on_graph_internal(
         computation.progress = 2; // Python script has been executed
     }
 
+    info!("PYC: Finished Step 2: Python script executed (This includes store into parquet).");
+    info!("PYC: Starting Step 3: Will now read the result and store it in-memory.");
     // Read computation result from disk
     store_computation_result(c_arc, result_file)
 }
@@ -159,12 +167,18 @@ pub fn store_computation_result(
         match SerializedFileReader::new(file) {
             Ok(reader) => {
                 let parquet_metadata = reader.metadata();
-                assert_eq!(parquet_metadata.num_row_groups(), 1);
+
+                if parquet_metadata.file_metadata().num_rows() != 1 {
+                    return Err("Unexpected parquet format (metadata)!".to_string());
+                }
 
                 // Currently we only support reading two columns
                 // It is expected that the first column is the node id and the second column is the result
                 let row_group_reader = reader.get_row_group(0).unwrap();
-                assert_eq!(row_group_reader.num_columns(), 2);
+
+                if row_group_reader.num_columns() != 2 {
+                    return Err("Unexpected parquet format (columns)!".to_string());
+                }
 
                 // get write lock on comp arc
                 let mut comp_arc = c_arc.write().unwrap();
@@ -200,6 +214,8 @@ pub fn store_computation_result(
         let mut computation = c_arc.write().unwrap();
         computation.progress = 3; // Computation result has been read
     }
+
+    info!("PYC: Finished Step 3: Result stored in-memory.");
 
     Ok(())
 }

@@ -15,18 +15,20 @@ describe.sequential('PageRank Benchmarks', () => {
     const graphName = 'wiki-Talk';
     const response = await gral.loadGraph(jwt, gralEndpoint, graphName);
     pageRankGraphID = response.result.graph_id;
-  }, {iterations: 3});
+  }, {iterations: 1, warmupIterations: 0});
 
   // Then, execute all algorithms we want to run on it
   bench('PageRank Native', async () => {
     const jwt = await arangodb.getArangoJWT();
-    await gral.runPagerank(jwt, gralEndpoint, 59, 10, 0.85);
-  }, {iterations: 5});
+    await gral.runPagerank(jwt, gralEndpoint, pageRankGraphID, 10, 0.85);
+    // 1x warmupIteration as for the first run indices need to be created in-memory.
+  }, {iterations: 3, warmupIterations: 1});
 
   bench('PageRank Python', async () => {
     const jwt = await arangodb.getArangoJWT();
-    //await gral.runPythonPagerank(jwt, gralEndpoint, 'pagerank', pageRankGraphID);
-  }, {iterations: 5});
+    await gral.runPythonPagerank(jwt, gralEndpoint, pageRankGraphID, 10, 0.85);
+    // no warmup iterations required. Only choosing 1 iteration as this execution is pretty slow.
+  }, {iterations: 1, warmupIterations: 0});
 
 
 });
