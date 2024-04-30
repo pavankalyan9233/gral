@@ -15,6 +15,11 @@ tests are implemented in separate files in the `api_tests` directory.
 
 ### Unit Tests
 
+Please make sure you have your binary with the latest changes compiled!
+```bash
+$ cargo build --release
+```
+
 To execute only the unit tests, run the following command:
 
 ```bash
@@ -22,6 +27,11 @@ $ cargo test
 ```
 
 ### Integration Tests
+
+Please make sure you have your binary with the latest changes compiled!
+```bash
+$ cargo build --release
+```
 
 To execute only the integration tests, run the following command:
 
