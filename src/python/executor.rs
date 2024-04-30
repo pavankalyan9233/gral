@@ -168,7 +168,7 @@ pub fn store_computation_result(
             Ok(reader) => {
                 let parquet_metadata = reader.metadata();
 
-                if parquet_metadata.file_metadata().num_rows() != 1 {
+                if parquet_metadata.num_row_groups() != 1 {
                     return Err("Unexpected parquet format (metadata)!".to_string());
                 }
 
