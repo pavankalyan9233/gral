@@ -11,6 +11,8 @@ describe.sequential('PageRank Benchmarks', () => {
 
   // First, load all graphs into gral
   bench('Load Graph: wiki-Talk', async () => {
+    // TODO: As soon as we have named graphs in GRAL, we will pull out graph creation out of here so we
+    //  only get algorithm related benchmark results here.
     const jwt = await arangodb.getArangoJWT();
     const graphName = 'wiki-Talk';
     const response = await gral.loadGraph(jwt, gralEndpoint, graphName);
