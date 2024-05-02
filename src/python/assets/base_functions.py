@@ -2,16 +2,15 @@
 import datetime
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import networkx as nx
 
 graph_file_path = "<Placeholder for graph_file_path>"
 result_file_path = "<Placeholder for result file path>"
 
 
-def worker(graph): print("<Placeholder for user injected script>");
-
-
-def read_graph(graph_file_path):
+def read_graph_pandas(graph_file_path):
     try:
         df_edges = pd.read_parquet(graph_file_path, engine='pyarrow')
     except FileNotFoundError:
@@ -24,15 +23,33 @@ def read_graph(graph_file_path):
 
     return graph
 
+def read_graph_pyarrow(graph_file_path):
+    try:
+        df_edges = pq.read_table(graph_file_path)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"File not found: {graph_file_path}")
 
-def store_computation(result):
+    fr = df_edges["_from"]
+    to = df_edges["_to"]
+    edges = [fr[i].as_py(), to[i].as_py() for i in range(len(fr))];
+    graph = nx.Graph()
+    graph.add_edges_from(edges)
+    return graph
+
+read_graph = read_graph_pyarrow
+
+def store_computation_flexible(result):
     if isinstance(result, dict):
         df = pd.DataFrame(list(result.items()), columns=['Node', 'Result'])
         df.to_parquet(result_file_path)
-
+    elif isinstance(result, pa.Table):
+        pq.write_table(result, result_file_path)
     else:
         raise TypeError("Computation result must be a dictionary. Exiting...")
 
+store_computation = store_computation_flexible
+
+def worker(graph): print("<Placeholder for user injected script>");
 
 def main():
     date_start = datetime.datetime.now()
