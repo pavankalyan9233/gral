@@ -17,11 +17,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Set up Python 3.12
+      - name: Set up Python 3.12.3
         uses: actions/setup-python@v5
         with:
           allow-prereleases: true
-          python-version: "3.12"
+          python-version: "3.12.3"
           architecture: "x64"
         env:
           AGENT_TOOLSDIRECTORY: /opt/hostedtoolcache
