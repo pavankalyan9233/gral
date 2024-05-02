@@ -19,7 +19,7 @@ jobs:
           node-version: '22'
       - name: Check Python3 dependencies # Python 3.11.6 is installed @ Kernstation
         run: |
-          source /mnt/python-venv/activate
+          source /mnt/python-venv/bin/activate
           pip3 install -r src/python/assets/requirements.txt
       - name: Build gral
         run: cargo build --release
