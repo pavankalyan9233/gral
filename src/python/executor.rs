@@ -166,12 +166,6 @@ pub fn store_computation_result(
     if let Ok(file) = File::open(path) {
         match SerializedFileReader::new(file) {
             Ok(reader) => {
-                let parquet_metadata = reader.metadata();
-
-                if parquet_metadata.num_row_groups() != 1 {
-                    return Err("Unexpected parquet format (metadata)!".to_string());
-                }
-
                 // Currently we only support reading two columns
                 // It is expected that the first column is the node id and the second column is the result
                 let row_group_reader = reader.get_row_group(0).unwrap();
