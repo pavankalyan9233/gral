@@ -25,7 +25,7 @@ jobs:
         run: cargo build --release
       - name: Run gral
         run: |
-          source /mnt/python-venv/activate
+          source /mnt/python-venv/bin/activate
           PYTHON3_BINARY_PATH=/mnt/python-venv/bin/python && ./target/release/gral --bind-port 1335 --arangodb-endpoints=https://localhost:9529,https://localhost:9539,https://localhost:9549 --arangodb-jwt-secrets /mnt/gral/secrets.jwt &
       - name: Install examples node dependencies
         run: cd examples && source /root/.bashrc && npm install
