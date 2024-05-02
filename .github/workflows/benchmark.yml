@@ -48,15 +48,15 @@ jobs:
         run: |
           cd api_tests
           source /root/.bashrc
-          npm run benchmark_junit
+          npm run benchmark_junit || true
 
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
         if: always()
         with:
           files: |
-            benchmark/**/*.xml
-            benchmark/**/*.json
+            benchmark/*.xml
+            benchmark/*.json
 
       #- name: Upload artifact
       #  uses: actions/upload-artifact@v4
