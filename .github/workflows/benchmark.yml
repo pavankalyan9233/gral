@@ -45,28 +45,12 @@ jobs:
           sed -i "s|endpoint: \"http://localhost:8529\"|endpoint: \"$new_arangodb_endpoint\"|g" environment.config.ts
           sed -i "s|database: \"_system\"|database: \"$new_arangodb_database\"|g" environment.config.ts
       - name: Run benchmark
+        id: run_benchmark
         run: |
           cd api_tests
           source /root/.bashrc
-          npm run benchmark_junit || true
-
-      - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: always()
-        with:
-          files: |
-            api_tests/benchmark/*.xml
-
-      #- name: Upload artifact
-      #  uses: actions/upload-artifact@v4
-      #  with:
-      #    name: BenchmarkResultJUNIT
-      #    path: api_tests/benchmark/benchmark.xml
-
-  # This section is probably not needed and will automatically remove the orphaned gral process
-  #cleanup:
-  #  runs-on: self-hosted
-  #  needs: [benchmark]  # Wait for the benchmark job to finish
-  #  steps:
-  #    - name: Kill gral process
-  #      run: pkill gral || true  # Kill the gral process if it's running, ignore errors if it's not found
+          output=$(npm run benchmark)
+          echo "::set-output name=benchmark_output::$output"
+      - name: Display Benchmark Output
+        run: |
+          echo "Script output: ${{ steps.run_benchmark.outputs.benchmark_output }}"
