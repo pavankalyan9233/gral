@@ -1,0 +1,32 @@
+#!/bin/bash
+
+cecho(){
+    RED="\033[0;31m"
+    GREEN="\033[0;32m"  # <-- [0 means not bold
+    YELLOW="\033[1;33m" # <-- [1 means bold
+    CYAN="\033[0;36m"
+
+    printf "${!1}${2} ${NC}\n" # <-- bash
+}
+
+mkdir -p logs
+cd ../examples
+cecho "CYAN" "Importing the benchmark datasets..."
+
+npm install
+
+# Source: https://ldbcouncil.org/benchmarks/graphalytics/
+
+
+##########################################################################
+# Please keep this section in sync with: `api_tests/environment.config.ts`
+##########################################################################
+
+# Graph Size: 2XS
+./scripts/downloadSingleDataset wiki-Talk; node main.js --graphName wiki-Talk -d true --mqs 100 --con 10 --verifyGraph true
+
+# Graph Size: S
+#./scripts/downloadSingleDataset dota-league; node main.js --graphName dota-league -d true --mqs 100 --con 10 --verifyGraph true
+
+# Graph Size: M
+#./scripts/downloadSingleDataset graph500-23; node main.js --graphName graph500-23 -d true --mqs 100 --con 10 --verifyGraph true
