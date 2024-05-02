@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import datetime
+
 import pandas as pd
 import networkx as nx
 
@@ -33,9 +35,21 @@ def store_computation(result):
 
 
 def main():
+    date_start = datetime.datetime.now()
     graph = read_graph(graph_file_path)
+    date_read_graph = datetime.datetime.now()
     result = worker(graph)
+    date_executed_computation = datetime.datetime.now()
     store_computation(result)
+    date_stored_result = datetime.datetime.now()
+
+    # Create tmp file under /tmp to store timings only
+    with open("/tmp/timings.txt", "w") as f:
+        f.write(f"Begin Python Execution: {date_start}\n")
+        f.write(f"Graph Read: {date_read_graph}\n")
+        f.write(f"Computation Executed: {date_executed_computation}\n")
+        f.write(f"Result Stored: {date_stored_result}\n")
+        f.write(f"Total Time: {date_stored_result - date_start}")
 
 
 if __name__ == "__main__":

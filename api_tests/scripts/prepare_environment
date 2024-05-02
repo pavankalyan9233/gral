@@ -17,9 +17,6 @@ cecho "CYAN" "-> Docker and gral logs will be saved in api_tests/logs folder (on
 
 docker compose up -d &> api_tests/logs/docker.txt
 
-# Integration tests now do require the wiki-Talk dataset to be loaded
-(cd examples || return; npm install; ./scripts/downloadSingleDataset wiki-Talk; node main.js --graphName wiki-Talk -d true --mqs 100 --con 10 --verifyGraph true)
-
 # If the target/release/gral binary does not exists, build it
 if [ ! -f target/release/gral ]; then
     cecho "CYAN" "Building gral..."
