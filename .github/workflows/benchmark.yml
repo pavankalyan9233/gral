@@ -38,6 +38,7 @@ jobs:
         run: |
           cd api_tests
           source /root/.bashrc
+          export PYTHON3_BINARY_PATH=/mnt/python-venv/bin/python
           npm run benchmark
 
   # This section is probably not needed and will automatically remove the orphaned gral process
