@@ -16,9 +16,9 @@ jobs:
       - name: Run gral
         run: ./target/release/gral --bind-port 1335 --arangodb-endpoints http://localhost:9529 --arangodb-jwt-secrets ./secrets.jwt &
       - name: Install examples node dependencies
-        run: cd examples && npm install
+        run: cd examples && nvm use 22.0.0 && npm install
       - name: Install api_tests node dependencies
-        run: cd api_tests && npm install
+        run: cd api_tests && nvm use 22.0.0 && npm install
       - name: Modify environment configuration for vitest
         run: |
           new_arangodb_endpoint="http://localhost:9529"
@@ -28,6 +28,7 @@ jobs:
       - name: Run benchmark
         run: |
           cd api_tests
+          nvm use 22.0.0
           npm run benchmark
 
   cleanup:
