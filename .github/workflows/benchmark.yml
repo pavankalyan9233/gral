@@ -18,12 +18,15 @@ jobs:
         with:
           node-version: '22'
       - name: Check Python3 dependencies # Python 3.11.6 is installed @ Kernstation
-        run: pip3 install -r src/python/assets/requirements.txt
+        run: |
+          source /mnt/python-venv/activate
+          pip3 install -r src/python/assets/requirements.txt
       - name: Build gral
         run: cargo build --release
       - name: Run gral
         run: |
-          ./target/release/gral --bind-port 1335 --arangodb-endpoints=https://localhost:9529,https://localhost:9539,https://localhost:9549 --arangodb-jwt-secrets /mnt/gral/secrets.jwt &
+          source /mnt/python-venv/activate
+          PYTHON3_BINARY_PATH=/mnt/python-venv/bin/python && ./target/release/gral --bind-port 1335 --arangodb-endpoints=https://localhost:9529,https://localhost:9539,https://localhost:9549 --arangodb-jwt-secrets /mnt/gral/secrets.jwt &
       - name: Install examples node dependencies
         run: cd examples && source /root/.bashrc && npm install
       - name: Install api_tests node dependencies
