@@ -49,8 +49,4 @@ jobs:
         run: |
           cd api_tests
           source /root/.bashrc
-          output=$(npm run benchmark)
-          echo "::set-output name=benchmark_output::$output"
-      - name: Display Benchmark Output
-        run: |
-          echo "Script output: ${{ steps.run_benchmark.outputs.benchmark_output }}"
+          npm run benchmark
