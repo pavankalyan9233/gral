@@ -17,13 +17,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-        env:
-          AGENT_TOOLSDIRECTORY: /opt/hostedtoolcache
-      - run: pip install -r src/python/assets/requirements.txt
+      - name: Check Python3 dependencies # Python 3.11.6 is installed @ Kernstation
+        run: pip3 install -r src/python/assets/requirements.txt
       - name: Build gral
         run: cargo build --release
       - name: Run gral
