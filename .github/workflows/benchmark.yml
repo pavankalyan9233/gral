@@ -55,8 +55,7 @@ jobs:
         if: always()
         with:
           files: |
-            benchmark/*.xml
-            benchmark/*.json
+            api_tests/benchmark/*.xml
 
       #- name: Upload artifact
       #  uses: actions/upload-artifact@v4
