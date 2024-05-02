@@ -4,6 +4,9 @@ name: "Benchmark Kernstation"
 # This instance has the data already loaded into the database "benchmark".
 on: workflow_dispatch
 
+env:
+  PYTHON3_BINARY_PATH: /mnt/python-venv/bin/python
+
 jobs:
   benchmark:
     name: Full Benchmark Suite
@@ -26,7 +29,7 @@ jobs:
       - name: Run gral
         run: |
           source /mnt/python-venv/bin/activate
-          PYTHON3_BINARY_PATH=/mnt/python-venv/bin/python ./target/release/gral --bind-port 1335 --arangodb-endpoints=https://localhost:9529,https://localhost:9539,https://localhost:9549 --arangodb-jwt-secrets /mnt/gral/secrets.jwt &
+          ./target/release/gral --bind-port 1335 --arangodb-endpoints=https://localhost:9529,https://localhost:9539,https://localhost:9549 --arangodb-jwt-secrets /mnt/gral/secrets.jwt &
       - name: Install examples node dependencies
         run: cd examples && source /root/.bashrc && npm install
       - name: Install api_tests node dependencies
@@ -44,7 +47,7 @@ jobs:
         run: |
           cd api_tests
           source /root/.bashrc
-          npm run benchmark_json
+          npm run benchmark
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
