@@ -31,7 +31,7 @@ def read_graph_pyarrow(graph_file_path):
 
     fr = df_edges["_from"]
     to = df_edges["_to"]
-    edges = [fr[i].as_py(), to[i].as_py() for i in range(len(fr))];
+    edges = [(fr[i].as_py(), to[i].as_py()) for i in range(len(fr))];
     graph = nx.Graph()
     graph.add_edges_from(edges)
     return graph
