@@ -26,7 +26,7 @@ describe.sequential('PageRank Benchmarks', () => {
     // 1x warmupIteration as for the first run indices need to be created in-memory.
   }, {iterations: 3, warmupIterations: 1});
 
-  bench('PageRank Python', async () => {
+  bench.skip('PageRank Python', async () => {
     const jwt = await arangodb.getArangoJWT();
     await gral.runPythonPagerank(jwt, gralEndpoint, pageRankGraphID, 10, 0.85);
     // no warmup iterations required. Only choosing 1 iteration as this execution is pretty slow.

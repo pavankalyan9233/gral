@@ -48,13 +48,21 @@ jobs:
         run: |
           cd api_tests
           source /root/.bashrc
-          npm run benchmark
+          npm run benchmark_junit
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
         with:
-          name: BenchmarkResultJson
-          path: api_tests/benchmark/benchmark.json
+          files: |
+            benchmark/**/*.xml
+            benchmark/**/*.json
+
+      #- name: Upload artifact
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: BenchmarkResultJUNIT
+      #    path: api_tests/benchmark/benchmark.xml
 
   # This section is probably not needed and will automatically remove the orphaned gral process
   #cleanup:
