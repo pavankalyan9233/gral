@@ -89,6 +89,26 @@ async function loadGraph(
   }
 }
 
+async function runIRank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {
+  const url = buildUrl(gralEndpoint, '/v1/irank');
+  const iRankRequest = {
+    "graph_id": graphId,
+    "maximum_supersteps": maxSupersteps,
+    "damping_factor": dampingFactor
+  };
+
+  const response = await axios.post(
+    url, iRankRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
 async function runPagerank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {
   const url = buildUrl(gralEndpoint, '/v1/pagerank');
   const pagerankRequest = {
@@ -130,14 +150,55 @@ async function runPythonPagerank(jwt: string, gralEndpoint: string, graphId: num
   }
 }
 
+async function runWCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+  const url = buildUrl(gralEndpoint, '/v1/wcc');
+  const wccRequest = {
+    "graph_id": graphId,
+    "custom_fields": customFields
+  };
+
+  const response = await axios.post(
+    url, wccRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function runSCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+  const url = buildUrl(gralEndpoint, '/v1/scc');
+  const wccRequest = {
+    "graph_id": graphId,
+    "custom_fields": customFields
+  };
+
+  const response = await axios.post(
+    url, wccRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
 export const gral = {
   buildUrl,
   buildHeaders,
   shutdownInstance,
   waitForJobToBeFinished,
   loadGraph,
+  runIRank,
   runPagerank,
-  runPythonPagerank
+  runPythonPagerank,
+  runWCC,
+  runSCC
 };
 
 module.exports = gral;
