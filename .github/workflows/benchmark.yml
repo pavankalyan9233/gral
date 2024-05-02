@@ -44,7 +44,13 @@ jobs:
         run: |
           cd api_tests
           source /root/.bashrc
-          npm run benchmark
+          npm run benchmark_json
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BenchmarkResultJson
+          path: api_tests/benchmark/benchmark.json
 
   # This section is probably not needed and will automatically remove the orphaned gral process
   #cleanup:
