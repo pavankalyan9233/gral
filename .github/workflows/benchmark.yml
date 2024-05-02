@@ -24,6 +24,7 @@ jobs:
         run: |
           source /mnt/python-venv/bin/activate
           pip3 install -r src/python/assets/requirements.txt
+          echo "PATH=$PATH" >> $GITHUB_ENV
       - name: Build gral
         run: cargo build --release
       - name: Run gral
