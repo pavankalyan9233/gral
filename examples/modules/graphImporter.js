@@ -79,7 +79,7 @@ export class GraphImporter {
     return lineCount;
   }
 
-  insertManyDocumentsIntoCollection = async (db, coll, maker, limit, batchSize, vertexInsert = true, startAtZero = false) => {
+  insertManyDocumentsIntoCollection = async (db, coll, maker, limit, batchSize, generatorInsertion = true, startAtZero = false) => {
     // This function uses the asynchronous API of `arangod` to quickly
     // insert a lot of documents into a collection. You can control which
     // documents to insert with the `maker` function. The arguments are:
@@ -121,7 +121,7 @@ export class GraphImporter {
     const {expectedAmountOfVertices, _} = await this.getVertexAndEdgeCountsToInsert();
 
     let docsToBeInserted;
-    if (vertexInsert) {
+    if (generatorInsertion) {
       docsToBeInserted = expectedAmountOfVertices;
     } else {
       // We are inserting edges here and passing an array instead of a maker method
@@ -216,6 +216,63 @@ export class GraphImporter {
     }
   };
 
+  async processVertexFile(filePath, batchSize = 10000) {
+    // TODO Minor: At some point we can merge this with edge insert. Also we can now reduce complexity
+    //  of insertManyDocumentsIntoCollection. But this is not important and a priority right now.
+    const fileStream = fs.createReadStream(filePath);
+    const rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity, // Recognize all line breaks
+    });
+
+    let docs = [];
+    const queue = new PQueue({concurrency: this.concurrency});
+
+    queue.on('active', () => {
+      if (printMessages) {
+        console.log(`Working on vertices. Queue Size: ${queue.size} - Still Pending: ${queue.pending}`);
+        printMessages = false; // Set flag to false to prevent immediate consecutive prints
+        setTimeout(() => {
+          printMessages = true; // Set flag to true after 5 seconds
+        }, intervalTime);
+      }
+    });
+
+    for await (const line of rl) {
+      // Assuming each line contains two numeric values separated by a space
+      docs.push({
+        _key: `${line}`
+      });
+
+      if (docs.length === batchSize) {
+        while (true) {
+          if (queue.size < this.max_queue_size) {
+            break;
+          } else {
+            console.log(`=> Queue rate limiting. Reached ${this.max_queue_size} elements. Sleeping 5 seconds.`)
+            await sleep(5000);
+          }
+        }
+
+        const copyDocs = [...docs];
+        queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
+          copyDocs, copyDocs.length, batchSize, false));
+        docs = [];
+      }
+    }
+
+    if (docs.length > 0) {
+      // last batch might still contain documents
+      const copyDocs = [...docs];
+      queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
+        copyDocs, copyDocs.length, batchSize, false));
+    }
+
+    // wait for all futures
+    await queue.onIdle();
+    console.log(`-> Done inserting vertices into collection ${this.graphName}_v`);
+  }
+
   async processEdgeFile(filePath, batchSize = 10000) {
     const fileStream = fs.createReadStream(filePath);
     const rl = readline.createInterface({
@@ -280,16 +337,9 @@ export class GraphImporter {
   }
 
   async insertVertices() {
+    console.log(`Will now insert edges into collection ${this.graphName}_v. This will take a while...`)
     const filePath = new URL(`../data/${this.graphName}/${this.graphName}.v`, import.meta.url).pathname;
-    const lineCount = await this.countLinesUsingWc(filePath);
-    const startsWithZero = await this.checkIfFirstVertexIdIsZero(filePath);
-    console.log(`Will now insert vertices into collection ${this.graphName}_v. This will take a while...`)
-
-    await this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
-      function (i) {
-        return {_key: JSON.stringify(i)};
-      },
-      lineCount, 10000, true, startsWithZero);
+    await this.processVertexFile(filePath, 10000);
   }
 
   async createGraphWithVerticesAndEdges(vertices, edges) {
