@@ -16,9 +16,9 @@ jobs:
       - name: Run gral
         run: ./target/release/gral --bind-port 1335 --arangodb-endpoints http://localhost:9529 --arangodb-jwt-secrets ./secrets.jwt &
       - name: Install examples node dependencies
-        run: cd examples && nvm use 22.0.0 && npm install
+        run: cd examples && source /root/.bashrc && npm install
       - name: Install api_tests node dependencies
-        run: cd api_tests && nvm use 22.0.0 && npm install
+        run: cd api_tests && source /root/.bashrc && npm install
       - name: Modify environment configuration for vitest
         run: |
           new_arangodb_endpoint="http://localhost:9529"
@@ -28,12 +28,13 @@ jobs:
       - name: Run benchmark
         run: |
           cd api_tests
-          nvm use 22.0.0
+          source /root/.bashrc
           npm run benchmark
 
-  cleanup:
-    runs-on: self-hosted
-    needs: [benchmark]  # Wait for the benchmark job to finish
-    steps:
-      - name: Kill gral process
-        run: pkill gral || true  # Kill the gral process if it's running, ignore errors if it's not found
+  # This section is probably not needed and will automatically remove the orphaned gral process
+  #cleanup:
+  #  runs-on: self-hosted
+  #  needs: [benchmark]  # Wait for the benchmark job to finish
+  #  steps:
+  #    - name: Kill gral process
+  #      run: pkill gral || true  # Kill the gral process if it's running, ignore errors if it's not found
