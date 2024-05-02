@@ -6,19 +6,33 @@ jobs:
   benchmark:
     name: Full Benchmark Suite
     runs-on: self-hosted
-    # runs-on: ubuntu-latest
     steps:
       - name: checkout repo
         uses: actions/checkout@main
       - name: Checkout
         uses: actions/checkout@v2 # Required to mount the Github Workspace to a volume
-      #- name: Install rust
-      #  run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - name: Build gral
-        #run: source $HOME/.cargo/env && cargo build --release
         run: cargo build --release
-      - name: Install node dependencies
+      - name: Run gral
+        run: ./target/release/gral --bind-port 1335 --arangodb-endpoints http://localhost:9529 --arangodb-jwt-secrets ./secrets.jwt &
+      - name: Install examples node dependencies
+        run: cd examples && npm install
+      - name: Install api_tests node dependencies
         run: cd api_tests && npm install
+      - name: Modify environment configuration for vitest
+        run: |
+          new_arangodb_endpoint="http://localhost:9529"
+          new_arangodb_auth="http://localhost:1335"
+          sed -i "s|arangodb_auth: \"http://localhost:9999\"|arangodb_auth: \"$new_arangodb_auth\"|g" environment.config.ts
+          sed -i "s|endpoint: \"http://localhost:8529\"|endpoint: \"$new_arangodb_endpoint\"|g" environment.config.ts
       - name: Run benchmark
-        run: cd api_tests && npm run benchmark
+        run: |
+          cd api_tests
+          npm run benchmark
 
+  cleanup:
+    runs-on: self-hosted
+    needs: [benchmark]  # Wait for the benchmark job to finish
+    steps:
+      - name: Kill gral process
+        run: pkill gral || true  # Kill the gral process if it's running, ignore errors if it's not found
