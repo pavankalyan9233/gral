@@ -1,5 +1,7 @@
 name: "Benchmark Kernstation"
-
+# This Job is specifically designed for the custom runner kernstation
+# Gral will be compiled and started, but we will use a running ArangoDB instance.
+# This instance has the data already loaded into the database "benchmark".
 on: workflow_dispatch
 
 jobs:

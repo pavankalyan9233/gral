@@ -31,10 +31,13 @@ export class GraphImporter {
     this.expectedAmountOfVertices = null;
     this.expectedAmountOfEdges = null;
 
-    let agentOptions = {};
+    let agentOptions = {
+      rejectUnauthorized: false
+    };
     if (arangoConfig.ca) {
       // This is specifically here to support ArangoGraph connections
       agentOptions.ca = Buffer.from(arangoConfig.ca, "base64");
+      agentOptions.rejectUnauthorized = true;
     }
 
     this.db = new Database({
