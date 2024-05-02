@@ -28,7 +28,7 @@ jobs:
       - name: Modify environment configuration for vitest
         run: |
           cd api_tests
-          new_arangodb_endpoint="http://localhost:9529"
+          new_arangodb_endpoint="https://localhost:9529"
           new_arangodb_auth="http://localhost:1335"
           new_arangodb_database="benchmark"
           sed -i "s|arangodb_auth: \"http://localhost:9999\"|arangodb_auth: \"$new_arangodb_auth\"|g" environment.config.ts
