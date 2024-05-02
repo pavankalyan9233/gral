@@ -1,0 +1,24 @@
+name: "Benchmark Kernstation"
+
+on: workflow_dispatch
+
+jobs:
+  benchmark:
+    name: Full Benchmark Suite
+    runs-on: kernstation
+    # runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@main
+      - name: Checkout
+        uses: actions/checkout@v2 # Required to mount the Github Workspace to a volume
+      #- name: Install rust
+      #  run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - name: Build gral
+        #run: source $HOME/.cargo/env && cargo build --release
+        run: cargo build --release
+      - name: Install node dependencies
+        run: cd api_tests && npm install
+      - name: Run benchmark
+        run: cd api_tests && npm run benchmark
+
