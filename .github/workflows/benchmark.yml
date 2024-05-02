@@ -20,7 +20,7 @@ jobs:
       - name: Build gral
         run: cargo build --release
       - name: Run gral
-        run: ./target/release/gral --bind-port 1335 --arangodb-endpoints http://localhost:9529 --arangodb-jwt-secrets ./secrets.jwt &
+        run: ./target/release/gral --bind-port 1335 --arangodb-endpoints=https://localhost:9529,https://localhost:9539,https://localhost:9549 --arangodb-jwt-secrets /mnt/gral/secrets.jwt &
       - name: Install examples node dependencies
         run: cd examples && source /root/.bashrc && npm install
       - name: Install api_tests node dependencies
