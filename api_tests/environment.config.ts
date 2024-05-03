@@ -15,7 +15,8 @@ export const config = {
   test_configuration: {
     short_timeout: 7500,
     medium_timeout: 15000,
-    long_timeout: 30000
+    long_timeout: 30000,
+    xtra_long_timeout: 60000
   },
   benchmark: {
     // Please keep this array in sync with /api_tests/scripts/import_benchmark_datasets

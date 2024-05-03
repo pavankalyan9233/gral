@@ -3,6 +3,7 @@ import {config} from '../environment.config';
 import {arangodb} from '../helpers/arangodb';
 import {gral} from '../helpers/gral';
 import axios from 'axios';
+import {validator} from "../helpers/validator";
 
 const gralEndpoint = config.gral_instances.arangodb_auth;
 
@@ -65,6 +66,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
 
   let jwt: string;
   let graph_idForComputation: string;
+  let result_id: string;
 
   beforeAll(async () => {
     jwt = await arangodb.getArangoJWT();
@@ -209,7 +211,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     const url = gral.buildUrl(gralEndpoint, '/v1/pagerank');
     const graphAnalyticsEngineRunPageRank = {
       "graph_id": graph_idForComputation,
-      "maximum_supersteps": 5,
+      "maximum_supersteps": 10,
       "damping_factor": 0.85
     };
     const response = await axios.post(
@@ -237,6 +239,24 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     expectTypeOf(jobResponse.result.memory_usage).toBeString();
     const memory_usage = parseInt(jobResponse.result.memory_usage);
     expect(memory_usage).toBeGreaterThan(0);
-  });
+    result_id = jobResponse.result.job_id;
+  }, config.test_configuration.medium_timeout);
+
+  test('Use wiki-Talk result file to check if the computed pagerank values are correct', async () => {
+    const resultAttrName = 'iResult';
+    const resultCollection = await arangodb.createDocumentCollection('results');
+    await gral.storeComputationResult(
+      result_id, config.arangodb.database, resultCollection.name, resultAttrName, jwt, gralEndpoint
+    );
+    const count = await resultCollection.count();
+    expect(count.count).toBe(2394385);
+
+    const computedDocs = await arangodb.executeQuery(`
+      FOR doc IN ${resultCollection.name}
+      RETURN [TO_NUMBER(SPLIT(doc.id, "/")[1]), doc.${resultAttrName}]
+    `);
+
+    await validator.verifyPageRankDocuments('wiki-Talk', computedDocs);
+  }, config.test_configuration.xtra_long_timeout);
 
 });
