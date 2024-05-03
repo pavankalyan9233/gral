@@ -15,14 +15,14 @@ describe.sequential('PageRank Benchmarks', () => {
     //  only get algorithm related benchmark results here.
     const jwt = await arangodb.getArangoJWT();
     const graphName = 'wiki-Talk';
-    const response = await gral.loadGraph(jwt, gralEndpoint, graphName);
+    const vertexAttributes = ["_id", "@collectionname"]
+    const response = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], vertexAttributes);
     wikiTalkGraphID = response.result.graph_id;
   }, {iterations: 1, warmupIterations: 0});
 
   // Then, execute all algorithms we want to run on it
 
-  // Currently skipped, as usage is not clear.
-  bench.skip('iRank', async () => {
+  bench('iRank', async () => {
     const jwt = await arangodb.getArangoJWT();
     await gral.runIRank(jwt, gralEndpoint, wikiTalkGraphID, 10, 0.85);
     // 1x warmupIteration as for the first run indices need to be created in-memory.

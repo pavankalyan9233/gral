@@ -68,13 +68,14 @@ async function loadGraph(
   gralEndpoint: string,
   graphName: string,
   vertexCollections: string[] = [],
-  edgeCollections: string[] = []) {
+  edgeCollections: string[] = [], vertexAttributes: string[] = []) {
   const url = buildUrl(gralEndpoint, '/v1/loaddata');
   const graphAnalyticsEngineLoadDataRequest = {
     "database": config.arangodb.database,
     "graph_name": graphName,
     "vertex_collections": vertexCollections,
-    "edge_collections": edgeCollections
+    "edge_collections": edgeCollections,
+    "vertex_attributes": vertexAttributes
   };
 
   const response = await axios.post(
@@ -97,10 +98,15 @@ async function runIRank(jwt: string, gralEndpoint: string, graphId: number, maxS
     "damping_factor": dampingFactor
   };
 
-  const response = await axios.post(
-    url, iRankRequest, buildHeaders(jwt)
-  );
-  const body = response.data;
+  let body;
+  try {
+    const response = await axios.post(
+      url, iRankRequest, buildHeaders(jwt)
+    );
+    body = response.data;
+  } catch (error) {
+    console.log(error);
+  }
 
   try {
     return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
