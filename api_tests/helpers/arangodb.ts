@@ -1,6 +1,7 @@
 const axios = require('axios');
 import {config} from '../environment.config';
 import {Database} from 'arangojs';
+import * as https from "https";
 
 function buildArangoDBUrl(path: string) {
   if (path[0] !== '/') {
@@ -17,6 +18,14 @@ async function getArangoJWT(maxRetries: number = 1) {
       const response = await axios.post(buildArangoDBUrl('/_open/auth'), {
         username: config.arangodb.username,
         password: config.arangodb.password
+      }, {
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false
+        }),
+        auth: {
+          username: config.arangodb.username,
+          password: config.arangodb.password,
+        },
       });
       return response.data['jwt'];
     } catch (error) {

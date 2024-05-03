@@ -1,24 +1,52 @@
 name: "Benchmark Kernstation"
-
+# This Job is specifically designed for the custom runner kernstation
+# Gral will be compiled and started, but we will use a running ArangoDB instance.
+# This instance has the data already loaded into the database "benchmark".
 on: workflow_dispatch
+
+env:
+  PYTHON3_BINARY_PATH: /mnt/python-venv/bin/python
 
 jobs:
   benchmark:
     name: Full Benchmark Suite
     runs-on: self-hosted
-    # runs-on: ubuntu-latest
     steps:
       - name: checkout repo
         uses: actions/checkout@main
       - name: Checkout
-        uses: actions/checkout@v2 # Required to mount the Github Workspace to a volume
-      #- name: Install rust
-      #  run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        uses: actions/checkout@v4 # Required to mount the Github Workspace to a volume
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Python3 dependencies # Python 3.11.6 is installed @ Kernstation
+        run: |
+          source /mnt/python-venv/bin/activate
+          pip3 install -r src/python/assets/requirements.txt
+          echo "PATH=$PATH" >> $GITHUB_ENV
       - name: Build gral
-        #run: source $HOME/.cargo/env && cargo build --release
         run: cargo build --release
-      - name: Install node dependencies
-        run: cd api_tests && npm install
+      - name: Run gral
+        run: |
+          source /mnt/python-venv/bin/activate
+          ./target/release/gral --bind-port 1335 --arangodb-endpoints=https://localhost:9529,https://localhost:9539,https://localhost:9549 --arangodb-jwt-secrets /mnt/gral/secrets.jwt &
+      - name: Install examples node dependencies
+        run: cd examples && source /root/.bashrc && npm install
+      - name: Install api_tests node dependencies
+        run: cd api_tests && source /root/.bashrc && npm install
+      - name: Modify environment configuration for vitest
+        run: |
+          cd api_tests
+          new_arangodb_endpoint="https://localhost:9529"
+          new_arangodb_auth="http://localhost:1335"
+          new_arangodb_database="benchmark"
+          sed -i "s|arangodb_auth: \"http://localhost:9999\"|arangodb_auth: \"$new_arangodb_auth\"|g" environment.config.ts
+          sed -i "s|endpoint: \"http://localhost:8529\"|endpoint: \"$new_arangodb_endpoint\"|g" environment.config.ts
+          sed -i "s|database: \"_system\"|database: \"$new_arangodb_database\"|g" environment.config.ts
       - name: Run benchmark
-        run: cd api_tests && npm run benchmark
-
+        id: run_benchmark
+        run: |
+          cd api_tests
+          source /root/.bashrc
+          npm run benchmark

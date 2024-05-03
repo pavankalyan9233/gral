@@ -71,7 +71,7 @@ async function loadGraph(
   edgeCollections: string[] = []) {
   const url = buildUrl(gralEndpoint, '/v1/loaddata');
   const graphAnalyticsEngineLoadDataRequest = {
-    "database": "_system",
+    "database": config.arangodb.database,
     "graph_name": graphName,
     "vertex_collections": vertexCollections,
     "edge_collections": edgeCollections
