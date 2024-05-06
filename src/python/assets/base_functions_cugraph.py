@@ -23,8 +23,8 @@ def store_computation_flexible(result):
     if isinstance(result, dict):
         df = pd.DataFrame(list(result.items()), columns=['Node', 'Result'])
         df.to_parquet(result_file_path)
-    elif isinstance(result, pa.Table):
-        pq.write_table(result, result_file_path)
+    elif isinstance(result, pd.DataFrame):
+        result.to_parquet(result_file_path)
     elif isinstance(result, cudf.core.dataframe.DataFrame):
         result.to_parquet(result_file_path)
     else:
@@ -50,11 +50,6 @@ def main():
         f.write(f"Computation Executed: {date_executed_computation}\n")
         f.write(f"Result Stored: {date_stored_result}\n")
         f.write(f"Total Time: {date_stored_result - date_start}")
-    print(f"Begin Python Execution: {date_start}\n")
-    print(f"Graph Read: {date_read_graph}\n")
-    print(f"Computation Executed: {date_executed_computation}\n")
-    print(f"Result Stored: {date_stored_result}\n")
-    print(f"Total Time: {date_stored_result - date_start}")
 
 
 if __name__ == "__main__":
