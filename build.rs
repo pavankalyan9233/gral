@@ -43,8 +43,14 @@ fn main() -> Result<()> {
         out_dir.join("base_functions.py"),
     )
     .expect("Failed to copy Python script to output directory");
+    std::fs::copy(
+        "src/python/assets/base_functions_cugraph.py",
+        out_dir.join("base_functions_cugraph.py"),
+    )
+    .expect("Failed to copy Python cugraph script to output directory");
 
     println!("cargo:rerun-if-changed=src/python/snippets/base_functions.py");
+    println!("cargo:rerun-if-changed=src/python/snippets/base_functions_cugraph.py");
 
     Ok(())
 }

@@ -413,10 +413,13 @@ message GraphAnalyticsEnginePythonFunctionRequest {
     // Graph ID
     uint64 graph_id = 1;
     // The python-based code to be executed. A method called `def worker(graph)`
-    // must be defined. The method must return a dictionary with the
-    // results. The key inside that dict must represent the vertex id,
-    // the value (actual computation result) can be of any type.
+    // must be defined. The method must return a dataframe or dictionary 
+    // with the results. The key inside that dict must represent the
+    // vertex id, the value (actual computation result) can be of any
+    // type.
     string function = 2;
+    // Use cugraph (or regular pandas/pyarrow):
+    bool use_cugraph = 3;
 }
 
 // Request arguments for GraphAnalyticsEngineRunLabelPropagation.

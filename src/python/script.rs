@@ -23,11 +23,18 @@ impl Script {
     }
 }
 
-fn read_base_script() -> Result<String, String> {
-    let res = std::str::from_utf8(include_bytes!(concat!(
-        env!("OUT_DIR"),
-        "/base_functions.py"
-    )));
+fn read_base_script(use_cugraph: bool) -> Result<String, String> {
+    let res = if use_cugraph {
+        std::str::from_utf8(include_bytes!(concat!(
+            env!("OUT_DIR"),
+            "/base_functions_cugraph.py"
+        )))
+    } else {
+        std::str::from_utf8(include_bytes!(concat!(
+            env!("OUT_DIR"),
+            "/base_functions.py"
+        )))
+    };
     if res.is_err() {
         return Err("Failed to read base script".to_string());
     }
@@ -36,12 +43,13 @@ fn read_base_script() -> Result<String, String> {
 
 pub fn generate_script(
     user_script: String,
+    use_cugraph: bool,
     result_file_path: String,
     graph_file_path: String,
 ) -> Result<Script, String> {
     let lines = vec![];
     let mut script = Script { lines };
-    let base_script_str = read_base_script()?;
+    let base_script_str = read_base_script(use_cugraph)?;
 
     for line in base_script_str.lines() {
         if line.contains("<Placeholder for graph_file_path>") {
@@ -49,10 +57,12 @@ pub fn generate_script(
                 .lines
                 .push(format!("graph_file_path = \"{}\"", graph_file_path));
             continue;
-        } else if line.contains("<Placeholder for user injected script>") {
+        }
+        if line.contains("<Placeholder for user injected script>") {
             script.lines.push(user_script.clone());
             continue;
-        } else if line.contains("<Placeholder for result file path>") {
+        }
+        if line.contains("<Placeholder for result file path>") {
             script
                 .lines
                 .push(format!("result_file_path = \"{}\"", result_file_path));

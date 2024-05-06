@@ -40,7 +40,7 @@ mod tests {
             result: Default::default(),
         }));
 
-        let res = executor::execute_python_script_on_graph(comp_arc, g_arc, user_snippet);
+        let res = executor::execute_python_script_on_graph(comp_arc, g_arc, user_snippet, false);
         assert!(res.is_ok());
     }
 
@@ -49,8 +49,13 @@ mod tests {
         let user_script_snippet = "def worker(): print('Hello, World!')".to_string();
         let result_path_file = "result.parquet".to_string();
         let graph_path_file = "graph.parquet".to_string();
-        let script =
-            generate_script(user_script_snippet, result_path_file, graph_path_file).unwrap();
+        let script = generate_script(
+            user_script_snippet,
+            false,
+            result_path_file,
+            graph_path_file,
+        )
+        .unwrap();
 
         let script_file = script.write_to_file();
         let file_path = script_file
