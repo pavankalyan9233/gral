@@ -73,29 +73,9 @@ describe('Python integration', () => {
     const resultCollection = await arangodb.createDocumentCollection('results');
     const comp_id = pythonComputationResult.job_id;
 
-    const storeResultRequestBody = {
-      "job_ids": [comp_id],
-      "attribute_names": ["iResult"],
-      "database": "_system",
-      "target_collection": "results",
-    };
-    const storeResultsUrl = gral.buildUrl(gralEndpoint, '/v1/storeresults');
-    const storeResultsResponse = await axios.post(
-      storeResultsUrl, storeResultRequestBody, gral.buildHeaders(jwt)
+    await gral.storeComputationResult(
+      comp_id, '_system', resultCollection.name, 'iResult', jwt, gralEndpoint
     );
-    expect(storeResultsResponse.status).toBe(200);
-    expect(storeResultsResponse.data.error_code).toBe(0);
-    expect(storeResultsResponse.data.error_message).toBe('');
-    expect(storeResultsResponse.data.job_id).toBeTypeOf('number');
-    expect(storeResultsResponse.data.job_id).toBeGreaterThan(0);
-
-
-    const storeResultsJobId = storeResultsResponse.data.job_id;
-    const storeJobResponse = await gral.waitForJobToBeFinished(gralEndpoint, jwt, storeResultsJobId);
-    const storeJobResult = storeJobResponse.result;
-    expect(storeJobResult.error_code).toBe(0);
-    expect(storeJobResult.error_message).toBe('');
-    expect(storeJobResult.comp_type).toBe('Store Operation');
 
     const collectionProps = await resultCollection.count();
     expect(collectionProps.count).toBe(5);

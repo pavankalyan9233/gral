@@ -50,6 +50,11 @@ function getArangoJSDatabaseInstance() {
   });
 }
 
+async function executeQuery(query: string) {
+  const db = getArangoJSDatabaseInstance();
+  return await db.query(query);
+}
+
 async function createDocumentCollection(collectionName: string, tryDrop: boolean = true) {
   const db = getArangoJSDatabaseInstance();
 
@@ -65,7 +70,7 @@ async function createDocumentCollection(collectionName: string, tryDrop: boolean
 }
 
 export const arangodb = {
-  getArangoJWT, createDocumentCollection, getArangoJSDatabaseInstance
+  getArangoJWT, createDocumentCollection, getArangoJSDatabaseInstance, executeQuery
 };
 
 

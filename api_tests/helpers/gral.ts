@@ -1,5 +1,6 @@
 import {config} from '../environment.config';
 import axios from "axios";
+import {expect} from "vitest";
 
 function buildUrl(endpoint: string, path: string) {
   if (endpoint !== config.gral_instances.arangodb_auth && endpoint !== config.gral_instances.service_auth && endpoint !== config.gral_instances.service_auth_unreachable) {
@@ -63,24 +64,87 @@ async function shutdownInstance(endpoint: string, jwt: string) {
   });
 }
 
+async function storeComputationResult(
+  job_id: string, databaseName: string = '_system',
+  targetCollectionName: string,
+  attributeName: string,
+  jwt: string,
+  gralEndpoint: string) {
+  const storeResultRequestBody = {
+    "job_ids": [job_id],
+    "attribute_names": [attributeName],
+    "database": databaseName,
+    "target_collection": targetCollectionName,
+  };
+
+  let storeResultsResponse;
+  const storeResultsUrl = gral.buildUrl(gralEndpoint, '/v1/storeresults');
+  try {
+    storeResultsResponse = await axios.post(
+      storeResultsUrl, storeResultRequestBody, gral.buildHeaders(jwt)
+    );
+  } catch (error) {
+    console.log(error);
+  }
+
+  expect(storeResultsResponse.status).toBe(200);
+  expect(storeResultsResponse.data.error_code).toBe(0);
+  expect(storeResultsResponse.data.error_message).toBe('');
+  expect(storeResultsResponse.data.job_id).toBeTypeOf('number');
+  expect(storeResultsResponse.data.job_id).toBeGreaterThan(0);
+
+  const storeResultsJobId = storeResultsResponse.data.job_id;
+  const storeJobResponse = await gral.waitForJobToBeFinished(gralEndpoint, jwt, storeResultsJobId);
+  const storeJobResult = storeJobResponse.result;
+  expect(storeJobResult.error_code).toBe(0);
+  expect(storeJobResult.error_message).toBe('');
+  expect(storeJobResult.comp_type).toBe('Store Operation');
+}
+
 async function loadGraph(
   jwt: string,
   gralEndpoint: string,
   graphName: string,
   vertexCollections: string[] = [],
-  edgeCollections: string[] = []) {
+  edgeCollections: string[] = [], vertexAttributes: string[] = []) {
   const url = buildUrl(gralEndpoint, '/v1/loaddata');
   const graphAnalyticsEngineLoadDataRequest = {
     "database": config.arangodb.database,
     "graph_name": graphName,
     "vertex_collections": vertexCollections,
-    "edge_collections": edgeCollections
+    "edge_collections": edgeCollections,
+    "vertex_attributes": vertexAttributes
   };
 
   const response = await axios.post(
     url, graphAnalyticsEngineLoadDataRequest, buildHeaders(jwt)
   );
   const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function runIRank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {
+  const url = buildUrl(gralEndpoint, '/v1/irank');
+  const iRankRequest = {
+    "graph_id": graphId,
+    "maximum_supersteps": maxSupersteps,
+    "damping_factor": dampingFactor
+  };
+
+  let body;
+  try {
+    const response = await axios.post(
+      url, iRankRequest, buildHeaders(jwt)
+    );
+    body = response.data;
+  } catch (error) {
+    console.log(error);
+  }
 
   try {
     return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
@@ -130,14 +194,56 @@ async function runPythonPagerank(jwt: string, gralEndpoint: string, graphId: num
   }
 }
 
+async function runWCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+  const url = buildUrl(gralEndpoint, '/v1/wcc');
+  const wccRequest = {
+    "graph_id": graphId,
+    "custom_fields": customFields
+  };
+
+  const response = await axios.post(
+    url, wccRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function runSCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+  const url = buildUrl(gralEndpoint, '/v1/scc');
+  const wccRequest = {
+    "graph_id": graphId,
+    "custom_fields": customFields
+  };
+
+  const response = await axios.post(
+    url, wccRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
 export const gral = {
   buildUrl,
   buildHeaders,
+  storeComputationResult,
   shutdownInstance,
   waitForJobToBeFinished,
   loadGraph,
+  runIRank,
   runPagerank,
-  runPythonPagerank
+  runPythonPagerank,
+  runWCC,
+  runSCC
 };
 
 module.exports = gral;
