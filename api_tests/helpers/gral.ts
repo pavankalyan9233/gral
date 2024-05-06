@@ -1,6 +1,6 @@
 import {config} from '../environment.config';
 import axios from "axios";
-import {expect} from "vitest";
+import { strict as assert } from 'assert';
 
 function buildUrl(endpoint: string, path: string) {
   if (endpoint !== config.gral_instances.arangodb_auth && endpoint !== config.gral_instances.service_auth && endpoint !== config.gral_instances.service_auth_unreachable) {
@@ -87,18 +87,18 @@ async function storeComputationResult(
     console.log(error);
   }
 
-  expect(storeResultsResponse.status).toBe(200);
-  expect(storeResultsResponse.data.error_code).toBe(0);
-  expect(storeResultsResponse.data.error_message).toBe('');
-  expect(storeResultsResponse.data.job_id).toBeTypeOf('number');
-  expect(storeResultsResponse.data.job_id).toBeGreaterThan(0);
+  assert(storeResultsResponse.status === 200);
+  assert(storeResultsResponse.data.error_code === 0);
+  assert(storeResultsResponse.data.error_message === '');
+  assert(typeof storeResultsResponse.data.job_id === 'number')
+  assert(storeResultsResponse.data.job_id > 0);
 
   const storeResultsJobId = storeResultsResponse.data.job_id;
   const storeJobResponse = await gral.waitForJobToBeFinished(gralEndpoint, jwt, storeResultsJobId);
   const storeJobResult = storeJobResponse.result;
-  expect(storeJobResult.error_code).toBe(0);
-  expect(storeJobResult.error_message).toBe('');
-  expect(storeJobResult.comp_type).toBe('Store Operation');
+  assert(storeJobResult.error_code === 0);
+  assert(storeJobResult.error_message === '');
+  assert(storeJobResult.comp_type === 'Store Operation')
 }
 
 async function loadGraph(
