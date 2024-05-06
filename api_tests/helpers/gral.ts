@@ -1,5 +1,6 @@
 import {config} from '../environment.config';
 import axios from "axios";
+import {expect} from "vitest";
 
 function buildUrl(endpoint: string, path: string) {
   if (endpoint !== config.gral_instances.arangodb_auth && endpoint !== config.gral_instances.service_auth && endpoint !== config.gral_instances.service_auth_unreachable) {
@@ -61,6 +62,43 @@ async function shutdownInstance(endpoint: string, jwt: string) {
       reject(error);
     });
   });
+}
+
+async function storeComputationResult(
+  job_id: string, databaseName: string = '_system',
+  targetCollectionName: string,
+  attributeName: string,
+  jwt: string,
+  gralEndpoint: string) {
+  const storeResultRequestBody = {
+    "job_ids": [job_id],
+    "attribute_names": [attributeName],
+    "database": databaseName,
+    "target_collection": targetCollectionName,
+  };
+
+  let storeResultsResponse;
+  const storeResultsUrl = gral.buildUrl(gralEndpoint, '/v1/storeresults');
+  try {
+    storeResultsResponse = await axios.post(
+      storeResultsUrl, storeResultRequestBody, gral.buildHeaders(jwt)
+    );
+  } catch (error) {
+    console.log(error);
+  }
+
+  expect(storeResultsResponse.status).toBe(200);
+  expect(storeResultsResponse.data.error_code).toBe(0);
+  expect(storeResultsResponse.data.error_message).toBe('');
+  expect(storeResultsResponse.data.job_id).toBeTypeOf('number');
+  expect(storeResultsResponse.data.job_id).toBeGreaterThan(0);
+
+  const storeResultsJobId = storeResultsResponse.data.job_id;
+  const storeJobResponse = await gral.waitForJobToBeFinished(gralEndpoint, jwt, storeResultsJobId);
+  const storeJobResult = storeJobResponse.result;
+  expect(storeJobResult.error_code).toBe(0);
+  expect(storeJobResult.error_message).toBe('');
+  expect(storeJobResult.comp_type).toBe('Store Operation');
 }
 
 async function loadGraph(
@@ -197,6 +235,7 @@ async function runSCC(jwt: string, gralEndpoint: string, graphId: number, custom
 export const gral = {
   buildUrl,
   buildHeaders,
+  storeComputationResult,
   shutdownInstance,
   waitForJobToBeFinished,
   loadGraph,
