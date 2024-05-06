@@ -68,19 +68,45 @@ async function loadGraph(
   gralEndpoint: string,
   graphName: string,
   vertexCollections: string[] = [],
-  edgeCollections: string[] = []) {
+  edgeCollections: string[] = [], vertexAttributes: string[] = []) {
   const url = buildUrl(gralEndpoint, '/v1/loaddata');
   const graphAnalyticsEngineLoadDataRequest = {
     "database": config.arangodb.database,
     "graph_name": graphName,
     "vertex_collections": vertexCollections,
-    "edge_collections": edgeCollections
+    "edge_collections": edgeCollections,
+    "vertex_attributes": vertexAttributes
   };
 
   const response = await axios.post(
     url, graphAnalyticsEngineLoadDataRequest, buildHeaders(jwt)
   );
   const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function runIRank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {
+  const url = buildUrl(gralEndpoint, '/v1/irank');
+  const iRankRequest = {
+    "graph_id": graphId,
+    "maximum_supersteps": maxSupersteps,
+    "damping_factor": dampingFactor
+  };
+
+  let body;
+  try {
+    const response = await axios.post(
+      url, iRankRequest, buildHeaders(jwt)
+    );
+    body = response.data;
+  } catch (error) {
+    console.log(error);
+  }
 
   try {
     return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
@@ -130,14 +156,55 @@ async function runPythonPagerank(jwt: string, gralEndpoint: string, graphId: num
   }
 }
 
+async function runWCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+  const url = buildUrl(gralEndpoint, '/v1/wcc');
+  const wccRequest = {
+    "graph_id": graphId,
+    "custom_fields": customFields
+  };
+
+  const response = await axios.post(
+    url, wccRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
+async function runSCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+  const url = buildUrl(gralEndpoint, '/v1/scc');
+  const wccRequest = {
+    "graph_id": graphId,
+    "custom_fields": customFields
+  };
+
+  const response = await axios.post(
+    url, wccRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
 export const gral = {
   buildUrl,
   buildHeaders,
   shutdownInstance,
   waitForJobToBeFinished,
   loadGraph,
+  runIRank,
   runPagerank,
-  runPythonPagerank
+  runPythonPagerank,
+  runWCC,
+  runSCC
 };
 
 module.exports = gral;
