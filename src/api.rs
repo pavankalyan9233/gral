@@ -553,6 +553,7 @@ async fn api_python(
             comp_arc.clone(),
             graph_arc.clone(),
             body.function,
+            body.use_cugraph,
         );
 
         let mut comp = comp_arc.write().unwrap();

@@ -24,9 +24,16 @@ pub fn execute_python_script_on_graph(
     c_arc: Arc<RwLock<PythonComputation>>,
     g_arc: Arc<RwLock<Graph>>,
     user_script: String,
+    use_cugraph: bool,
 ) -> Result<(), String> {
     let python3_binary_path = get_python_environment()?;
-    execute_python_script_on_graph_internal(c_arc, g_arc, user_script, Some(python3_binary_path))
+    execute_python_script_on_graph_internal(
+        c_arc,
+        g_arc,
+        user_script,
+        use_cugraph,
+        Some(python3_binary_path),
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -53,9 +60,16 @@ pub fn execute_python_script_on_graph_with_bin(
     c_arc: Arc<RwLock<PythonComputation>>,
     g_arc: Arc<RwLock<Graph>>,
     user_script: String,
+    use_cugraph: bool,
     python3_binary_path: String,
 ) -> Result<(), String> {
-    execute_python_script_on_graph_internal(c_arc, g_arc, user_script, Some(python3_binary_path))
+    execute_python_script_on_graph_internal(
+        c_arc,
+        g_arc,
+        user_script,
+        use_cugraph,
+        Some(python3_binary_path),
+    )
 }
 
 pub(crate) fn create_temporary_file(
@@ -73,6 +87,7 @@ fn execute_python_script_on_graph_internal(
     c_arc: Arc<RwLock<PythonComputation>>,
     g_arc: Arc<RwLock<Graph>>,
     user_script: String,
+    use_cugraph: bool,
     python3_binary_path: Option<String>,
 ) -> Result<(), String> {
     let python3_bin = python3_binary_path.unwrap_or_else(|| "python3".to_string());
@@ -96,8 +111,9 @@ fn execute_python_script_on_graph_internal(
         ".parquet".to_string(),
     )?;
     let result_file_path = result_file.path().to_str().unwrap().to_string();
-    let script_res = script::generate_script(user_script, result_file_path, graph_file_path)
-        .map_err(|e| e.to_string());
+    let script_res =
+        script::generate_script(user_script, use_cugraph, result_file_path, graph_file_path)
+            .map_err(|e| e.to_string());
     let script = script_res.unwrap();
     let script_file = script.write_to_file()?;
     let script_file_path = script_file.path().to_str().unwrap().to_string();
