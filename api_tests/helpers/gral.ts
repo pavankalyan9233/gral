@@ -1,6 +1,6 @@
 import {config} from '../environment.config';
 import axios from "axios";
-import * as assert from "node:assert";
+import { strict as assert } from 'assert';
 
 function buildUrl(endpoint: string, path: string) {
   if (endpoint !== config.gral_instances.arangodb_auth && endpoint !== config.gral_instances.service_auth && endpoint !== config.gral_instances.service_auth_unreachable) {
