@@ -168,6 +168,25 @@ async function runPythonPagerank(jwt: string, gralEndpoint: string, graphId: num
   }
 }
 
+async function runWCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+  const url = buildUrl(gralEndpoint, '/v1/wcc');
+  const wccRequest = {
+    "graph_id": graphId,
+    "custom_fields": customFields
+  };
+
+  const response = await axios.post(
+    url, wccRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
 export const gral = {
   buildUrl,
   buildHeaders,
@@ -176,7 +195,8 @@ export const gral = {
   waitForJobToBeFinished,
   loadGraph,
   runPagerank,
-  runPythonPagerank
+  runPythonPagerank,
+  runWCC
 };
 
 module.exports = gral;

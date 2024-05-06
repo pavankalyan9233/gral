@@ -65,8 +65,9 @@ const verifyGraphStatus = async (graph_id: string, jwt: string) => {
 describe.sequential('API tests based on wiki-Talk graph dataset', () => {
 
   let jwt: string;
-  let graph_idForComputation: string;
-  let result_id: string;
+  let graph_idForComputation: number;
+  let result_id_pagerank: string;
+  let result_id_wcc: string;
 
   beforeAll(async () => {
     jwt = await arangodb.getArangoJWT();
@@ -239,14 +240,20 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     expectTypeOf(jobResponse.result.memory_usage).toBeString();
     const memory_usage = parseInt(jobResponse.result.memory_usage);
     expect(memory_usage).toBeGreaterThan(0);
-    result_id = jobResponse.result.job_id;
+    result_id_pagerank = jobResponse.result.job_id;
   }, config.test_configuration.medium_timeout);
 
-  test('Use wiki-Talk result file to check if the computed pagerank values are correct', async () => {
+  test('run the wcc algorithm on one of the created graphs', async () => {
+    const wccJobResponse = await gral.runWCC(jwt, gralEndpoint, graph_idForComputation);
+    result_id_wcc = wccJobResponse.result.job_id;
+  }, config.test_configuration.medium_timeout);
+
+
+  test('Verify pagerank result', async () => {
     const resultAttrName = 'iResult';
     const resultCollection = await arangodb.createDocumentCollection('results');
     await gral.storeComputationResult(
-      result_id, config.arangodb.database, resultCollection.name, resultAttrName, jwt, gralEndpoint
+      result_id_pagerank, config.arangodb.database, resultCollection.name, resultAttrName, jwt, gralEndpoint
     );
     const count = await resultCollection.count();
     expect(count.count).toBe(2394385);
@@ -258,5 +265,24 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
 
     await validator.verifyPageRankDocuments('wiki-Talk', computedDocs);
   }, config.test_configuration.xtra_long_timeout);
+
+  test('Verify wcc result', async () => {
+    const resultAttrName = 'iResult';
+    const resultCollection = await arangodb.createDocumentCollection('results');
+    await gral.storeComputationResult(
+      result_id_wcc, config.arangodb.database, resultCollection.name, resultAttrName, jwt, gralEndpoint
+    );
+    const count = await resultCollection.count();
+    expect(count.count).toBe(2394385);
+
+    const computedDocs = await arangodb.executeQuery(`
+      FOR doc IN ${resultCollection.name}
+      RETURN [TO_NUMBER(SPLIT(doc.id, "/")[1]), TO_NUMBER(SPLIT(doc.${resultAttrName}, "/")[1])]
+    `);
+
+    await validator.verifyWCCResults('wiki-Talk', computedDocs);
+  }, config.test_configuration.xtra_long_timeout);
+
+
 
 });
