@@ -492,7 +492,7 @@ mod tests {
             g.index_edges(true, true);
 
             let (labels, _label_size, steps) =
-                (labelpropagation_sync(&g, 2, "start_label", false).unwrap());
+                labelpropagation_sync(&g, 2, "start_label", false).unwrap();
 
             assert_eq!(steps, 2);
             assert_eq!(
