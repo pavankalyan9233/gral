@@ -6,7 +6,8 @@ use crate::args::{with_args, GralArgs};
 use crate::auth::{with_auth, Unauthorized};
 use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
-    LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
+    JobRuntime, LabelPropagationComputation, LoadComputation, PageRankComputation,
+    StoreComputation,
 };
 use crate::constants;
 use crate::graph_store::graph::Graph;
@@ -283,6 +284,7 @@ async fn api_wcc(
         number: None,
         error_code: 0,
         error_message: "".to_string(),
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
@@ -302,6 +304,7 @@ async fn api_wcc(
                 comp.error_code = 1;
             }
         }
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -361,6 +364,7 @@ async fn api_scc(
         number: None,
         error_code: 0,
         error_message: "".to_string(),
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
@@ -385,6 +389,7 @@ async fn api_scc(
                 comp.error_code = 1;
             }
         }
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -476,6 +481,7 @@ async fn api_aggregate_components(
         error_code: 0,
         error_message: "".to_string(),
         result: vec![],
+        runtime: JobRuntime::start(),
     }));
     generic_comp_arc = comp_arc.clone();
     let prev_comp_clone = prev_comp.clone();
@@ -493,6 +499,7 @@ async fn api_aggregate_components(
         let mut comp = comp_arc.write().unwrap();
         comp.result = res;
         comp.progress = 1;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -545,6 +552,7 @@ async fn api_python(
         error_code: 0,
         error_message: "".to_string(),
         result: Default::default(),
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
 
@@ -568,6 +576,7 @@ async fn api_python(
                 comp.error_code = 1;
             }
         }
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -628,6 +637,7 @@ async fn api_pagerank(
         steps: 0,
         rank: vec![],
         result_position: 0,
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
@@ -648,6 +658,7 @@ async fn api_pagerank(
             }
         }
         comp.progress = 100;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -708,6 +719,7 @@ async fn api_irank(
         steps: 0,
         rank: vec![],
         result_position: 0,
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
@@ -727,6 +739,7 @@ async fn api_irank(
             }
         }
         comp.progress = 100;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -792,6 +805,7 @@ async fn api_label_propagation(
         label: vec![],
         result_position: 0,
         label_size_sum: 0,
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     let startlabel = body.start_label_attribute.clone();
@@ -826,6 +840,7 @@ async fn api_label_propagation(
             }
         }
         comp.progress = 100;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -907,6 +922,7 @@ async fn api_attribute_propagation(
         label: vec![],
         result_position: 0,
         label_size_sum: 0,
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     let startlabel = body.start_label_attribute.clone();
@@ -941,6 +957,7 @@ async fn api_attribute_propagation(
             }
         }
         comp.progress = 100;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -1032,6 +1049,7 @@ async fn api_write_result_back_arangodb(
         progress: 0,
         error_code: 0,
         error_message: "".to_string(),
+        runtime: JobRuntime::start(),
     }));
     let comp_id: u64;
     {
@@ -1068,6 +1086,7 @@ async fn api_write_result_back_arangodb(
                         comp.error_message = e;
                     }
                 }
+                comp.runtime = comp.runtime.stop();
             });
     });
 
@@ -1430,6 +1449,7 @@ async fn api_get_arangodb_graph(
         progress: 0,
         error_code: 0,
         error_message: "".to_string(),
+        runtime: JobRuntime::start(),
     }));
     let comp_id: u64;
     {
@@ -1468,6 +1488,7 @@ async fn api_get_arangodb_graph(
                         // Note that the graph will still be attached to
                         // the computation! Once the computation is
                         // deleted, the graph will be freed!
+                        comp.runtime = comp.runtime.stop();
                     }
                 }
             });
