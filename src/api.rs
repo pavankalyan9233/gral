@@ -1154,23 +1154,7 @@ async fn api_get_job(
         None => Ok(not_found_err(format!("Could not find jobId {}", job_id))),
         Some(comp_arc) => {
             let comp = comp_arc.read().unwrap();
-            let graph_arc = comp.get_graph();
-            let graph = graph_arc.read().unwrap();
-
-            // Write response:
-            let (error_code, error_message) = comp.get_error();
-            let response = GraphAnalyticsEngineJob {
-                job_id,
-                graph_id: graph.graph_id,
-                total: comp.get_total(),
-                progress: comp.get_progress(),
-                error: error_code != 0,
-                error_code,
-                error_message,
-                source_job: "".to_string(),
-                comp_type: comp.algorithm_name(),
-                memory_usage: comp.memory_usage() as u64,
-            };
+            let response = comp.job_info(job_id);
             Ok(warp::reply::with_status(
                 serde_json::to_vec(&response).expect("Should be serializable"),
                 StatusCode::OK,
@@ -1350,24 +1334,7 @@ async fn api_list_jobs(
     let mut response: Vec<GraphAnalyticsEngineJob> = vec![];
     for (job_id, comp_arc) in comps.list.iter() {
         let comp = comp_arc.read().unwrap();
-        let graph_arc = comp.get_graph();
-        let graph = graph_arc.read().unwrap();
-
-        // Write response:
-        let (error_code, error_message) = comp.get_error();
-        let j = GraphAnalyticsEngineJob {
-            job_id: *job_id,
-            graph_id: graph.graph_id,
-            total: 1,
-            progress: if comp.is_ready() { 1 } else { 0 },
-            error: error_code != 0,
-            error_code,
-            error_message,
-            source_job: "".to_string(),
-            comp_type: comp.algorithm_name(),
-            memory_usage: comp.memory_usage() as u64,
-        };
-        response.push(j);
+        response.push(comp.job_info(*job_id));
     }
     Ok(serde_json::to_vec(&response).expect("Should be serializable"))
 }

@@ -7,6 +7,7 @@ use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
 use warp::Filter;
 
+use crate::api::graphanalyticsengine::GraphAnalyticsEngineJob;
 use crate::graph_store::graph::Graph;
 
 pub trait Computation {
@@ -22,6 +23,23 @@ pub trait Computation {
     // TODO: We should think about the get_result API (maybe it could return a Result<>)
     fn get_result(&self, which: u64) -> (String, Value);
     fn memory_usage(&self) -> usize;
+    fn job_info(&self, job_id: u64) -> GraphAnalyticsEngineJob {
+        let graph_arc = self.get_graph();
+        let graph = graph_arc.read().unwrap();
+        let (error_code, error_message) = self.get_error();
+        GraphAnalyticsEngineJob {
+            job_id,
+            graph_id: graph.graph_id,
+            total: self.get_total(),
+            progress: self.get_progress(),
+            error: error_code != 0,
+            error_code,
+            error_message,
+            source_job: "".to_string(),
+            comp_type: self.algorithm_name(),
+            memory_usage: self.memory_usage() as u64,
+        }
+    }
 }
 
 pub struct Computations {
