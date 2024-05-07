@@ -68,6 +68,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
   let graph_idForComputation: number;
   let result_id_pagerank: string;
   let result_id_wcc: string;
+  let result_id_cdlp: string;
 
   beforeAll(async () => {
     jwt = await arangodb.getArangoJWT();
@@ -157,12 +158,15 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     await verifyGraphStatus(graph_id, jwt);
   }, config.test_configuration.long_timeout);
 
-  test('load the wiki-Talk graph into memory, via provided edge and vertex names', async () => {
+  test.only('load the wiki-Talk graph into memory, via provided edge and vertex names', async () => {
+    // Note: This graph is being used for algorithm validation later.
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
+    const vertexAttributes = ["_key"];
     const graphAnalyticsEngineLoadDataRequest = {
       "database": "_system",
       "vertex_collections": ["wiki-Talk_v"],
-      "edge_collections": ["wiki-Talk_e"]
+      "edge_collections": ["wiki-Talk_e"],
+      "vertex_attributes": vertexAttributes
     };
 
     const response = await axios.post(
@@ -248,6 +252,10 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     result_id_wcc = wccJobResponse.result.job_id;
   }, config.test_configuration.medium_timeout);
 
+  test.only('run the label propagation (sync) algorithm on one of the created graphs', async () => {
+    const cdlpJobResponse = await gral.runCDLP(jwt, gralEndpoint, graph_idForComputation);
+    result_id_cdlp = cdlpJobResponse.result.job_id;
+  }, config.test_configuration.xtra_long_timeout * 2 );
 
   test('Verify pagerank result', async () => {
     const resultAttrName = 'iResult';
@@ -283,6 +291,27 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     await validator.verifyWCCResults('wiki-Talk', computedDocs);
   }, config.test_configuration.xtra_long_timeout);
 
+  test.only('Verify cdlp result', async () => {
+    const resultAttrName = 'iResult';
+    const resultCollection = await arangodb.createDocumentCollection('results');
+    await gral.storeComputationResult(
+      result_id_cdlp, config.arangodb.database, resultCollection.name, resultAttrName, jwt, gralEndpoint
+    );
+    const count = await resultCollection.count();
+    expect(count.count).toBe(2394385);
+
+    const computedDocs = await arangodb.executeQuery(`
+      FOR doc IN ${resultCollection.name}
+      LIMIT 10
+      RETURN [TO_NUMBER(SPLIT(doc.id, "/")[1]), doc.${resultAttrName}]
+    `);
+
+    await computedDocs.forEach((doc) => {
+      console.log(doc);
+    });
+
+    // await validator.verifyWCCResults('wiki-Talk', computedDocs);
+  }, config.test_configuration.xtra_long_timeout);
 
 
 });
