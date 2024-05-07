@@ -1161,6 +1161,7 @@ async fn api_get_job(
                 error_message: j,
                 comp_type: "".to_string(),
                 memory_usage: 0,
+                runtime_in_microseconds: 0,
             })
             .unwrap(),
             StatusCode::NOT_FOUND,

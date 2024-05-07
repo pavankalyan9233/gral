@@ -62,6 +62,7 @@ pub trait Computation {
             source_job: "".to_string(),
             comp_type: self.algorithm_name(),
             memory_usage: self.memory_usage() as u64,
+            runtime_in_microseconds: self.get_runtime().as_micros() as u64,
         }
     }
 }

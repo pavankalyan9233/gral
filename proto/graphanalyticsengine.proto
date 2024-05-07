@@ -584,6 +584,8 @@ message GraphAnalyticsEngineJob {
     string comp_type = 9;
     // Memory usage:
     uint64 memory_usage = 10;
+    // Runtime of job in microseconds
+    uint64 runtime_in_microseconds = 11;
 }
 
 // Response for a delete job request.
