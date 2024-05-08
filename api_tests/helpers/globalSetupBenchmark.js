@@ -27,6 +27,5 @@ export async function setup() {
   console.log("Starting the Benchmark Framework... Waiting for all services to be ready...");
   // we'll try to wait up to 10s for arangodb to be ready
   const jwt = await arangodb.getArangoJWT(10);
-  //const responses = await loadBenchmarkGraphs(jwt);
-  //console.log(responses);
+  await loadBenchmarkGraphs(jwt);
 }

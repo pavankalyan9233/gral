@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 import {config} from '../environment.config';
 import {Database} from 'arangojs';
 import * as https from "https";

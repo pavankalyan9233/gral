@@ -1,5 +1,6 @@
 import {config} from '../environment.config';
-import ngGenerator = require('ngraph.generators');
+import GraphGenerator from 'ngraph.generators';
+import {Graph} from "ngraph.graph";
 import {GraphImporter} from "../../examples/modules/graphImporter.js";
 
 function getArangoConfig() {
@@ -18,10 +19,10 @@ function getImportOptions() {
   };
 }
 
-async function writeGraphToArangoDB(graph: any, graphName: string) {
+async function writeGraphToArangoDB(graph: Graph, graphName: string) {
   const arangoConfig = getArangoConfig();
   const importOptions = getImportOptions();
-  let graphImporter = new GraphImporter(arangoConfig, graphName, true, importOptions);
+  const graphImporter = new GraphImporter(arangoConfig, graphName, true, importOptions);
   const vertexCollectionName = graphImporter.getVertexCollectionName();
   await graphImporter.createGraph();
 
@@ -45,8 +46,7 @@ async function writeGraphToArangoDB(graph: any, graphName: string) {
 }
 
 async function generateCompleteGraph(amountOfNodes: number = 5, graphName: string = 'test_graph') {
-  // @ts-ignore
-  const graph = ngGenerator.complete(amountOfNodes);
+  const graph = GraphGenerator.complete(amountOfNodes);
   return await writeGraphToArangoDB(graph, graphName);
 }
 
