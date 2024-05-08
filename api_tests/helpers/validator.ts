@@ -69,6 +69,9 @@ async function verifyCDLPResults(graphName: string, actual: ArrayCursor) {
   }
 
   await actual.forEach((doc) => {
+    console.log(`Doc ID to check is ${doc[0]}`);
+    console.log(`Actual value is ${doc[1]}`);
+    console.log(`Expected value is ${transformedObject[doc[0]]}`);
     let docId = doc[0];
     expect(doc[1]).toBe(transformedObject[docId]);
   });
