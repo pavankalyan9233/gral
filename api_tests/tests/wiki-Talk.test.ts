@@ -76,6 +76,18 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     expect(jwt).not.toBeUndefined();
   }, config.test_configuration.medium_timeout);
 
+  test('prepare wiki-Talk graph for CDLP computation', async () => {
+    // first we need to prepare a new label for this
+    await arangodb.executeQuery(`
+      LET totalDocuments = LENGTH(@@collectionName)
+      FOR doc IN @@collectionName
+        LET keyAsNumber = TO_NUMBER(doc._key)
+        LET lexicographicValue = CONCAT("000000", TO_STRING(keyAsNumber))
+        LET formattedLexicographicKey = RIGHT(lexicographicValue, 7)
+      UPDATE doc WITH { lexicographicKey: formattedLexicographicKey } IN @@collectionName
+    `, {"@collectionName": "wiki-Talk_v"});
+  });
+
   test('load the wiki-Talk graph with graph_name and vertex and edge collections given', async () => {
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
     const graphAnalyticsEngineLoadDataRequest = {
@@ -253,16 +265,6 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
   }, config.test_configuration.medium_timeout);
 
   test('run the label propagation (sync) algorithm on one of the created graphs', async () => {
-    // first we need to prepare a new label for this
-    await arangodb.executeQuery(`
-      LET totalDocuments = LENGTH(@@collectionName)
-      FOR doc IN @@collectionName
-        LET keyAsNumber = TO_NUMBER(doc._key)
-        LET lexicographicValue = CONCAT("000000", TO_STRING(keyAsNumber))
-        LET formattedLexicographicKey = RIGHT(lexicographicValue, 7)
-      UPDATE doc WITH { lexicographicKey: formattedLexicographicKey } IN @@collectionName
-    `, {"@collectionName": "wiki-Talk_v"});
-
     const cdlpJobResponse = await gral.runCDLP(jwt, gralEndpoint, graph_idForComputation, "lexicographicKey");
     result_id_cdlp = cdlpJobResponse.result.job_id;
   }, config.test_configuration.xtra_long_timeout * 3);

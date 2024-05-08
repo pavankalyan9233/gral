@@ -75,7 +75,6 @@ async function verifyCDLPResults(graphName: string, actual: ArrayCursor) {
       Expected: ${transformedObject[docId]}
       Actual: ${doc[1]}
       Key to check: ${docId}
-      DBDocument: ${arangodb.executeQuery(`FOR doc in results FILTER doc.id == ${docId} RETURN doc`)}
     `;
 
     expect(doc[1], errorMessage).toBe(transformedObject[docId]);
