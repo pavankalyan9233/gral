@@ -215,6 +215,7 @@ jobs:
       - run:
           name: Build release
           command: |
+            cargo clean
             cargo build --release
 
       # TODO: Potentially we do cache here to much. Let's check in detail which sub-directories here needs to
