@@ -158,7 +158,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     await verifyGraphStatus(graph_id, jwt);
   }, config.test_configuration.long_timeout);
 
-  test.only('load the wiki-Talk graph into memory, via provided edge and vertex names', async () => {
+  test('load the wiki-Talk graph into memory, via provided edge and vertex names', async () => {
     // Note: This graph is being used for algorithm validation later.
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
     const vertexAttributes = ["lexicographicKey"];
@@ -252,7 +252,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     result_id_wcc = wccJobResponse.result.job_id;
   }, config.test_configuration.medium_timeout);
 
-  test.only('run the label propagation (sync) algorithm on one of the created graphs', async () => {
+  test('run the label propagation (sync) algorithm on one of the created graphs', async () => {
     // first we need to prepare a new label for this
     await arangodb.executeQuery(`
       LET totalDocuments = LENGTH(@@collectionName)
@@ -301,7 +301,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     await validator.verifyWCCResults('wiki-Talk', computedDocs);
   }, config.test_configuration.xtra_long_timeout);
 
-  test.only('Verify cdlp result', async () => {
+  test('Verify cdlp result', async () => {
     const resultAttrName = 'iResult';
     const resultCollection = await arangodb.createDocumentCollection('results');
     await gral.storeComputationResult(
