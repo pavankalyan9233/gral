@@ -1,5 +1,6 @@
 import {ArrayCursor} from "arangojs/cursor";
 import {expect} from 'vitest';
+import {arangodb} from "./arangodb";
 
 const fs = require('fs');
 const path = require('path');
@@ -69,11 +70,15 @@ async function verifyCDLPResults(graphName: string, actual: ArrayCursor) {
   }
 
   await actual.forEach((doc) => {
-    console.log(`Doc ID to check is ${doc[0]}`);
-    console.log(`Actual value is ${doc[1]}`);
-    console.log(`Expected value is ${transformedObject[doc[0]]}`);
     let docId = doc[0];
-    expect(doc[1]).toBe(transformedObject[docId]);
+    const errorMessage = `
+      Expected: ${transformedObject[docId]}
+      Actual: ${doc[1]}
+      Key to check: ${docId}
+      DBDocument: ${arangodb.executeQuery(`FOR doc in results FILTER doc.id == ${docId} RETURN doc`)}
+    `;
+
+    expect(doc[1], errorMessage).toBe(transformedObject[docId]);
   });
 }
 
