@@ -50,9 +50,9 @@ function getArangoJSDatabaseInstance() {
   });
 }
 
-async function executeQuery(query: string) {
+async function executeQuery(query: string, bindParams: any = {}) {
   const db = getArangoJSDatabaseInstance();
-  return await db.query(query);
+  return await db.query(query, bindParams);
 }
 
 async function createDocumentCollection(collectionName: string, tryDrop: boolean = true) {

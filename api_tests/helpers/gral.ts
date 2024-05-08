@@ -232,11 +232,11 @@ async function runSCC(jwt: string, gralEndpoint: string, graphId: number, custom
   }
 }
 
-async function runCDLP(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+async function runCDLP(jwt: string, gralEndpoint: string, graphId: number, startLabelAttribute: string = "") {
   const url = buildUrl(gralEndpoint, '/v1/labelpropagation');
   const cdlpRequest = {
     "graph_id": graphId,
-    "start_label_attribute": "_key",
+    "start_label_attribute": startLabelAttribute,
     "synchronous": true,
     "maximum_supersteps": 10,
     "random_tiebreak": false,

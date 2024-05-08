@@ -57,8 +57,25 @@ async function verifyWCCResults(graphName: string, actual: ArrayCursor) {
   }
 }
 
+async function verifyCDLPResults(graphName: string, actual: ArrayCursor) {
+  const lines = readResultLines(graphName, 'CDLP');
+  let transformedObject = {};
+
+  for (const line of lines) {
+    const parts = line.split(' ');
+    if (parts.length === 2) {
+      transformedObject[parseInt(parts[0])] = parseInt(parts[1]);
+    }
+  }
+
+  await actual.forEach((doc) => {
+    let docId = doc[0];
+    expect(doc[1]).toBe(transformedObject[docId]);
+  });
+}
+
 export const validator = {
-  verifyPageRankDocuments, verifyWCCResults
+  verifyPageRankDocuments, verifyWCCResults, verifyCDLPResults
 };
 
 

@@ -161,7 +161,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
   test.only('load the wiki-Talk graph into memory, via provided edge and vertex names', async () => {
     // Note: This graph is being used for algorithm validation later.
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
-    const vertexAttributes = ["_key"];
+    const vertexAttributes = ["lexicographicKey"];
     const graphAnalyticsEngineLoadDataRequest = {
       "database": "_system",
       "vertex_collections": ["wiki-Talk_v"],
@@ -253,9 +253,19 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
   }, config.test_configuration.medium_timeout);
 
   test.only('run the label propagation (sync) algorithm on one of the created graphs', async () => {
-    const cdlpJobResponse = await gral.runCDLP(jwt, gralEndpoint, graph_idForComputation);
+    // first we need to prepare a new label for this
+    await arangodb.executeQuery(`
+      LET totalDocuments = LENGTH(@@collectionName)
+      FOR doc IN @@collectionName
+        LET keyAsNumber = TO_NUMBER(doc._key)
+        LET lexicographicValue = CONCAT("000000", TO_STRING(keyAsNumber))
+        LET formattedLexicographicKey = RIGHT(lexicographicValue, 7)
+      UPDATE doc WITH { lexicographicKey: formattedLexicographicKey } IN @@collectionName
+    `, {"@collectionName": "wiki-Talk_v"});
+
+    const cdlpJobResponse = await gral.runCDLP(jwt, gralEndpoint, graph_idForComputation, "lexicographicKey");
     result_id_cdlp = cdlpJobResponse.result.job_id;
-  }, config.test_configuration.xtra_long_timeout * 2 );
+  }, config.test_configuration.xtra_long_timeout * 3);
 
   test('Verify pagerank result', async () => {
     const resultAttrName = 'iResult';
@@ -303,14 +313,10 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     const computedDocs = await arangodb.executeQuery(`
       FOR doc IN ${resultCollection.name}
       LIMIT 10
-      RETURN [TO_NUMBER(SPLIT(doc.id, "/")[1]), doc.${resultAttrName}]
+      RETURN [TO_NUMBER(SPLIT(doc.id, "/")[1]), TO_NUMBER(doc.${resultAttrName})]
     `);
 
-    await computedDocs.forEach((doc) => {
-      console.log(doc);
-    });
-
-    // await validator.verifyWCCResults('wiki-Talk', computedDocs);
+    await validator.verifyCDLPResults('wiki-Talk', computedDocs);
   }, config.test_configuration.xtra_long_timeout);
 
 
