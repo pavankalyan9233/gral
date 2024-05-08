@@ -1,7 +1,6 @@
 import {parseArgs} from './modules/argumentParser.js';
 import {GraphImporter} from './modules/graphImporter.js';
 
-
 const argv = parseArgs();
 
 const main = async () => {
@@ -34,4 +33,4 @@ const main = async () => {
   }
 
 }
-main().then(r => console.log('Everything is done')).catch(e => console.error(e));
+main().then(() => console.log('Everything is done')).catch(e => console.error(e));
