@@ -83,7 +83,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
         LET formattedLexicographicKey = RIGHT(lexicographicValue, 7)
       UPDATE doc WITH { lexicographicKey: formattedLexicographicKey } IN @@collectionName
     `, {"@collectionName": "wiki-Talk_v"});
-  }, config.test_configuration.xtra_long_timeout);
+  }, config.test_configuration.xtra_long_timeout * 2);
 
   test('load the wiki-Talk graph with graph_name and vertex and edge collections given', async () => {
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
