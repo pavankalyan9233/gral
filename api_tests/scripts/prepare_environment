@@ -17,6 +17,13 @@ cecho "CYAN" "-> Docker and gral logs will be saved in api_tests/logs folder (on
 
 docker compose up -d &> api_tests/logs/docker.txt
 
+while ! curl -u root: -X GET http://localhost:8529/_api/version >/dev/null 2>&1; do
+  cecho "CYAN" "-> ArangoDB not ready yet..."
+  sleep 1
+done
+
+cecho "CYAN" "ArangoDB is ready!"
+
 # If the target/release/gral binary does not exists, build it
 if [ ! -f target/release/gral ]; then
     cecho "CYAN" "Building gral..."
@@ -27,5 +34,15 @@ fi
 ./target/release/gral --bind-port 1337 --auth-service localhost:9092 --arangodb-endpoints http://localhost:8529 --arangodb-jwt-secrets ./secrets.jwt &> api_tests/logs/service_auth.txt &
 ./target/release/gral --bind-port 1336 --auth-service localhost:1234 --arangodb-endpoints http://localhost:8529 --arangodb-jwt-secrets ./secrets.jwt &> api_tests/logs/service_auth_unreachable.txt &
 
-# TODO: Wait properly for the services to start
-sleep 5
+TOKEN=$(curl -s -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' --data '{"username":"root","password":""}' http://localhost:8529/_open/auth | jq -r '.jwt')
+
+while ! curl -H 'Accept: application/json' -H "Authorization: Bearer ${TOKEN}" -u root: -X GET http://localhost:9999/v1/graphs >/dev/null 2>&1; do
+  sleep 1
+done
+while ! curl -H 'Accept: application/json' -H "Authorization: Bearer ${TOKEN}" -u root: -X GET http://localhost:1337/v1/graphs >/dev/null 2>&1; do
+  sleep 1
+done
+while ! curl -H 'Accept: application/json' -H "Authorization: Bearer ${TOKEN}" -u root: -X GET http://localhost:1336/v1/graphs >/dev/null 2>&1; do
+  sleep 1
+done
+cecho "CYAN" "Gral(s) ready!"
