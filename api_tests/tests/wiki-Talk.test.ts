@@ -74,10 +74,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     jwt = await arangodb.getArangoJWT();
     expect(jwt).not.toBe('');
     expect(jwt).not.toBeUndefined();
-  }, config.test_configuration.medium_timeout);
 
-  test('prepare wiki-Talk graph for CDLP computation', async () => {
-    // first we need to prepare a new label for this
     await arangodb.executeQuery(`
       LET totalDocuments = LENGTH(@@collectionName)
       FOR doc IN @@collectionName
@@ -86,7 +83,7 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
         LET formattedLexicographicKey = RIGHT(lexicographicValue, 7)
       UPDATE doc WITH { lexicographicKey: formattedLexicographicKey } IN @@collectionName
     `, {"@collectionName": "wiki-Talk_v"});
-  });
+  }, config.test_configuration.medium_timeout);
 
   test('load the wiki-Talk graph with graph_name and vertex and edge collections given', async () => {
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
