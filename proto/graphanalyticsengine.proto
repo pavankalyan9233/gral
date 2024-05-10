@@ -436,6 +436,8 @@ message GraphAnalyticsEngineLabelPropagationRequest {
     // (uniform distribution) or deterministically (smallest label amongst
     // the most frequent ones):
     bool random_tiebreak = 4;
+    // Maximum number of steps to do:
+    uint32 maximum_supersteps = 5;
 }
 
 // Request arguments for GraphAnalyticsEngineRunAttributePropagation.

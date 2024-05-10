@@ -5,7 +5,7 @@ use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::collections::HashMap;
 
 fn find_label_name_column(g: &Graph, l: &str) -> Result<usize, String> {
-    // First count types of vertices, use column with "@collectionname":
+    // First count types of vertices, use column with given label:
     let pos = g.vertex_column_names.iter().position(|s| s == l);
     match pos {
         None => Err(format!("Need '{l}' as a column name in column store!")),
