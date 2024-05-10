@@ -225,11 +225,7 @@ async function runCDLP(jwt: string, gralEndpoint: string, graphId: number, start
   );
   const body = response.data;
 
-  try {
-    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
-  } catch (error) {
-    throw error;
-  }
+  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
 export const gral = {

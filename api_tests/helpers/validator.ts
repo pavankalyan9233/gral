@@ -1,6 +1,5 @@
 import {ArrayCursor} from "arangojs/cursor";
 import {expect} from 'vitest';
-import {arangodb} from "./arangodb";
 
 import fs = require('fs');
 import path = require('path');
@@ -60,7 +59,7 @@ async function verifyWCCResults(graphName: string, actual: ArrayCursor) {
 
 async function verifyCDLPResults(graphName: string, actual: ArrayCursor) {
   const lines = readResultLines(graphName, 'CDLP');
-  let transformedObject = {};
+  const transformedObject = {};
 
   for (const line of lines) {
     const parts = line.split(' ');
@@ -70,7 +69,7 @@ async function verifyCDLPResults(graphName: string, actual: ArrayCursor) {
   }
 
   await actual.forEach((doc) => {
-    let docId = doc[0];
+    const docId = doc[0];
     const errorMessage = `
       Expected: ${transformedObject[docId]}
       Actual: ${doc[1]}
