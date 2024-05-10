@@ -143,6 +143,11 @@ jobs:
           keys:
             - v1-node-deps-cache-{{ .Branch }}-{{ checksum "api_tests/package.json" }}
 
+      - run:
+          name: Lint api_tests and examples JS sub-projects
+          command: |
+            cd ~/app/api_tests && npm install && npm run lint
+            cd ~/app/examples && npm install && npm run lint
       # It is important that this importer runs first, before integration tests are being executed as that data
       # is being used in the integration tests
       # TODO: Sleep 10 is a workaround to get branch stable ASAP. We need a proper mechanism to wait for ArangoDB to be ready
@@ -151,7 +156,7 @@ jobs:
           command: |
             sleep 10
             sudo apt-get update -y && sudo apt-get install zstd -y
-            cd ~/app/examples && npm install
+            cd ~/app/examples
             ./scripts/downloadSingleDataset wiki-Talk
             node main.js --graphName wiki-Talk -d true --mqs 100 --con 10 --verifyGraph true
 
@@ -167,7 +172,7 @@ jobs:
             /tmp/workspace/target/release/gral --bind-port 1337 --arangodb-jwt-secrets ./secrets.jwt --auth-service authservice:9092 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth.txt &
             /tmp/workspace/target/release/gral --bind-port 1336 --arangodb-jwt-secrets ./secrets.jwt --auth-service localhost:1234 --arangodb-endpoints http://localhost:8529 &> api_tests/logs/service_auth_unreachable.txt &
             sleep 1
-            cd ~/app/api_tests && npm install && npm run test
+            cd ~/app/api_tests && npm run test
             sudo pkill -9 gral
 
       - save_cache:

@@ -34,7 +34,7 @@ describe('Python integration', () => {
 
     await gral.waitForJobToBeFinished(gralEndpoint, jwt, job_id);
 
-    let pythonUrl = gral.buildUrl(gralEndpoint, '/v1/python');
+    const pythonUrl = gral.buildUrl(gralEndpoint, '/v1/python');
     const pythonPostBody = {
       "graph_id": graph_id,
       "function": "def worker(graph): return nx.pagerank(graph, 0.85)"
@@ -71,10 +71,10 @@ describe('Python integration', () => {
     // Store the computation results into the database
     // create collection named results in arangodb
     const resultCollection = await arangodb.createDocumentCollection('results');
-    const comp_id = pythonComputationResult.job_id;
+    const compId = pythonComputationResult.job_id;
 
     await gral.storeComputationResult(
-      comp_id, '_system', resultCollection.name, 'iResult', jwt, gralEndpoint
+      compId, '_system', resultCollection.name, 'iResult', jwt, gralEndpoint
     );
 
     const collectionProps = await resultCollection.count();
@@ -86,7 +86,7 @@ describe('Python integration', () => {
       RETURN doc
     `);
 
-    await docs.forEach((doc: any) => {
+    await docs.forEach((doc) => {
       expect(doc).toHaveProperty('iResult');
       expect(doc.iResult).toBeTypeOf('number');
       expect(doc.iResult).toBe(0.2);
@@ -107,7 +107,7 @@ describe('Python integration', () => {
 
     await gral.waitForJobToBeFinished(gralEndpoint, jwt, job_id);
 
-    let pythonUrl = gral.buildUrl(gralEndpoint, '/v1/python');
+    const pythonUrl = gral.buildUrl(gralEndpoint, '/v1/python');
 
     const pythonFunctionsToTest = [
       ";'./,234180", // invalid python code

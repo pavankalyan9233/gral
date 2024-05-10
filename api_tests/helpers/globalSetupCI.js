@@ -19,7 +19,7 @@ export async function teardown() {
   // TODO: Implement a way to not execute this particular method whenever we run only `npm run test`
   for (const endpoint of gral_valid_auth_endpoints) {
     await gral.shutdownInstance(endpoint, jwt)
-      .then((response) => {
+      .then(() => {
         console.log(`Instance ${endpoint} Shutdown successful`);
         // Handle the response here
       })

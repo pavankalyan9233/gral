@@ -1,14 +1,14 @@
-import {beforeAll, describe, expect, expectTypeOf, test} from 'vitest';
+import {beforeAll, describe, expect, test} from 'vitest';
 import {config} from '../environment.config';
 import {arangodb} from '../helpers/arangodb';
 import {gral} from '../helpers/gral';
 import axios from 'axios';
 
-const gral_valid_auth_endpoints = [config.gral_instances.arangodb_auth, config.gral_instances.service_auth];
-const gral_invalid_auth_endpoints = [config.gral_instances.service_auth_unreachable];
+const GRAL_VALID_AUTH_ENDPOINTS = [config.gral_instances.arangodb_auth, config.gral_instances.service_auth];
+const GRAL_INVALID_AUTH_ENDPOINTS = [config.gral_instances.service_auth_unreachable];
 describe.concurrent('Authentication tests', () => {
   describe.concurrent('With valid JWT token', () => {
-    let jwt: String;
+    let jwt: string;
 
     beforeAll(async () => {
       jwt = await arangodb.getArangoJWT();
@@ -21,8 +21,8 @@ describe.concurrent('Authentication tests', () => {
     });
 
     test('GET /v1/graphs ', async () => {
-      for (let endpoint of gral_valid_auth_endpoints) {
-        let url = gral.buildUrl(endpoint, '/v1/graphs');
+      for (const endpoint of GRAL_VALID_AUTH_ENDPOINTS) {
+        const url = gral.buildUrl(endpoint, '/v1/graphs');
         const response = await axios.get(url, gral.buildHeaders(jwt));
         expect(response.status).toBe(200);
         expect(response.data).toBeInstanceOf(Array);
@@ -31,11 +31,11 @@ describe.concurrent('Authentication tests', () => {
   });
 
   describe.concurrent('With an invalid JWT token', () => {
-    let jwt: String = 'invalid';
+    const jwt: string = 'invalid';
 
     test('GET /v1/graphs ', async () => {
-      for (let endpoint of [...gral_valid_auth_endpoints, ...gral_invalid_auth_endpoints]) {
-        let url = gral.buildUrl(endpoint, '/v1/graphs');
+      for (const endpoint of [...GRAL_VALID_AUTH_ENDPOINTS, ...GRAL_INVALID_AUTH_ENDPOINTS]) {
+        const url = gral.buildUrl(endpoint, '/v1/graphs');
         await axios.get(url, gral.buildHeaders(jwt)).catch((error) => {
           expect(error.response.status).toBe(401);
         });

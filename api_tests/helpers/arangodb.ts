@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 import {config} from '../environment.config';
 import {Database} from 'arangojs';
 import * as https from "https";
@@ -50,7 +50,7 @@ function getArangoJSDatabaseInstance() {
   });
 }
 
-async function executeQuery(query: string, bindParams: any = {}) {
+async function executeQuery(query: string, bindParams: unknown = {}) {
   const db = getArangoJSDatabaseInstance();
   return await db.query(query, bindParams);
 }

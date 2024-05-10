@@ -1,9 +1,8 @@
 import {ArrayCursor} from "arangojs/cursor";
 import {expect} from 'vitest';
-import {arangodb} from "./arangodb";
 
-const fs = require('fs');
-const path = require('path');
+import fs = require('fs');
+import path = require('path');
 
 function readResultLines(graphName: string, algorithm: string) {
   const data = fs.readFileSync(path.join('../', 'examples', 'data', `${graphName}`, `${graphName}-${algorithm}`));
@@ -12,7 +11,7 @@ function readResultLines(graphName: string, algorithm: string) {
 
 async function verifyPageRankDocuments(graphName: string, actual: ArrayCursor) {
   const lines = readResultLines(graphName, 'PR');
-  let expected = {};
+  const expected = {};
 
   for (const line of lines) {
     const parts = line.split(' ');
@@ -21,14 +20,14 @@ async function verifyPageRankDocuments(graphName: string, actual: ArrayCursor) {
     }
   }
 
-  await actual.forEach((doc: any) => {
-    let docId = doc[0];
+  await actual.forEach((doc) => {
+    const docId = doc[0];
     expect(doc[1]).toBeCloseTo(expected[docId], 13);
   });
 }
 
 async function verifyWCCResults(graphName: string, actual: ArrayCursor) {
-  let groups = {};
+  const groups = {};
   await actual.forEach((doc) => {
     groups[doc[0]] = {
       actual: doc[1]
@@ -46,10 +45,10 @@ async function verifyWCCResults(graphName: string, actual: ArrayCursor) {
     }
   }
 
-  let unique = {};
+  const unique = {};
   for (const key in groups) {
-    let actual = groups[key].actual;
-    let expected = groups[key].expected;
+    const actual = groups[key].actual;
+    const expected = groups[key].expected;
     if (unique[actual] === undefined) {
       unique[actual] = expected;
     } else {
@@ -60,7 +59,7 @@ async function verifyWCCResults(graphName: string, actual: ArrayCursor) {
 
 async function verifyCDLPResults(graphName: string, actual: ArrayCursor) {
   const lines = readResultLines(graphName, 'CDLP');
-  let transformedObject = {};
+  const transformedObject = {};
 
   for (const line of lines) {
     const parts = line.split(' ');
@@ -70,7 +69,7 @@ async function verifyCDLPResults(graphName: string, actual: ArrayCursor) {
   }
 
   await actual.forEach((doc) => {
-    let docId = doc[0];
+    const docId = doc[0];
     const errorMessage = `
       Expected: ${transformedObject[docId]}
       Actual: ${doc[1]}
