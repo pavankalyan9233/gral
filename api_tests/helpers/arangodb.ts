@@ -1,3 +1,4 @@
+/* eslint-disable  no-explicit-any */
 import axios from 'axios';
 import {config} from '../environment.config';
 import {Database} from 'arangojs';
