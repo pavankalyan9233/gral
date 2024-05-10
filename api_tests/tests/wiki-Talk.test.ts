@@ -68,12 +68,22 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
   let graph_idForComputation: number;
   let result_id_pagerank: string;
   let result_id_wcc: string;
+  let result_id_cdlp: string;
 
   beforeAll(async () => {
     jwt = await arangodb.getArangoJWT();
     expect(jwt).not.toBe('');
     expect(jwt).not.toBeUndefined();
-  }, config.test_configuration.medium_timeout);
+
+    await arangodb.executeQuery(`
+      LET totalDocuments = LENGTH(@@collectionName)
+      FOR doc IN @@collectionName
+        LET keyAsNumber = TO_NUMBER(doc._key)
+        LET lexicographicValue = CONCAT("000000", TO_STRING(keyAsNumber))
+        LET formattedLexicographicKey = RIGHT(lexicographicValue, 7)
+      UPDATE doc WITH { lexicographicKey: formattedLexicographicKey } IN @@collectionName
+    `, {"@collectionName": "wiki-Talk_v"});
+  }, config.test_configuration.xtra_long_timeout * 2);
 
   test('load the wiki-Talk graph with graph_name and vertex and edge collections given', async () => {
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
@@ -158,11 +168,14 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
   }, config.test_configuration.long_timeout);
 
   test('load the wiki-Talk graph into memory, via provided edge and vertex names', async () => {
+    // Note: This graph is being used for algorithm validation later.
     const url = gral.buildUrl(gralEndpoint, '/v1/loaddata');
+    const vertexAttributes = ["lexicographicKey"];
     const graphAnalyticsEngineLoadDataRequest = {
       "database": "_system",
       "vertex_collections": ["wiki-Talk_v"],
-      "edge_collections": ["wiki-Talk_e"]
+      "edge_collections": ["wiki-Talk_e"],
+      "vertex_attributes": vertexAttributes
     };
 
     const response = await axios.post(
@@ -248,6 +261,10 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     result_id_wcc = wccJobResponse.result.job_id;
   }, config.test_configuration.medium_timeout);
 
+  test('run the label propagation (sync) algorithm on one of the created graphs', async () => {
+    const cdlpJobResponse = await gral.runCDLP(jwt, gralEndpoint, graph_idForComputation, "lexicographicKey");
+    result_id_cdlp = cdlpJobResponse.result.job_id;
+  }, config.test_configuration.xtra_long_timeout * 3);
 
   test('Verify pagerank result', async () => {
     const resultAttrName = 'iResult';
@@ -283,6 +300,23 @@ describe.sequential('API tests based on wiki-Talk graph dataset', () => {
     await validator.verifyWCCResults('wiki-Talk', computedDocs);
   }, config.test_configuration.xtra_long_timeout);
 
+  test('Verify cdlp result', async () => {
+    const resultAttrName = 'iResult';
+    const resultCollection = await arangodb.createDocumentCollection('results');
+    await gral.storeComputationResult(
+      result_id_cdlp, config.arangodb.database, resultCollection.name, resultAttrName, jwt, gralEndpoint
+    );
+    const count = await resultCollection.count();
+    expect(count.count).toBe(2394385);
+
+    const computedDocs = await arangodb.executeQuery(`
+      FOR doc IN ${resultCollection.name}
+      LIMIT 10
+      RETURN [TO_NUMBER(SPLIT(doc.id, "/")[1]), TO_NUMBER(doc.${resultAttrName})]
+    `);
+
+    await validator.verifyCDLPResults('wiki-Talk', computedDocs);
+  }, config.test_configuration.xtra_long_timeout);
 
 
 });

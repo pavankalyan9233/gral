@@ -762,7 +762,7 @@ async fn api_label_propagation(
             StatusCode::BAD_REQUEST,
         ));
     }
-    let body = parsed.unwrap();
+    let mut body = parsed.unwrap();
 
     let graph_arc: Arc<RwLock<Graph>> = match get_and_check_graph(&graphs, body.graph_id) {
         Err(r) => {
@@ -775,6 +775,10 @@ async fn api_label_propagation(
         // Make sure we have an edge index:
         let mut graph = graph_arc.write().unwrap();
         graph.index_edges(true, true);
+    }
+
+    if body.maximum_supersteps == 0 {
+        body.maximum_supersteps = 64;
     }
 
     let comp_arc = Arc::new(RwLock::new(LabelPropagationComputation {
@@ -796,14 +800,14 @@ async fn api_label_propagation(
         let res = if body.synchronous {
             algorithms::labelpropagation::labelpropagation_sync(
                 &graph,
-                64,
+                body.maximum_supersteps,
                 &startlabel,
                 body.random_tiebreak,
             )
         } else {
             algorithms::labelpropagation::labelpropagation_async(
                 &graph,
-                64,
+                body.maximum_supersteps,
                 &startlabel,
                 body.random_tiebreak,
             )
