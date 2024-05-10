@@ -210,6 +210,28 @@ async function runSCC(jwt: string, gralEndpoint: string, graphId: number, custom
   return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
+async function runCDLP(jwt: string, gralEndpoint: string, graphId: number, startLabelAttribute: string = "") {
+  const url = buildUrl(gralEndpoint, '/v1/labelpropagation');
+  const cdlpRequest = {
+    "graph_id": graphId,
+    "start_label_attribute": startLabelAttribute,
+    "synchronous": true,
+    "maximum_supersteps": 10,
+    "random_tiebreak": false,
+  };
+
+  const response = await axios.post(
+    url, cdlpRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  try {
+    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  } catch (error) {
+    throw error;
+  }
+}
+
 export const gral = {
   buildUrl,
   buildHeaders,
@@ -221,7 +243,8 @@ export const gral = {
   runPagerank,
   runPythonPagerank,
   runWCC,
-  runSCC
+  runSCC,
+  runCDLP
 };
 
 module.exports = gral;
