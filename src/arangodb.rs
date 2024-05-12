@@ -169,7 +169,7 @@ fn compute_shard_map(sd: &ShardDistribution, coll_list: &[String]) -> Result<Sha
             Some(coll_dist) => {
                 // Keys of coll_dist are the shards, value has leader:
                 for (shard, location) in &(coll_dist.plan) {
-                    if ignore.get(shard).is_none() {
+                    if !ignore.contains(shard) {
                         let leader = &(location.leader);
                         match result.get_mut(leader) {
                             None => {
