@@ -201,25 +201,28 @@ export class GraphImporter {
           } else {
             const edgeLabel = this.getEdgeLabel();
             jobs.push(session.writeTransaction(async tx => {
+              let formattedEdgeData = [];
               for (const edgeData of l) {
-                //const fromSource = customIdToNodeIdMap[edgeData._from.split('/')[1]];
-                //const toSource = customIdToNodeIdMap[edgeData._to.split('/')[1]];
                 const fromCustomId = edgeData._from.split('/')[1];
                 const toCustomId = edgeData._to.split('/')[1];
+                formattedEdgeData.push({fromCustomId, toCustomId});
+              }
 
-                // MATCH (a: {customId: ${fromSource}}), (b {customId: ${toSource}})
-                const label = this.getVertexLabel();
-                const cypherQuery = `
-                  MATCH (a:\`${label}\` {customId: "${fromCustomId}"}), (b:\`${label}\` {customId: "${toCustomId}"})
+              const label = this.getVertexLabel();
+              const cypherQuery = `
+                  UNWIND $relationships AS relData
+                  MATCH (a:\`${label}\` {customId: relData.fromCustomId}), (b:\`${label}\` {customId: relData.toCustomId})
                   CREATE (a)-[:\`${edgeLabel}\`]->(b)
                 `
-                ;
-                writeToFile("query");
-                writeToFile(cypherQuery);
+              ;
+              writeToFile("query");
+              writeToFile(cypherQuery);
+              console.log(formattedEdgeData)
 
-                tx.run(cypherQuery).then(result => {
-                });
-              }
+              tx.run(cypherQuery, {relationships: formattedEdgeData}).then(result => {
+              });
+
+              l = [];
             }));
           }
         } catch (e) {
