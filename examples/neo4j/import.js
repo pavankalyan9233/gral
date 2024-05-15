@@ -465,14 +465,56 @@ export class GraphImporter {
     return {expectedAmountOfVertices, expectedAmountOfEdges};
   }
 
+  async getNodeLabelCount() {
+    const session = this.driver.session();
+    const label = this.getVertexLabel();
+    const query = `
+      MATCH (n:\`${label}\`)
+      RETURN count(n) as count
+    `;
+
+    let count;
+    await session.run(query)
+      .then(result => {
+        count = result.records[0].get('count').low;
+      })
+      .catch(error => {
+        console.error('Error executing query:', error);
+      })
+      .finally(() => {
+        session.close();
+      });
+
+    return count;
+  }
+
+  async getEdgeLabelCount() {
+    const session = this.driver.session();
+    const label = this.getEdgeLabel();
+    const query = `
+      MATCH ()-[r:\`${label}\`]->()
+      RETURN count(r) as count
+    `;
+
+    let count;
+    await session.run(query)
+      .then(result => {
+        count = result.records[0].get('count').low;
+      })
+      .catch(error => {
+        console.error('Error executing query:', error);
+      })
+      .finally(() => {
+        session.close();
+      });
+
+    return count;
+  }
+
   async verifyGraph() {
     const {expectedAmountOfVertices, expectedAmountOfEdges} = await this.getVertexAndEdgeCountsToInsert();
-    const vertexCollection = this.db.collection(`${this.graphName}_v`);
-    const edgeCollection = this.db.collection(`${this.graphName}_e`);
-    const vProperties = await vertexCollection.count();
-    const eProperties = await edgeCollection.count();
-    const vCount = vProperties.count;
-    const eCount = eProperties.count;
+    const vCount = await this.getNodeLabelCount();
+    const eCount = await this.getEdgeLabelCount();
 
     if (vCount !== parseInt(expectedAmountOfVertices)) {
       throw new Error(`Expected amount of vertices (${expectedAmountOfVertices}) does not match actual amount of vertices (${vCount})`);

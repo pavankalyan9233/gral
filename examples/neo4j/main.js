@@ -29,7 +29,7 @@ const main = async () => {
     await graphImporter.insertEdges();
   }
   if (argv.verifyGraph) {
-    //await graphImporter.verifyGraph();
+    await graphImporter.verifyGraph();
   }
 
 }
