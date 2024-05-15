@@ -11,4 +11,10 @@ export const config = {
     concurrency: 20,
     max_queue_size: 1000,
   },
+  neo4j: {
+    endpoint: "neo4j://localhost:7687",
+    username: "admin",
+    password: "",
+    database: "neo4j",
+  }
 };

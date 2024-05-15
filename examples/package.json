@@ -6,9 +6,9 @@
   "type": "module",
   "dependencies": {
     "arangojs": "^8.1.1",
-    "yargs": "^16.2.0",
     "axios": "^1.6.8",
-    "p-queue": "^8.0.1"
+    "p-queue": "^8.0.1",
+    "yargs": "^16.2.0"
   },
   "scripts": {
     "help": "node main.js --help",
@@ -17,5 +17,8 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "neo4j-driver": "^5.20.0"
+  }
 }
