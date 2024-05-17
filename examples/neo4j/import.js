@@ -193,6 +193,8 @@ export class GraphImporter {
                 //writeToFile(propertiesObject);
 
                 await tx.run(cypherQuery, propertiesObject).then(result => {
+                  const nodeId = result.records[0].get('nodeId').low;
+                  customIdToNodeIdMap[nodeData.properties.customId] = nodeId;
                 });
               }
               l = [];
@@ -202,28 +204,32 @@ export class GraphImporter {
             jobs.push(session.writeTransaction(async tx => {
               let formattedEdgeData = [];
               for (const edgeData of l) {
+                const fromId = parseInt(edgeData._from.split('/')[1]);
+                const toId = parseInt(edgeData._to.split('/')[1]);
+                const fromCustomId = customIdToNodeIdMap[fromId];
+                const toCustomId = customIdToNodeIdMap[toId];
 
-                const fromCustomId = parseInt(edgeData._from.split('/')[1]);
-                const toCustomId = parseInt(edgeData._to.split('/')[1]);
                 formattedEdgeData.push({fromCustomId, toCustomId});
               }
 
               const label = this.getVertexLabel();
-              console.log(label)
-              console.log(edgeLabel);
               const cypherQuery = `
                   UNWIND $relationships AS relData
-                  MATCH (a:\`${label}\` {customId: relData.fromCustomId}), (b:\`${label}\` {customId: relData.toCustomId})
+                  MATCH (a), (b)
+                  WHERE id(a) = relData.fromCustomId AND id(b) = relData.toCustomId
                   CREATE (a)-[:\`${edgeLabel}\`]->(b)
+                  // UNWIND $relationships AS relData
+                  // MATCH (a:\`${label}\` {customId: relData.fromCustomId}), (b:\`${label}\` {customId: relData.toCustomId})
+                  // CREATE (a)-[:\`${edgeLabel}\`]->(b)
                 `
               ;
-              writeToFile("query");
-              writeToFile(cypherQuery);
-              writeToFile(JSON.stringify(formattedEdgeData));
+              //writeToFile("query");
+              //writeToFile(cypherQuery);
+              //writeToFile(JSON.stringify(formattedEdgeData));
 
               await tx.run(cypherQuery, {relationships: formattedEdgeData}).then(result => {
                 //console.log(JSON.stringify(result))
-                console.log(result.summary.counters)
+                //console.log(result.summary.counters)
               });
 
               l = [];
@@ -237,7 +243,7 @@ export class GraphImporter {
       await Promise.all(jobs).then(() => {
         done = true;
       });
-      
+
       if (done) {
         break;
       }
@@ -372,49 +378,58 @@ export class GraphImporter {
   }
 
   async dropNodeLabels() {
-    const session = this.driver.session();
     const label = this.getVertexLabel();
     const query = `
       MATCH (n:\`${label}\`)
-      DETACH DELETE n
+      WITH n LIMIT 500000
+      DELETE n
     `;
 
-    await session.run(query)
-      .then(result => {
-        console.log(`Deleted nodes.`);
-      })
-      .catch(error => {
-        console.error('Error executing query:', error);
-      })
-      .finally(() => {
-        session.close();
-      });
+    for (let i = 0; i < 20; i++) {
+      const session = this.driver.session();
+      await session.run(query)
+        .then(result => {
+
+        })
+        .catch(error => {
+          console.error('Error executing query:', error);
+        })
+        .finally(() => {
+          session.close();
+        });
+    }
+    console.log(`Deleted nodes.`);
   }
 
   async dropEdgeLabels() {
-    const session = this.driver.session();
     const label = this.getEdgeLabel();
     const query = `
       MATCH ()-[r:\`${label}\`]->()
+      WITH r LIMIT 500000
       DELETE r
     `;
 
-    await session.run(query)
-      .then(result => {
-        console.log(`Deleted relationships.`);
-      })
-      .catch(error => {
-        console.error('Error executing query:', error);
-      })
-      .finally(() => {
-        session.close();
-      });
+    for (let i = 0; i < 20; i++) {
+      const session = this.driver.session();
+      await session.run(query)
+        .then(result => {
+
+        })
+        .catch(error => {
+          console.error('Error executing query:', error);
+        })
+        .finally(() => {
+          session.close();
+        });
+    }
+    console.log(`Deleted relationships.`);
   }
 
   async prepareGraph() {
     if (this.dropGraph) {
-      await this.dropNodeLabels();
+      // edges need to be deleted first
       await this.dropEdgeLabels();
+      await this.dropNodeLabels();
     }
   }
 
