@@ -46,15 +46,31 @@ struct ArangoDBError {
     code: i32,
 }
 
-fn build_client(use_tls: bool) -> Result<reqwest::Client, String> {
+fn build_client(use_tls: bool, ca: &[u8]) -> Result<reqwest::Client, String> {
     let builder = reqwest::Client::builder();
     if use_tls {
-        let client = builder
-            .use_rustls_tls()
-            .min_tls_version(reqwest::tls::Version::TLS_1_2)
-            .danger_accept_invalid_certs(true)
-            .https_only(true)
-            .build();
+        let client = if ca.is_empty() {
+            builder
+                .use_rustls_tls()
+                .min_tls_version(reqwest::tls::Version::TLS_1_2)
+                .danger_accept_invalid_certs(true)
+                .https_only(true)
+                .build()
+        } else {
+            let cert = reqwest::Certificate::from_pem(ca);
+            if let Err(err) = cert {
+                return Err(format!(
+                    "Could not parse CA certificate for ArangoDB: {:?}",
+                    err
+                ));
+            }
+            builder
+                .use_rustls_tls()
+                .min_tls_version(reqwest::tls::Version::TLS_1_2)
+                .add_root_certificate(cert.unwrap())
+                .https_only(true)
+                .build()
+        };
         if let Err(err) = client {
             return Err(format!("Error message from request builder: {:?}", err));
         }
@@ -197,13 +213,14 @@ async fn get_all_shard_data(
     req: &GraphAnalyticsEngineLoadDataRequest,
     endpoints: &[String],
     jwt_token: &String,
+    ca_cert: &[u8],
     shard_map: &ShardMap,
     result_channels: Vec<tokio::sync::mpsc::Sender<Bytes>>,
 ) -> Result<(), String> {
     let begin = SystemTime::now();
 
     let use_tls = endpoints[0].starts_with("https://");
-    let client = build_client(use_tls)?;
+    let client = build_client(use_tls, ca_cert)?;
 
     let make_url = |path: &str| -> String { endpoints[0].clone() + "/_db/" + &req.database + path };
 
@@ -315,7 +332,7 @@ async fn get_all_shard_data(
             };
             //let client_clone = client.clone(); // the clones will share
             //                                   // the connection pool
-            let client_clone = build_client(use_tls)?;
+            let client_clone = build_client(use_tls, ca_cert)?;
             let endpoint_clone = endpoints[endpoints_round_robin].clone();
             let jwt_token_clone = jwt_token.clone();
             endpoints_round_robin += 1;
@@ -521,6 +538,7 @@ pub async fn fetch_graph_from_arangodb(
     // Graph object must be new and empty!
     let endpoints: Vec<String>;
     let jwt_token: String;
+    let ca_cert: Vec<u8>;
     {
         let guard = args.lock().unwrap();
         endpoints = guard
@@ -529,6 +547,7 @@ pub async fn fetch_graph_from_arangodb(
             .map(|s| s.to_owned())
             .collect();
         jwt_token = create_jwt_token(&guard, &user, 60 * 60 * 2 /* seconds */);
+        ca_cert = guard.arangodb_cacert.clone();
     }
     if endpoints.is_empty() {
         return Err("no endpoints given".to_string());
@@ -541,7 +560,7 @@ pub async fn fetch_graph_from_arangodb(
     );
 
     let use_tls = endpoints[0].starts_with("https://");
-    let client = build_client(use_tls)?;
+    let client = build_client(use_tls, &ca_cert)?;
 
     let make_url = |path: &str| -> String { endpoints[0].clone() + "/_db/" + &req.database + path };
 
@@ -690,7 +709,7 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(&req, &endpoints, &jwt_token, &vertex_map, senders).await?;
+        get_all_shard_data(&req, &endpoints, &jwt_token, &ca_cert, &vertex_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -800,7 +819,7 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(&req, &endpoints, &jwt_token, &edge_map, senders).await?;
+        get_all_shard_data(&req, &endpoints, &jwt_token, &ca_cert, &edge_map, senders).await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -832,10 +851,11 @@ async fn batch_sender(
     endpoint: String,
     use_tls: bool,
     jwt_token: String,
+    ca_cert: Vec<u8>,
     database: String,
 ) -> Result<(), String> {
     let begin = std::time::SystemTime::now();
-    let client = build_client(use_tls)?;
+    let client = build_client(use_tls, &ca_cert)?;
     while let Some(batch) = receiver.recv().await {
         let batch_clone = batch.clone();
         debug!(
@@ -872,6 +892,7 @@ pub async fn write_result_to_arangodb(
     assert_eq!(result_comp_arcs.len(), attribute_names.len());
     let endpoints: Vec<String>;
     let jwt_token: String;
+    let ca_cert: Vec<u8>;
     {
         let guard = args.lock().unwrap();
         endpoints = guard
@@ -880,6 +901,7 @@ pub async fn write_result_to_arangodb(
             .map(|s| s.to_owned())
             .collect();
         jwt_token = create_jwt_token(&guard, &user, 60 * 60 * 2 /* seconds */);
+        ca_cert = guard.arangodb_cacert.clone();
     }
     if endpoints.is_empty() {
         return Err("no endpoints given".to_string());
@@ -909,11 +931,13 @@ pub async fn write_result_to_arangodb(
             endpoints_round_robin = 0;
         }
         let database_clone = req.database.clone();
+        let ca_cert_clone = ca_cert.clone();
         task_set.spawn(batch_sender(
             receiver,
             endpoint_clone,
             use_tls,
             jwt_token_clone,
+            ca_cert_clone,
             database_clone,
         ));
     }
