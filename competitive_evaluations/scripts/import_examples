@@ -1,0 +1,39 @@
+#!/bin/bash
+
+#############################################
+### ArangoDB
+#############################################
+
+# Currently it is expected that ArangoDB is running.
+
+# Import data into ArangoDB
+(
+  cd ../examples || return
+  npm i
+  node main.js --graphName wiki-Talk -d true --mqs 500 --con 50
+)
+
+#############################################
+### Gral
+#############################################
+
+# Load data into gral service
+(
+  cd ../
+  # unfortunately we need to compile ts to js here
+  tsc ../api_tests/helpers/arangodb --outDir modules/
+  tsc ../api_tests/helpers/gral --outDir modules/
+  tsc ../api_tests/environment.config.ts --outDir modules/
+  # finally execute import script and store graph name to gral id in graphNameToGralIdMap.json
+  node importGral.js
+)
+
+#############################################
+### Neo4j
+#############################################
+
+(
+  cd ../examples/neo4j || return
+  node main.js --graphName wiki-Talk --dropGraph true --mqs 20 --concurrent 10
+)
+

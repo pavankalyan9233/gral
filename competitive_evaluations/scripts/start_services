@@ -1,0 +1,30 @@
+#!/bin/bash
+
+#############################################
+### ArangoDB
+#############################################
+
+(
+  cd ../
+  docker compose up -d
+)
+
+#############################################
+### Neo4j
+#############################################
+
+(
+  cd ../
+  docker run -d --name="neo4jbench" --publish=7474:7474 --publish=7687:7687 --user="$(id -u):$(id -g)" -e NEO4J_AUTH=none --env NEO4J_PLUGINS='["graph-data-science", "apoc"]' neo4j:latest
+)
+
+#############################################
+### Gral
+#############################################
+
+(
+  cd ../
+  cargo build --release # build optimized binary
+  killall gral -9
+  ./target/release/gral --bind-port 9999 --arangodb-endpoints http://localhost:8529 --arangodb-jwt-secrets ./secrets.jwt &> api_tests/logs/arangodb_auth.txt &
+)

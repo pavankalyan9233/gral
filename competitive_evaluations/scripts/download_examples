@@ -1,0 +1,7 @@
+#!/bin/bash
+
+#############################################
+### Download datasets
+#############################################
+
+./scripts/downloadSingleDataset wiki-Talk

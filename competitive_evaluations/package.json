@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "benchmark": "vitest bench --maxConcurrency 1"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "arangojs": "^8.8.1",
+    "axios": "^1.6.8",
+    "ts-node": "^10.9.2",
+    "vitest": "^1.6.0"
+  }
+}
