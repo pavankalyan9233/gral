@@ -20,7 +20,7 @@ const main = async () => {
 
   let graphImporter = new GraphImporter(neo4jConfig, graphName, argv.dropGraph, importOptions);
 
-  await graphImporter.prepareGraph();
+  await graphImporter.cleanGraphData();
 
   if (!argv.skipVertices) {
     await graphImporter.insertVertices();
@@ -32,5 +32,8 @@ const main = async () => {
     await graphImporter.verifyGraph();
   }
 
+  // this is the "gds" utility. It can only be created after we have inserted all the data
+  await graphImporter.prepareGraph();
+
 }
-main().then(r => console.log('Everything is done')).catch(e => console.error(e));
+main().then(() => console.log('Everything is done')).catch(e => console.error(e));

@@ -1,25 +1,19 @@
-import * as util from "node:util";
 import neo4j from 'neo4j-driver';
 import fs from 'fs';
-import path from 'path';
+import path, {dirname} from 'path';
 import {promisify} from 'util';
 import {exec as execSync} from 'child_process';
-
-const exec = promisify(execSync);
-import axios from 'axios';
 import readline from 'readline';
 import PQueue from "p-queue";
-import * as https from "https";
+import {fileURLToPath} from 'url';
+
+const exec = promisify(execSync);
 
 // Parameter for the queue update log messages
 let printMessages = true; // Flag to control printing messages
 const intervalTime = 2000; // 5 seconds in milliseconds
 
-import {fileURLToPath} from 'url';
-
 const __filename = fileURLToPath(import.meta.url);
-
-import {dirname} from 'path';
 
 const __dirname = dirname(__filename);
 
@@ -27,10 +21,10 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-const log_file = fs.createWriteStream(__dirname + '/debug.log', {flags: 'w'});
-const writeToFile = function (d) { //
-  log_file.write(util.format(d) + '\n');
-};
+//const writeToFile = function (d) {
+// const log_file = fs.createWriteStream(__dirname + '/debug.log', {flags: 'w'});
+//  log_file.write(util.format(d) + '\n');
+//};
 
 let customIdToNodeIdMap = {};
 
@@ -122,7 +116,7 @@ export class GraphImporter {
 
     let documentCount = 0;
 
-    const {expectedAmountOfVertices, _} = await this.getVertexAndEdgeCountsToInsert();
+    const {expectedAmountOfVertices} = await this.getVertexAndEdgeCountsToInsert();
 
     let docsToBeInserted;
     if (generatorInsertion) {
@@ -193,8 +187,7 @@ export class GraphImporter {
                 //writeToFile(propertiesObject);
 
                 await tx.run(cypherQuery, propertiesObject).then(result => {
-                  const nodeId = result.records[0].get('nodeId').low;
-                  customIdToNodeIdMap[nodeData.properties.customId] = nodeId;
+                  customIdToNodeIdMap[nodeData.properties.customId] = result.records[0].get('nodeId').low;
                 });
               }
               l = [];
@@ -227,7 +220,7 @@ export class GraphImporter {
               //writeToFile(cypherQuery);
               //writeToFile(JSON.stringify(formattedEdgeData));
 
-              await tx.run(cypherQuery, {relationships: formattedEdgeData}).then(result => {
+              await tx.run(cypherQuery, {relationships: formattedEdgeData}).then(() => {
                 //console.log(JSON.stringify(result))
                 //console.log(result.summary.counters)
               });
@@ -388,7 +381,7 @@ export class GraphImporter {
     for (let i = 0; i < 20; i++) {
       const session = this.driver.session();
       await session.run(query)
-        .then(result => {
+        .then(() => {
 
         })
         .catch(error => {
@@ -412,7 +405,7 @@ export class GraphImporter {
     for (let i = 0; i < 20; i++) {
       const session = this.driver.session();
       await session.run(query)
-        .then(result => {
+        .then(() => {
 
         })
         .catch(error => {
@@ -462,13 +455,15 @@ export class GraphImporter {
     return result.records[0].get('exists');
   }
 
-  async prepareGraph() {
+  async cleanGraphData() {
     if (this.dropGraph) {
       // edges need to be deleted first
       await this.dropEdgeLabels();
       await this.dropNodeLabels();
     }
+  }
 
+  async prepareGraph() {
     const graphExists = await this.checkGraphExists();
 
     if (!graphExists) {

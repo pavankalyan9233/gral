@@ -13,8 +13,8 @@ const WARNUP_ITERATIONS = 1;
 const gralEndpoint = config.gral_instances.arangodb_auth;
 const neoEndpoint = environmentConfig.neo4j.endpoint;
 
-describe.sequential('Run PageRank on all environments we do have using wiki-Talk dataset', () => {
-  bench('GRAL PageRank', async () => {
+describe.sequential('PageRank all services (Dataset: wiki-Talk)', () => {
+  bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     const wikiTalkGraphId = common.getGralGraphId('wiki-Talk');
     expect(wikiTalkGraphId).toBeTypeOf('number');
@@ -22,29 +22,27 @@ describe.sequential('Run PageRank on all environments we do have using wiki-Talk
     // 1x warmupIteration as for the first run indices need to be created in-memory.
   }, {iterations: ITERATIONS, warmupIterations: WARNUP_ITERATIONS});
 
-  bench('Neo4j PageRank', async () => {
+  bench('Neo4j', async () => {
     const driver = neo4j.driver(neoEndpoint, neo4j.auth.basic(
       environmentConfig.neo4j.username, environmentConfig.neo4j.password
-    ), {database: environmentConfig.neo4j.database});
+    ), {});
     const pageRankCypherQuery = `
     CALL gds.pageRank.stream(
-      'wiki-Talk',
+      'test',
       {
         maxIterations: 10, 
         dampingFactor: 0.85
       }
     )
     YIELD nodeId, score
-  
-    RETURN gds.util.asNode(nodeId).customId AS id, score ORDER BY score DESC
     `;
+    // RETURN gds.util.asNode(nodeId).customId AS id, score ORDER BY score DESC
 
     const session = driver.session();
 
     await session.run(pageRankCypherQuery)
-      .then(result => {
+      .then(() => {
         // currently we do not want to do anything with the result
-        console.log(result)
       })
       .catch(error => {
         console.error('Error during pagerank:', error);
