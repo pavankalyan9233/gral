@@ -1,7 +1,7 @@
 import {hideBin} from 'yargs/helpers';
-import {config} from '../config/environment.js';
+import {config} from '../../config/environment.js';
 import {createRequire} from 'module';
-import * as environment from "../config/environment.js";
+import * as environment from "../../config/environment.js";
 
 const require = createRequire(import.meta.url);
 const yargs = require('yargs/yargs');

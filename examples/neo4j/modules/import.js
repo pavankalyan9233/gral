@@ -367,13 +367,13 @@ export class GraphImporter {
 
   async insertEdges() {
     console.log(`Will now insert edges into collection ${this.graphName}_e. This will take a while...`)
-    const filePath = new URL(`../data/${this.graphName}/${this.graphName}.e`, import.meta.url).pathname;
+    const filePath = new URL(`../../data/${this.graphName}/${this.graphName}.e`, import.meta.url).pathname;
     await this.processEdgeFile(filePath, 10000);
   }
 
   async insertVertices() {
     console.log(`Will now insert edges into collection ${this.graphName}_v. This will take a while...`)
-    const filePath = new URL(`../data/${this.graphName}/${this.graphName}.v`, import.meta.url).pathname;
+    const filePath = new URL(`../../data/${this.graphName}/${this.graphName}.v`, import.meta.url).pathname;
     await this.processVertexFile(filePath, 10000);
   }
 
@@ -425,11 +425,54 @@ export class GraphImporter {
     console.log(`Deleted relationships.`);
   }
 
+  async createGraph() {
+    const nodeLabelsList = [
+      this.getVertexLabel()
+    ];
+
+    const relationShipList = [
+      this.getEdgeLabel()
+    ];
+
+    const cypherQuery = `
+      CALL gds.graph.project(
+        "${this.graphName}",
+        ${JSON.stringify(nodeLabelsList)},
+        ${JSON.stringify(relationShipList)}
+      )`
+    ;
+
+    const session = this.driver.session();
+    await session.run(cypherQuery);
+    await session.close();
+    console.log('Graph created successfully.');
+  }
+
+  async checkGraphExists() {
+    console.log(this.graphName)
+    const checkGraphCypherQuery =
+      `CALL gds.graph.exists("${this.graphName}") YIELD exists RETURN exists`
+    ;
+    console.log(checkGraphCypherQuery)
+
+    const session = this.driver.session();
+    const result = await session.run(checkGraphCypherQuery);
+    await session.close();
+
+    return result.records[0].get('exists');
+  }
+
   async prepareGraph() {
     if (this.dropGraph) {
       // edges need to be deleted first
       await this.dropEdgeLabels();
       await this.dropNodeLabels();
+    }
+
+    const graphExists = await this.checkGraphExists();
+
+    if (!graphExists) {
+      await this.createGraph();
     }
   }
 
@@ -442,7 +485,7 @@ export class GraphImporter {
   }
 
   readGraphProperties() {
-    const filePath = new URL(`../data/${this.graphName}/${this.graphName}.properties`, import.meta.url).pathname;
+    const filePath = new URL(`../../data/${this.graphName}/${this.graphName}.properties`, import.meta.url).pathname;
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n').filter(line => line.trim() !== '' && !line.startsWith('#'));
 

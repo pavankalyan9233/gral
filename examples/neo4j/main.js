@@ -1,5 +1,5 @@
-import {parseArgs} from './argumentParser.js';
-import {GraphImporter} from './import.js';
+import {parseArgs} from './modules/argumentParser.js';
+import {GraphImporter} from './modules/import.js';
 
 const argv = parseArgs();
 
