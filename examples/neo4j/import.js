@@ -283,7 +283,7 @@ export class GraphImporter {
         }
 
         const copyDocs = [...docs];
-        await queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
+        queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
           copyDocs, copyDocs.length, batchSize, false, undefined, true));
         docs = [];
       }
@@ -292,7 +292,7 @@ export class GraphImporter {
     if (docs.length > 0) {
       // last batch might still contain documents
       const copyDocs = [...docs];
-      await queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
+      queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_v',
         copyDocs, copyDocs.length, batchSize, false, undefined, true));
     }
 
@@ -341,7 +341,7 @@ export class GraphImporter {
         }
 
         const copyDocs = [...docs];
-        await queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
+        queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
           copyDocs, copyDocs.length, batchSize, false, undefined, false));
         docs = [];
       }
@@ -350,7 +350,7 @@ export class GraphImporter {
     if (docs.length > 0) {
       // last batch might still contain documents
       const copyDocs = [...docs];
-      await queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
+      queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
         copyDocs, copyDocs.length, batchSize, false, undefined, false));
     }
 
