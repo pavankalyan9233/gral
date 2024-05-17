@@ -126,6 +126,7 @@ export class GraphImporter {
       docsToBeInserted = maker.length;
     }
 
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (!done) {
         while (l.length < batchSize && documentCount < docsToBeInserted) {
@@ -272,6 +273,7 @@ export class GraphImporter {
       docs.push({label, properties});
 
       if (docs.length === batchSize) {
+        // eslint-disable-next-line no-constant-condition
         while (true) {
           if (queue.size < this.max_queue_size) {
             break;
@@ -328,8 +330,9 @@ export class GraphImporter {
         _from: `${this.graphName}_v/${fromSource}`,
         _to: `${this.graphName}_v/${toSource}`,
       });
-
+      
       if (docs.length === batchSize) {
+        // eslint-disable-next-line no-constant-condition
         while (true) {
           if (queue.size < this.max_queue_size) {
             break;
