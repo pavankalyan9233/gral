@@ -18,7 +18,7 @@ USAGE:
 
 OPTIONS:
   -h, --help             Prints help information
-  --use-tls BOOL         Use TLS or not [default: true]
+  --use-tls BOOL         Use TLS or not [default: false]
   --use-tls-auth BOOL    Use TLS client cert authentification [default: false]
   --keyfile PATH         Path to keyfile with cert chain and server key (TLS)
                          [default: 'tls/keyfile.pem']
@@ -45,7 +45,8 @@ options (command line options have higher precedence!):
   ARANGODB_ENDPOINT           Sets the default for --arangodb-endpoints
   ARANGODB_JWT                Sets the default path for --arangodb-jwt-secrets
   SERVER_CERTFILE             Specify a single keyfile to find the server TLS
-                              certificate and key
+                              certificate and key, this is the default for
+                              --keyfile
   ARANGODB_CACERT             Sets the default for --arangodb-cacert
   ARANGODB_USER               Sets user in --arangodb-user
   INTEGRATION_SERVICE_ADDRESS Sets the address for --auth-service
@@ -134,14 +135,12 @@ fn load_cert_and_key_from_keyfile(path: &str) -> (Vec<u8>, Vec<u8>) {
                         }
                         Ok(pems) => {
                             let mut cert: Vec<u8> = vec![];
-                            let mut cert_found = false;
                             let mut key: Vec<u8> = vec![];
                             let mut key_found = false;
-                            // Find the first cert and key:
+                            // Find the certs and key:
                             for p in &pems {
-                                if !cert_found && p.tag() == "CERTIFICATE" {
-                                    cert_found = true;
-                                    cert = Vec::from(pem::encode(p).as_bytes());
+                                if p.tag() == "CERTIFICATE" {
+                                    cert.extend_from_slice(pem::encode(p).as_bytes());
                                 } else if !key_found
                                     && (p.tag() == "PRIVATE KEY" || p.tag() == "EC PRIVATE KEY")
                                 {
@@ -223,7 +222,7 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
     };
     let default_endpoint = my_get_env("ARANGODB_ENDPOINT", "https://localhost:8529");
     let default_jwt_path = my_get_env("ARANGODB_JWT", "./secrets.jwt");
-    let default_keyfile_path = my_get_env("SERVER_CERTFILE", "./tls/keyfile.pem");
+    let default_keyfile_path = my_get_env("SERVER_CERTFILE", "");
     let jwt_path = pargs
         .opt_value_from_str("--arangodb-jwt-secrets")?
         .unwrap_or(default_jwt_path);
@@ -237,11 +236,13 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
 
     let cert: Vec<u8>; // Server certificate
     let key: Vec<u8>; // Server key
+    let mut default_use_tls = false;
     let keyfile_path: String = pargs
         .opt_value_from_str("--keyfile")?
         .unwrap_or(default_keyfile_path);
     if !keyfile_path.is_empty() {
         (cert, key) = load_cert_and_key_from_keyfile(&keyfile_path);
+        default_use_tls = true;
     } else {
         cert = vec![];
         key = vec![];
@@ -257,7 +258,9 @@ pub fn parse_args() -> Result<GralArgs, pico_args::Error> {
     };
 
     let args = GralArgs {
-        use_tls: pargs.opt_value_from_str("--use-tls")?.unwrap_or(false),
+        use_tls: pargs
+            .opt_value_from_str("--use-tls")?
+            .unwrap_or(default_use_tls),
         use_auth: pargs.opt_value_from_str("--use-auth")?.unwrap_or(false),
         cert,
         key,
