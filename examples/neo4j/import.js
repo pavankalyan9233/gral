@@ -186,14 +186,13 @@ export class GraphImporter {
                 const propertiesObject = {label, ...nodeData.properties};
                 let cypherQuery = `CREATE (n:\`${label}\` ${fullPropertiesString}) RETURN id(n) AS nodeId`;
 
-                writeToFile('fullPropertiesString:', fullPropertiesString);
-                writeToFile("query");
-                writeToFile(cypherQuery);
-                writeToFile('propertiesObject:');
-                writeToFile(propertiesObject);
+                //writeToFile('fullPropertiesString:', fullPropertiesString);
+                //writeToFile("query");
+                //writeToFile(cypherQuery);
+                //writeToFile('propertiesObject:');
+                //writeToFile(propertiesObject);
 
-                tx.run(cypherQuery, propertiesObject).then(result => {
-                  customIdToNodeIdMap[nodeData.properties.customId] = result.records[0]._fields[0].low;
+                await tx.run(cypherQuery, propertiesObject).then(result => {
                 });
               }
               l = [];
@@ -203,12 +202,15 @@ export class GraphImporter {
             jobs.push(session.writeTransaction(async tx => {
               let formattedEdgeData = [];
               for (const edgeData of l) {
-                const fromCustomId = edgeData._from.split('/')[1];
-                const toCustomId = edgeData._to.split('/')[1];
+
+                const fromCustomId = parseInt(edgeData._from.split('/')[1]);
+                const toCustomId = parseInt(edgeData._to.split('/')[1]);
                 formattedEdgeData.push({fromCustomId, toCustomId});
               }
 
               const label = this.getVertexLabel();
+              console.log(label)
+              console.log(edgeLabel);
               const cypherQuery = `
                   UNWIND $relationships AS relData
                   MATCH (a:\`${label}\` {customId: relData.fromCustomId}), (b:\`${label}\` {customId: relData.toCustomId})
@@ -217,9 +219,11 @@ export class GraphImporter {
               ;
               writeToFile("query");
               writeToFile(cypherQuery);
-              console.log(formattedEdgeData)
+              writeToFile(JSON.stringify(formattedEdgeData));
 
-              tx.run(cypherQuery, {relationships: formattedEdgeData}).then(result => {
+              await tx.run(cypherQuery, {relationships: formattedEdgeData}).then(result => {
+                //console.log(JSON.stringify(result))
+                console.log(result.summary.counters)
               });
 
               l = [];
@@ -230,9 +234,10 @@ export class GraphImporter {
         }
       }
 
-      await Promise.all(jobs);
-      done = true;
-
+      await Promise.all(jobs).then(() => {
+        done = true;
+      });
+      
       if (done) {
         break;
       }
@@ -263,7 +268,7 @@ export class GraphImporter {
 
     for await (const line of rl) {
       // Assuming each line contains two numeric values separated by a space
-      const properties = {customId: line};
+      const properties = {customId: parseInt(line)};
       const label = this.getVertexLabel();
       docs.push({label, properties});
 
@@ -293,6 +298,7 @@ export class GraphImporter {
 
     // wait for all futures
     await queue.onIdle();
+
     console.log(`-> Done inserting vertices into collection ${this.graphName}_v`);
   }
 
@@ -335,7 +341,7 @@ export class GraphImporter {
         }
 
         const copyDocs = [...docs];
-        queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
+        await queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
           copyDocs, copyDocs.length, batchSize, false, undefined, false));
         docs = [];
       }
@@ -344,7 +350,7 @@ export class GraphImporter {
     if (docs.length > 0) {
       // last batch might still contain documents
       const copyDocs = [...docs];
-      queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
+      await queue.add(() => this.insertManyDocumentsIntoCollection(this.databaseName, this.graphName + '_e',
         copyDocs, copyDocs.length, batchSize, false, undefined, false));
     }
 
@@ -373,7 +379,7 @@ export class GraphImporter {
       DETACH DELETE n
     `;
 
-    session.run(query)
+    await session.run(query)
       .then(result => {
         console.log(`Deleted nodes.`);
       })
@@ -393,7 +399,7 @@ export class GraphImporter {
       DELETE r
     `;
 
-    session.run(query)
+    await session.run(query)
       .then(result => {
         console.log(`Deleted relationships.`);
       })
