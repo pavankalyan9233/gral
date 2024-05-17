@@ -121,7 +121,7 @@ export class GraphImporter {
 
     let documentCount = 0;
 
-    const {expectedAmountOfVertices, _} = await this.getVertexAndEdgeCountsToInsert();
+    const {expectedAmountOfVertices} = await this.getVertexAndEdgeCountsToInsert();
 
     let docsToBeInserted;
     if (generatorInsertion) {
@@ -131,6 +131,7 @@ export class GraphImporter {
       docsToBeInserted = maker.length;
     }
 
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (!done) {
         while (l.length < batchSize && documentCount < docsToBeInserted) {
@@ -248,6 +249,7 @@ export class GraphImporter {
       });
 
       if (docs.length === batchSize) {
+        // eslint-disable-next-line no-constant-condition
         while (true) {
           if (queue.size < this.max_queue_size) {
             break;
@@ -305,6 +307,7 @@ export class GraphImporter {
       });
 
       if (docs.length === batchSize) {
+        // eslint-disable-next-line no-constant-condition
         while (true) {
           if (queue.size < this.max_queue_size) {
             break;

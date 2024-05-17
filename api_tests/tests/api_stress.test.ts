@@ -15,7 +15,7 @@ const TEST_TIMEOUT = 10000;
 // I still want to keep this file as it has been helpful in the past to test the service under high load.
 // Additionally, this test file demonstrates how to use GRPC to communicate with the service in JavaScript.
 describe.skip('API Stress Test', () => {
-  let jwt: String;
+  let jwt: string;
 
   beforeAll(async () => {
     jwt = await arangodb.getArangoJWT(3);
@@ -27,25 +27,21 @@ describe.skip('API Stress Test', () => {
     const notesProto = loadPackageDefinition(packageDefinition);
 
     const createToken = async () => {
-      try {
-        //const credentials
-        const client = new notesProto.authentication.AuthenticationV1(endpoint, ChannelCredentials.createInsecure());
-        const createTokenRequest = {
-          user: "root"
-        };
+      const client = new notesProto.authentication.AuthenticationV1(endpoint, ChannelCredentials.createInsecure());
+      const createTokenRequest = {
+        user: "root"
+      };
 
-        return new Promise((resolve, reject) => {
-          client.CreateToken(createTokenRequest, (error, response) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve(response);
-            }
-          });
+      return new Promise((resolve, reject) => {
+        client.CreateToken(createTokenRequest, (error, response) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(response);
+          }
         });
-      } catch (error) {
-        throw error;
-      }
+      });
+
     };
 
     const tokenPromises = [];
@@ -65,9 +61,8 @@ describe.skip('API Stress Test', () => {
 
   test('Test random chosen gral endpoint that will communicate with the auth service behind', () => {
     const endpoint = 'http://localhost:1337';
-    let url = gral.buildUrl(endpoint, '/v1/graphs');
-
-    let promises = [];
+    const url = gral.buildUrl(endpoint, '/v1/graphs');
+    const promises = [];
 
     for (let i = 0; i < AMOUNT_OF_REQUESTS; i++) {
       promises.push(
@@ -83,7 +78,7 @@ describe.skip('API Stress Test', () => {
         expect(responses.length).toBe(AMOUNT_OF_REQUESTS);
       })
       .catch((error) => {
-        console.error('An error occurred:', error);
+        throw error;
       });
   }, TEST_TIMEOUT);
 });

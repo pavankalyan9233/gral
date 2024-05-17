@@ -1,6 +1,6 @@
 import {config} from '../environment.config';
 import axios from "axios";
-import { strict as assert } from 'assert';
+import {strict as assert} from 'assert';
 
 function buildUrl(endpoint: string, path: string) {
   if (endpoint !== config.gral_instances.arangodb_auth && endpoint !== config.gral_instances.service_auth && endpoint !== config.gral_instances.service_auth_unreachable) {
@@ -30,6 +30,8 @@ async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: stri
   // the test after a certain amount of time. The default timeout is 5 seconds.
   // For longer running tests, this needs to be adjusted inside the test() definition
   // itself
+
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       const response = await axios.get(url, buildHeaders(jwt));
@@ -121,11 +123,7 @@ async function loadGraph(
   );
   const body = response.data;
 
-  try {
-    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
-  } catch (error) {
-    throw error;
-  }
+  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
 async function runIRank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {
@@ -146,11 +144,7 @@ async function runIRank(jwt: string, gralEndpoint: string, graphId: number, maxS
     console.log(error);
   }
 
-  try {
-    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
-  } catch (error) {
-    throw error;
-  }
+  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
 async function runPagerank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {
@@ -166,11 +160,7 @@ async function runPagerank(jwt: string, gralEndpoint: string, graphId: number, m
   );
   const body = response.data;
 
-  try {
-    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
-  } catch (error) {
-    throw error;
-  }
+  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
 async function runPythonPagerank(jwt: string, gralEndpoint: string, graphId: number,
@@ -187,11 +177,7 @@ async function runPythonPagerank(jwt: string, gralEndpoint: string, graphId: num
   );
   const body = response.data;
 
-  try {
-    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
-  } catch (error) {
-    throw error;
-  }
+  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
 async function runWCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
@@ -206,11 +192,7 @@ async function runWCC(jwt: string, gralEndpoint: string, graphId: number, custom
   );
   const body = response.data;
 
-  try {
-    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
-  } catch (error) {
-    throw error;
-  }
+  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
 async function runSCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
@@ -225,11 +207,25 @@ async function runSCC(jwt: string, gralEndpoint: string, graphId: number, custom
   );
   const body = response.data;
 
-  try {
-    return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
-  } catch (error) {
-    throw error;
-  }
+  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+}
+
+async function runCDLP(jwt: string, gralEndpoint: string, graphId: number, startLabelAttribute: string = "") {
+  const url = buildUrl(gralEndpoint, '/v1/labelpropagation');
+  const cdlpRequest = {
+    "graph_id": graphId,
+    "start_label_attribute": startLabelAttribute,
+    "synchronous": true,
+    "maximum_supersteps": 10,
+    "random_tiebreak": false,
+  };
+
+  const response = await axios.post(
+    url, cdlpRequest, buildHeaders(jwt)
+  );
+  const body = response.data;
+
+  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
 export const gral = {
@@ -243,7 +239,8 @@ export const gral = {
   runPagerank,
   runPythonPagerank,
   runWCC,
-  runSCC
+  runSCC,
+  runCDLP
 };
 
 module.exports = gral;

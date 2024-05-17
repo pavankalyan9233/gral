@@ -1,5 +1,4 @@
 import {hideBin} from 'yargs/helpers';
-import {config} from '../config/environment.js';
 import {createRequire} from 'module';
 import * as environment from "../config/environment.js";
 

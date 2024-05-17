@@ -1,7 +1,7 @@
 import {config} from '../environment.config';
 
 function getPagerankGraphs() {
-  let graphs = [];
+  const graphs = [];
   for (const key in config.benchmark.graphs) {
     if (Object.prototype.hasOwnProperty.call(config.benchmark.graphs, key)) {
       const element = config.benchmark.graphs[key];

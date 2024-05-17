@@ -1,7 +1,6 @@
-import {beforeAll, bench, describe, expect} from 'vitest';
+import {bench, describe} from 'vitest';
 import {config} from '../../environment.config';
 import {arangodb} from '../../helpers/arangodb';
-import {benchmarkHelper} from "../../helpers/benchmark";
 import {gral} from "../../helpers/gral";
 
 const gralEndpoint = config.gral_instances.arangodb_auth;

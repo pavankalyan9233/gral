@@ -1,4 +1,5 @@
 #!/bin/bash
+rm -rf tls
 mkdir -p tls
 cd tls
 openssl genrsa -aes256 -passout pass:abcd1234 -out ca-key.pem 2048
@@ -30,7 +31,10 @@ openssl req -new -key key.pem -out key-csr.pem -sha512 -config ssl.conf -subj "/
 
 openssl x509 -req -in key-csr.pem -CA ca.pem -days 3650 -CAkey ca-key.pem -out cert.pem -extensions req_ext -extfile ssl.conf -passin pass:abcd1234 -CAcreateserial
 
-cat ca.pem cert.pem key.pem > keyfile.pem
+# Put server certificate, CA certificate and server key into keyfile.
+# Note that the order is important here: The server cert must go before
+# the CA cert!
+cat cert.pem ca.pem key.pem > keyfile.pem
 ln cert.pem ca.crt
 ln key.pem ca.key
 
