@@ -6,6 +6,7 @@
   "devDependencies": {
     "arangojs": "^8.8.1",
     "axios": "^1.6.8",
+    "neo4j-driver": "^5.18.0",
     "ts-node": "^10.9.2",
     "vitest": "^1.6.0"
   }

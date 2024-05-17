@@ -1,56 +1,58 @@
-import {bench, describe} from 'vitest';
+import {bench, describe, expect} from 'vitest';
 import {config} from '../../api_tests/environment.config';
 import {arangodb} from '../../api_tests/helpers/arangodb';
 import {gral} from "../../api_tests/helpers/gral";
+import {common} from "../modules/common";
+import neo4j from 'neo4j-driver';
+
+import {config as environmentConfig} from '../../examples/config/environment.js';
+
+const ITERATIONS = 5;
+const WARNUP_ITERATIONS = 1;
 
 const gralEndpoint = config.gral_instances.arangodb_auth;
-let wikiTalkGraphID = 0;
+const neoEndpoint = environmentConfig.neo4j.endpoint;
 
-describe.sequential('Various Benchmarks', () => {
-
-  // First, load all graphs into gral
-  bench('Load Graph: wiki-Talk', async () => {
-    // TODO: As soon as we have named graphs in GRAL, we will pull out graph creation out of here so we
-    //  only get algorithm related benchmark results here.
+describe.sequential('Run PageRank on all environments we do have using wiki-Talk dataset', () => {
+  bench('GRAL PageRank', async () => {
     const jwt = await arangodb.getArangoJWT();
-    const graphName = 'wiki-Talk';
-    const vertexAttributes = ["_id", "@collectionname"]
-    const response = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], vertexAttributes);
-    wikiTalkGraphID = response.result.graph_id;
-  }, {iterations: 1, warmupIterations: 0});
-
-  // Then, execute all algorithms we want to run on it
-
-  bench('iRank', async () => {
-    const jwt = await arangodb.getArangoJWT();
-    await gral.runIRank(jwt, gralEndpoint, wikiTalkGraphID, 10, 0.85);
+    const wikiTalkGraphId = common.getGralGraphId('wiki-Talk');
+    expect(wikiTalkGraphId).toBeTypeOf('number');
+    await gral.runPagerank(jwt, gralEndpoint, wikiTalkGraphId, 10, 0.85);
     // 1x warmupIteration as for the first run indices need to be created in-memory.
-  }, {iterations: 3, warmupIterations: 1});
+  }, {iterations: ITERATIONS, warmupIterations: WARNUP_ITERATIONS});
 
-  bench('PageRank', async () => {
-    const jwt = await arangodb.getArangoJWT();
-    await gral.runPagerank(jwt, gralEndpoint, wikiTalkGraphID, 10, 0.85);
-    // 1x warmupIteration as for the first run indices need to be created in-memory.
-  }, {iterations: 3, warmupIterations: 1});
+  bench('Neo4j PageRank', async () => {
+    const driver = neo4j.driver(neoEndpoint, neo4j.auth.basic(
+      environmentConfig.neo4j.username, environmentConfig.neo4j.password
+    ), {database: environmentConfig.neo4j.database});
+    const pageRankCypherQuery = `
+    CALL gds.pageRank.stream(
+      'wiki-Talk',
+      {
+        maxIterations: 10, 
+        dampingFactor: 0.85
+      }
+    )
+    YIELD nodeId, score
+  
+    RETURN gds.util.asNode(nodeId).customId AS id, score ORDER BY score DESC
+    `;
 
-  bench('PageRank Python', async () => {
-    const jwt = await arangodb.getArangoJWT();
-    await gral.runPythonPagerank(jwt, gralEndpoint, wikiTalkGraphID, 10, 0.85);
-    // no warmup iterations required. Only choosing 1 iteration as this execution is pretty slow.
-  }, {iterations: 1, warmupIterations: 0});
+    const session = driver.session();
 
-  bench('WCC', async () => {
-    const jwt = await arangodb.getArangoJWT();
-    const customFields = {};
-    await gral.runWCC(jwt, gralEndpoint, wikiTalkGraphID, customFields);
-    // 1x warmupIteration as for the first run indices need to be created in-memory.
-  }, {iterations: 3, warmupIterations: 1});
+    await session.run(pageRankCypherQuery)
+      .then(result => {
+        // currently we do not want to do anything with the result
+        console.log(result)
+      })
+      .catch(error => {
+        console.error('Error during pagerank:', error);
+      })
+      .finally(() => {
+        session.close();
+      });
 
-  bench('SCC', async () => {
-    const jwt = await arangodb.getArangoJWT();
-    const customFields = {};
-    await gral.runSCC(jwt, gralEndpoint, wikiTalkGraphID, customFields);
-    // 1x warmupIteration as for the first run indices need to be created in-memory.
-  }, {iterations: 3, warmupIterations: 1});
+  });
 
 });
