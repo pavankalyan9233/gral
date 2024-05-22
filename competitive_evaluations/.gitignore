@@ -1,4 +1,3 @@
 node_modules
-modules/helpers
 environment.config.js
 modules/graphNameToGralIdMap.json

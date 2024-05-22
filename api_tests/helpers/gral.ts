@@ -21,7 +21,7 @@ function buildHeaders(jwt: string) {
   };
 }
 
-async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: string) {
+async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: string, refetchInterval: number = 250) {
   const url = buildUrl(endpoint, `/v1/jobs/${jobId}`);
 
   let retries = 0;
@@ -43,11 +43,11 @@ async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: stri
           return {result: body, retriesNeeded: retries};
         } else {
           retries++;
-          await new Promise(resolve => setTimeout(resolve, 250));
+          await new Promise(resolve => setTimeout(resolve, refetchInterval));
         }
       } else {
         retries++;
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, refetchInterval));
       }
     } catch (error) {
       throw new Error(`Job <${jobId}> did not finish in time: ${error}`);
@@ -108,7 +108,7 @@ async function loadGraph(
   gralEndpoint: string,
   graphName: string,
   vertexCollections: string[] = [],
-  edgeCollections: string[] = [], vertexAttributes: string[] = []) {
+  edgeCollections: string[] = [], vertexAttributes: string[] = [], refetchInterval: number = 250) {
   const url = buildUrl(gralEndpoint, '/v1/loaddata');
   const graphAnalyticsEngineLoadDataRequest = {
     "database": config.arangodb.database,
@@ -123,7 +123,7 @@ async function loadGraph(
   );
   const body = response.data;
 
-  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id, refetchInterval);
 }
 
 async function runIRank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {

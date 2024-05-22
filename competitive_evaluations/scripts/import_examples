@@ -17,16 +17,8 @@
 ### Gral
 #############################################
 
-# Load data into gral service
-(
-  cd ../
-  # unfortunately we need to compile ts to js here
-  tsc ../api_tests/helpers/arangodb --outDir modules/
-  tsc ../api_tests/helpers/gral --outDir modules/
-  tsc ../api_tests/environment.config.ts --outDir modules/
-  # finally execute import script and store graph name to gral id in graphNameToGralIdMap.json
-  node importGral.js
-)
+# We will always load a new graph for every benchmark as our service is separated from the database
+# and the loading itself should be part of the benchmark.
 
 #############################################
 ### Neo4j

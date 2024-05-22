@@ -330,7 +330,7 @@ export class GraphImporter {
         _from: `${this.graphName}_v/${fromSource}`,
         _to: `${this.graphName}_v/${toSource}`,
       });
-      
+
       if (docs.length === batchSize) {
         // eslint-disable-next-line no-constant-condition
         while (true) {
