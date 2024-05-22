@@ -4,6 +4,7 @@ use std::sync::{Arc, RwLock};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gral::computations::JobRuntime;
     use gral::graph_store::graph::Graph;
     use gral::python::pythoncomputation::PythonComputation;
     use gral::python::script::generate_script;
@@ -38,6 +39,7 @@ mod tests {
             error_code: 0,
             error_message: "".to_string(),
             result: Default::default(),
+            runtime: JobRuntime::start(),
         }));
 
         let res = executor::execute_python_script_on_graph(comp_arc, g_arc, user_snippet, false);

@@ -1,10 +1,12 @@
 use crate::computations::Computation;
+use crate::computations::JobRuntime;
 use crate::graph_store::graph::Graph;
 use serde_json::Value;
 use std::any::Any;
 use std::collections::HashMap;
 use std::mem;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 pub struct PythonComputation {
     pub graph: Arc<RwLock<Graph>>,
@@ -14,6 +16,7 @@ pub struct PythonComputation {
     pub error_code: i32,
     pub error_message: String,
     pub result: HashMap<u64, Value>,
+    pub runtime: JobRuntime,
 }
 
 impl Computation for PythonComputation {
@@ -58,5 +61,8 @@ impl Computation for PythonComputation {
             total_memory += mem::size_of_val(v);
         }
         total_memory
+    }
+    fn get_runtime(&self) -> Duration {
+        self.runtime.get()
     }
 }

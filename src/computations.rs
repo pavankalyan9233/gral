@@ -5,9 +5,33 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::{Duration, Instant};
 use warp::Filter;
 
+use crate::api::graphanalyticsengine::GraphAnalyticsEngineJob;
 use crate::graph_store::graph::Graph;
+
+pub enum JobRuntime {
+    Started(Instant),
+    Finished(Duration),
+}
+impl JobRuntime {
+    pub fn start() -> Self {
+        Self::Started(Instant::now())
+    }
+    pub fn stop(&self) -> Self {
+        match self {
+            Self::Started(start) => Self::Finished(start.elapsed()),
+            Self::Finished(duration) => Self::Finished(*duration),
+        }
+    }
+    pub fn get(&self) -> Duration {
+        match self {
+            Self::Started(start) => start.elapsed(),
+            Self::Finished(duration) => *duration,
+        }
+    }
+}
 
 pub trait Computation {
     fn is_ready(&self) -> bool;
@@ -22,6 +46,25 @@ pub trait Computation {
     // TODO: We should think about the get_result API (maybe it could return a Result<>)
     fn get_result(&self, which: u64) -> (String, Value);
     fn memory_usage(&self) -> usize;
+    fn get_runtime(&self) -> Duration;
+    fn job_info(&self, job_id: u64) -> GraphAnalyticsEngineJob {
+        let graph_arc = self.get_graph();
+        let graph = graph_arc.read().unwrap();
+        let (error_code, error_message) = self.get_error();
+        GraphAnalyticsEngineJob {
+            job_id,
+            graph_id: graph.graph_id,
+            total: self.get_total(),
+            progress: self.get_progress(),
+            error: error_code != 0,
+            error_code,
+            error_message,
+            source_job: "".to_string(),
+            comp_type: self.algorithm_name(),
+            memory_usage: self.memory_usage() as u64,
+            runtime_in_microseconds: self.get_runtime().as_micros() as u64,
+        }
+    }
 }
 
 pub struct Computations {
@@ -72,8 +115,8 @@ pub struct ComponentsComputation {
     pub number: Option<u64>,
     pub error_code: i32,
     pub error_message: String,
+    pub runtime: JobRuntime,
 }
-
 impl Computation for ComponentsComputation {
     fn is_ready(&self) -> bool {
         self.components.is_some()
@@ -134,6 +177,9 @@ impl Computation for ComponentsComputation {
         }
         total
     }
+    fn get_runtime(&self) -> Duration {
+        self.runtime.get()
+    }
 }
 
 pub struct LoadComputation {
@@ -143,6 +189,7 @@ pub struct LoadComputation {
     pub progress: u32,
     pub error_code: i32,
     pub error_message: String,
+    pub runtime: JobRuntime,
 }
 
 impl Computation for LoadComputation {
@@ -180,6 +227,9 @@ impl Computation for LoadComputation {
         // Memory for graph accounted for there!
         0
     }
+    fn get_runtime(&self) -> Duration {
+        self.runtime.get()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -202,6 +252,7 @@ pub struct AggregationComputation {
     pub error_code: i32,
     pub error_message: String,
     pub result: Vec<Component>,
+    pub runtime: JobRuntime,
 }
 
 impl Computation for AggregationComputation {
@@ -244,6 +295,9 @@ impl Computation for AggregationComputation {
     fn memory_usage(&self) -> usize {
         self.result.len() * std::mem::size_of::<Component>()
     }
+    fn get_runtime(&self) -> Duration {
+        self.runtime.get()
+    }
 }
 
 pub struct StoreComputation {
@@ -253,6 +307,7 @@ pub struct StoreComputation {
     pub progress: u32,
     pub error_code: i32,
     pub error_message: String,
+    pub runtime: JobRuntime,
 }
 
 impl Computation for StoreComputation {
@@ -291,6 +346,9 @@ impl Computation for StoreComputation {
         // Memory for graph accounted for there!
         0
     }
+    fn get_runtime(&self) -> Duration {
+        self.runtime.get()
+    }
 }
 
 pub struct PageRankComputation {
@@ -304,6 +362,7 @@ pub struct PageRankComputation {
     pub steps: u32,
     pub rank: Vec<f64>,
     pub result_position: usize,
+    pub runtime: JobRuntime,
 }
 
 impl Computation for PageRankComputation {
@@ -347,6 +406,9 @@ impl Computation for PageRankComputation {
     fn memory_usage(&self) -> usize {
         self.rank.len() * std::mem::size_of::<f64>()
     }
+    fn get_runtime(&self) -> Duration {
+        self.runtime.get()
+    }
 }
 
 pub struct LabelPropagationComputation {
@@ -360,6 +422,7 @@ pub struct LabelPropagationComputation {
     pub label: Vec<String>,
     pub result_position: usize,
     pub label_size_sum: usize,
+    pub runtime: JobRuntime,
 }
 
 impl Computation for LabelPropagationComputation {
@@ -402,5 +465,8 @@ impl Computation for LabelPropagationComputation {
     }
     fn memory_usage(&self) -> usize {
         self.label_size_sum + self.label.len() * std::mem::size_of::<String>()
+    }
+    fn get_runtime(&self) -> Duration {
+        self.runtime.get()
     }
 }
