@@ -63,7 +63,6 @@ const verifyGraphStatus = async (graphId: string, jwt: string) => {
 };
 
 describe.sequential('API tests based on wiki-Talk graph dataset', () => {
-
   let jwt: string;
   let graphIdForComputation: number;
   let resultIdPagerank: string;

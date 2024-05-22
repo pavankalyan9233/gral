@@ -10,7 +10,12 @@
 (
   cd ../examples || return
   npm i
-  node main.js --graphName wiki-Talk -d true --mqs 500 --con 50
+  node main.js --graphName wiki-Talk -d true --mqs 500 --con 50      # 2XS
+  node main.js --graphName kgs -d true --mqs 500 --con 50            # XS
+  node main.js --graphName dota-league -d true --mqs 500 --con 50    # S
+  node main.js --graphName datagen-8_0-fb -d true --mqs 500 --con 50 # M
+  node main.js --graphName datagen-8_5-fb -d true --mqs 500 --con 50 # L	
+  node main.js --graphName com-friendster -d true --mqs 500 --con 50 # XL
 )
 
 #############################################
@@ -26,6 +31,11 @@
 
 (
   cd ../examples/neo4j || return
-  node main.js --graphName wiki-Talk --dropGraph true --mqs 20 --concurrent 10
+  node main.js --graphName wiki-Talk --d true --mqs 20 --con 10      # 2XS
+  node main.js --graphName kgs --d true --mqs 20 --con 10            # XS
+  node main.js --graphName dota-league --d true --mqs 20 --con 10    # S
+  node main.js --graphName datagen-8_0-fb --d true --mqs 20 --con 10 # M
+  node main.js --graphName datagen-8_5-fb --d true --mqs 20 --con 10 # L
+  node main.js --graphName com-friendster --d true --mqs 20 --con 10 # XL
 )
 

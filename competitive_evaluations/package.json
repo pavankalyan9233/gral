@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "benchmark": "vitest bench --maxConcurrency 1"
+    "benchmark": "vitest bench --maxConcurrency 1 --outputJson main.json"
   },
   "type": "commonjs",
   "devDependencies": {

@@ -126,6 +126,23 @@ async function loadGraph(
   return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id, refetchInterval);
 }
 
+async function dropGraph(
+  jwt: string,
+  gralEndpoint: string,
+  graphId: number,
+  refetchInterval: number = 250
+) {
+  const url = buildUrl(gralEndpoint, `/v1/graphs/${graphId}`);
+  const response = await axios.delete(
+    url, buildHeaders(jwt)
+  );
+  assert(response.status === 200);
+
+  // TODO: DELETE does not return a job id, but documented like this.
+  // const body = response.data;
+  // return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id, refetchInterval);
+}
+
 async function runIRank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {
   const url = buildUrl(gralEndpoint, '/v1/irank');
   const iRankRequest = {
@@ -235,6 +252,7 @@ export const gral = {
   shutdownInstance,
   waitForJobToBeFinished,
   loadGraph,
+  dropGraph,
   runIRank,
   runPagerank,
   runPythonPagerank,

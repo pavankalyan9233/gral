@@ -78,30 +78,7 @@ export class GraphImporter {
   }
 
   insertManyDocumentsIntoCollection = async (db, coll, maker, limit, batchSize, generatorInsertion = true, startAtZero = false, isNodeInsertion = true) => {
-    // This function uses the asynchronous API of `arangod` to quickly
-    // insert a lot of documents into a collection. You can control which
-    // documents to insert with the `maker` function. The arguments are:
-    //  db - name of the database (string)
-    //  coll - name of the collection, must already exist (string)
-    //  maker - a callback function to produce documents, it is called
-    //          with a single integer, the first time with 0, then with 1
-    //          and so on. The callback function should return an object
-    //          or a list of objects, which will be inserted into the
-    //          collection. You can either specify the `_key` attribute or
-    //          not. Once you return either `null` or `false`, no more
-    //          callbacks will be done.
-    //  limit - an integer, if `limit` documents have been received, no more
-    //          callbacks are issued.
-    //  batchSize - an integer, this function will use this number as batch
-    //              size.
-    // Example:
-    //   insertManyDocumentsIntoCollection("_system", "coll",
-    //       i => {Hallo:i}, 1000000, 1000);
-    // will insert 1000000 documents into the collection "coll" in the
-    // `_system` database in batches of 1000. The documents will all have
-    // the `Hallo` attribute set to one of the numbers from 0 to 999999.
-    // This is useful to quickly generate test data. Be careful, this can
-    // create a lot of parallel load!
+    // Be careful, this can create a lot of parallel load!
     let done = false;
     let l = [];
     let jobs = [];
@@ -156,8 +133,6 @@ export class GraphImporter {
 
       const session = this.driver.session();
       if ((done && l.length > 0) || l.length >= batchSize) {
-
-
         try {
           if (isNodeInsertion) {
             jobs.push(session.writeTransaction(async tx => {
@@ -171,7 +146,7 @@ export class GraphImporter {
                   if (nodeData.properties[key] === undefined) {
                     continue;
                   }
-                  propertiesString += key + ': $' + key;
+                  propertiesString += key + ': toInteger($' + key + ')';
                   if (i < keys.length - 1) {
                     propertiesString += ', ';
                   }
@@ -186,7 +161,6 @@ export class GraphImporter {
                 //writeToFile(cypherQuery);
                 //writeToFile('propertiesObject:');
                 //writeToFile(propertiesObject);
-
                 await tx.run(cypherQuery, propertiesObject).then(result => {
                   customIdToNodeIdMap[nodeData.properties.customId] = result.records[0].get('nodeId').low;
                 });
