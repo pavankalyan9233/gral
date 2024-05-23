@@ -76,7 +76,7 @@ describe.sequential(`Label Propagation, Graph: ${graphName}`, () => {
     await gral.dropGraph(jwt, gralEndpoint, wikiTalkGraphId);
   }, {iterations: ITERATIONS, warmupIterations: WARMUP_ITERATIONS});
 
-  bench.only('Neo4j', async () => {
+  bench('Neo4j', async () => {
     await neo4jHelper.createGraph(graphName, ["customId"]);
     // customId equals the data original source id
     // cannot be set to the original neo4j's id as this value cannot be set from the outside

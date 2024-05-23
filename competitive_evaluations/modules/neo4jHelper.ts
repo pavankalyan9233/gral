@@ -62,7 +62,8 @@ const runPageRank = async (graphName: string, maxIterations: number = 10, dampin
       '${graphName}',
       {
         maxIterations: ${maxIterations}, 
-        dampingFactor: ${dampingFactor}
+        dampingFactor: ${dampingFactor},
+        concurrency: 1
       }
     )
     YIELD nodeId, score
@@ -87,7 +88,7 @@ const runWCC = async (graphName: string) => {
   ), {});
   const wccCypherQuery = `
     CALL gds.wcc.stream("${graphName}", {
-      concurrency: 4
+      concurrency: 1
     })
     YIELD nodeId, componentId
   `;
@@ -111,7 +112,7 @@ const runSCC = async (graphName: string) => {
   ), {});
   const sccCypherQuery = `
     CALL gds.scc.stream("${graphName}", {
-      concurrency: 4
+      concurrency: 1
     })
     YIELD nodeId, componentId
   `;
