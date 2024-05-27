@@ -8,7 +8,7 @@ const ITERATIONS = 5;
 const WARMUP_ITERATIONS = 0;
 
 const gralEndpoint = config.gral_instances.arangodb_auth;
-const graphName = 'dota-league';
+const graphName = 'twitter_mpi';
 
 describe.sequential(`PageRank, Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
