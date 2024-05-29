@@ -5,6 +5,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
+use log::error;
 use warp::Filter;
 
 use crate::graph_store::graph::Graph;
@@ -137,7 +138,7 @@ impl Computation for ComponentsComputation {
 }
 
 pub struct LoadComputation {
-    pub graph: Arc<RwLock<Graph>>,
+    pub graph_id: u64, // we are only storing the graph_id here, we don't want to hold a lock on the graph
     pub shall_stop: bool,
     pub total: u32,
     pub progress: u32,
@@ -159,7 +160,10 @@ impl Computation for LoadComputation {
         "".to_string()
     }
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
-        self.graph.clone()
+        let vec_string: Vec<String> = vec![];
+        let graph_arc: Arc<RwLock<Graph>> = Arc::new(RwLock::new(Graph::new(false, vec_string)));
+        error!("dummy... workaround");
+        return graph_arc;
     }
     fn get_total(&self) -> u32 {
         self.total

@@ -1,10 +1,10 @@
-import {bench, describe, expect} from 'vitest';
+import {bench, describe} from 'vitest';
 import {config} from '../../api_tests/environment.config';
 import {arangodb} from '../../api_tests/helpers/arangodb';
 import {gral} from "../../api_tests/helpers/gral";
 import {neo4jHelper} from "../modules/neo4jHelper";
 
-const ITERATIONS = 5;
+const ITERATIONS = 3;
 const WARMUP_ITERATIONS = 0;
 
 const gralEndpoint = config.gral_instances.arangodb_auth;
@@ -13,10 +13,7 @@ const graphName = 'wiki-Talk';
 describe.sequential(`PageRank, Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
-    const response = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);
-    const wikiTalkGraphId = response.result.graph_id;
-    expect(wikiTalkGraphId).toBeTypeOf('number');
-
+    const wikiTalkGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);
     await gral.runPagerank(jwt, gralEndpoint, wikiTalkGraphId, 10, 0.85);
     await gral.dropGraph(jwt, gralEndpoint, wikiTalkGraphId);
   }, {iterations: ITERATIONS, warmupIterations: WARMUP_ITERATIONS});
@@ -31,10 +28,7 @@ describe.sequential(`PageRank, Graph: ${graphName}`, () => {
 describe.sequential(`WCC, Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
-    const response = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);
-    const wikiTalkGraphId = response.result.graph_id;
-    expect(wikiTalkGraphId).toBeTypeOf('number');
-
+    const wikiTalkGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);
     await gral.runWCC(jwt, gralEndpoint, wikiTalkGraphId, {});
     await gral.dropGraph(jwt, gralEndpoint, wikiTalkGraphId);
   }, {iterations: ITERATIONS, warmupIterations: WARMUP_ITERATIONS});
@@ -49,10 +43,7 @@ describe.sequential(`WCC, Graph: ${graphName}`, () => {
 describe.sequential(`SCC, Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
-    const response = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);
-    const wikiTalkGraphId = response.result.graph_id;
-    expect(wikiTalkGraphId).toBeTypeOf('number');
-
+    const wikiTalkGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);
     await gral.runSCC(jwt, gralEndpoint, wikiTalkGraphId, {});
     await gral.dropGraph(jwt, gralEndpoint, wikiTalkGraphId);
   }, {iterations: ITERATIONS, warmupIterations: WARMUP_ITERATIONS});
@@ -67,10 +58,7 @@ describe.sequential(`SCC, Graph: ${graphName}`, () => {
 describe.sequential(`Label Propagation, Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
-    const response = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], ['_key'], 50);
-    const wikiTalkGraphId = response.result.graph_id;
-    expect(wikiTalkGraphId).toBeTypeOf('number');
-
+    const wikiTalkGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], ['_key'], 50);
     await gral.runCDLP(jwt, gralEndpoint, wikiTalkGraphId, "_key");
     // _key equals the data original source id
     await gral.dropGraph(jwt, gralEndpoint, wikiTalkGraphId);

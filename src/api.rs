@@ -1457,7 +1457,7 @@ async fn api_get_arangodb_graph(
 
     // Now create a job object:
     let comp_arc = Arc::new(RwLock::new(LoadComputation {
-        graph: graph.clone(),
+        graph_id,
         shall_stop: false,
         total: 2, // will eventually be overwritten in background thread
         progress: 0,

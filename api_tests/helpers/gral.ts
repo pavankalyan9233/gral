@@ -21,6 +21,11 @@ function buildHeaders(jwt: string) {
   };
 }
 
+async function sendDeleteJobRequest(jwt: string, gralEndpoint: string, jobId: string) {
+  const url = buildUrl(gralEndpoint, `/v1/jobs/${jobId}`);
+  axios.delete(url, buildHeaders(jwt));
+}
+
 async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: string, refetchInterval: number = 250) {
   const url = buildUrl(endpoint, `/v1/jobs/${jobId}`);
 
@@ -122,8 +127,11 @@ async function loadGraph(
     url, graphAnalyticsEngineLoadDataRequest, buildHeaders(jwt)
   );
   const body = response.data;
+  const graphId = body.graph_id;
 
-  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id, refetchInterval);
+  await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id, refetchInterval);
+  // HACK right now as the loaddata job returns a "faked" graph id and not the correct one.
+  return graphId;
 }
 
 async function dropGraph(
@@ -164,7 +172,7 @@ async function runIRank(jwt: string, gralEndpoint: string, graphId: number, maxS
   return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
-async function runPagerank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85) {
+async function runPagerank(jwt: string, gralEndpoint: string, graphId: number, maxSupersteps: number = 10, dampingFactor: number = 0.85, deleteJob: boolean = true) {
   const url = buildUrl(gralEndpoint, '/v1/pagerank');
   const pagerankRequest = {
     "graph_id": graphId,
@@ -177,7 +185,14 @@ async function runPagerank(jwt: string, gralEndpoint: string, graphId: number, m
   );
   const body = response.data;
 
-  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  let jobResponse = await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  if (deleteJob) {
+    // required as job currently holds mutex to the instantiated graph itself
+    // this will free used memory
+    const job_id = jobResponse.result.job_id;
+    sendDeleteJobRequest(jwt, gralEndpoint, job_id);
+  }
+  return jobResponse;
 }
 
 async function runPythonPagerank(jwt: string, gralEndpoint: string, graphId: number,
@@ -197,7 +212,7 @@ async function runPythonPagerank(jwt: string, gralEndpoint: string, graphId: num
   return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
 }
 
-async function runWCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+async function runWCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}, deleteJob: boolean = true) {
   const url = buildUrl(gralEndpoint, '/v1/wcc');
   const wccRequest = {
     "graph_id": graphId,
@@ -209,10 +224,17 @@ async function runWCC(jwt: string, gralEndpoint: string, graphId: number, custom
   );
   const body = response.data;
 
-  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  const jobResponse = await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  if (deleteJob) {
+    // required as job currently holds mutex to the instantiated graph itself
+    // this will free used memory
+    const job_id = jobResponse.result.job_id;
+    sendDeleteJobRequest(jwt, gralEndpoint, job_id);
+  }
+  return jobResponse;
 }
 
-async function runSCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}) {
+async function runSCC(jwt: string, gralEndpoint: string, graphId: number, customFields: object = {}, deleteJob: boolean = true) {
   const url = buildUrl(gralEndpoint, '/v1/scc');
   const wccRequest = {
     "graph_id": graphId,
@@ -224,10 +246,17 @@ async function runSCC(jwt: string, gralEndpoint: string, graphId: number, custom
   );
   const body = response.data;
 
-  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  const jobResponse = await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  if (deleteJob) {
+    // required as job currently holds mutex to the instantiated graph itself
+    // this will free used memory
+    const job_id = jobResponse.result.job_id;
+    sendDeleteJobRequest(jwt, gralEndpoint, job_id);
+  }
+  return jobResponse;
 }
 
-async function runCDLP(jwt: string, gralEndpoint: string, graphId: number, startLabelAttribute: string = "") {
+async function runCDLP(jwt: string, gralEndpoint: string, graphId: number, startLabelAttribute: string = "", deleteJob: boolean = true) {
   const url = buildUrl(gralEndpoint, '/v1/labelpropagation');
   const cdlpRequest = {
     "graph_id": graphId,
@@ -242,7 +271,14 @@ async function runCDLP(jwt: string, gralEndpoint: string, graphId: number, start
   );
   const body = response.data;
 
-  return await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  const jobResponse = await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  if (deleteJob) {
+    // required as job currently holds mutex to the instantiated graph itself
+    // this will free used memory
+    const job_id = jobResponse.result.job_id;
+    sendDeleteJobRequest(jwt, gralEndpoint, job_id);
+  }
+  return jobResponse;
 }
 
 export const gral = {
