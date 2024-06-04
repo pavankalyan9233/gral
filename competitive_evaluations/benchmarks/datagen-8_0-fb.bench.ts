@@ -1,4 +1,4 @@
-import {bench, describe} from 'vitest';
+import {bench, describe, expect} from 'vitest';
 import {config} from '../../api_tests/environment.config';
 import {arangodb} from '../../api_tests/helpers/arangodb';
 import {gral} from "../../api_tests/helpers/gral";
@@ -8,7 +8,7 @@ const ITERATIONS = 1;
 const WARMUP_ITERATIONS = 0;
 
 const gralEndpoint = config.gral_instances.arangodb_auth;
-const graphName = 'wiki-Talk';
+const graphName = 'datagen-8_0-fb';
 
 describe.sequential(`PageRank, Graph: ${graphName}`, () => {
   bench('GRAL', async () => {

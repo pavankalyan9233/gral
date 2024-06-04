@@ -43,6 +43,7 @@ async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: stri
       const body = response.data;
       if (body !== undefined) {
         if (body.error) {
+          console.log(body.error);
           throw new Error(`Job <${jobId}> failed: ${body.error_message}`)
         } else if (body.progress >= body.total) {
           return {result: body, retriesNeeded: retries};
@@ -55,6 +56,7 @@ async function waitForJobToBeFinished(endpoint: string, jwt: string, jobId: stri
         await new Promise(resolve => setTimeout(resolve, refetchInterval));
       }
     } catch (error) {
+      console.log(error);
       throw new Error(`Job <${jobId}> did not finish in time: ${error}`);
     }
   }

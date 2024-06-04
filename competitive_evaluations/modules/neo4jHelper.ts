@@ -1,6 +1,8 @@
 import neo4j from "neo4j-driver";
 import {config as environmentConfig} from "../../examples/config/environment";
 
+const AMOUNT_OF_THREADS = 4; // MAX allowed amount of threads is 4 in community edition
+
 const createGraph = async (graphName: string, node_properties: Array<string> = []) => {
   // creates neo4j in memory graph projection
   const driver = neo4j.driver(environmentConfig.neo4j.endpoint, neo4j.auth.basic(
@@ -63,7 +65,7 @@ const runPageRank = async (graphName: string, maxIterations: number = 10, dampin
       {
         maxIterations: ${maxIterations}, 
         dampingFactor: ${dampingFactor},
-        concurrency: 1
+        concurrency: ${AMOUNT_OF_THREADS}
       }
     )
     YIELD nodeId, score
@@ -88,7 +90,7 @@ const runWCC = async (graphName: string) => {
   ), {});
   const wccCypherQuery = `
     CALL gds.wcc.stream("${graphName}", {
-      concurrency: 1
+      concurrency: ${AMOUNT_OF_THREADS}
     })
     YIELD nodeId, componentId
   `;
@@ -112,7 +114,7 @@ const runSCC = async (graphName: string) => {
   ), {});
   const sccCypherQuery = `
     CALL gds.scc.stream("${graphName}", {
-      concurrency: 1
+      concurrency: ${AMOUNT_OF_THREADS}
     })
     YIELD nodeId, componentId
   `;
@@ -139,7 +141,7 @@ const runCDLP = async (graphName: string, startLabelAttribute: string = "") => {
       "${graphName}",
       {
         maxIterations: 10,
-        concurrency: 1,
+        concurrency: ${AMOUNT_OF_THREADS},
         seedProperty: '${startLabelAttribute}'
       }
     )

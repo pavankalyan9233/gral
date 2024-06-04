@@ -4,13 +4,13 @@ import {arangodb} from '../../api_tests/helpers/arangodb';
 import {gral} from "../../api_tests/helpers/gral";
 import {neo4jHelper} from "../modules/neo4jHelper";
 
-const ITERATIONS = 3;
+const ITERATIONS = 1;
 const WARMUP_ITERATIONS = 0;
 
 const gralEndpoint = config.gral_instances.arangodb_auth;
 const graphName = 'twitter_mpi';
 
-describe.sequential(`PageRank, Graph: ${graphName}`, () => {
+describe.sequential.skip(`PageRank, Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     const twitterMpiGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);
@@ -25,7 +25,7 @@ describe.sequential(`PageRank, Graph: ${graphName}`, () => {
   }, {iterations: ITERATIONS, warmupIterations: WARMUP_ITERATIONS});
 });
 
-describe.sequential(`WCC, Graph: ${graphName}`, () => {
+describe.sequential.skip(`WCC, Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     const twitterMpiGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);
@@ -40,7 +40,7 @@ describe.sequential(`WCC, Graph: ${graphName}`, () => {
   }, {iterations: ITERATIONS, warmupIterations: WARMUP_ITERATIONS});
 });
 
-describe.sequential(`SCC, Graph: ${graphName}`, () => {
+describe.sequential.skip(`SCC, Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     const twitterMpiGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);

@@ -4,7 +4,7 @@ import {arangodb} from '../../api_tests/helpers/arangodb';
 import {gral} from "../../api_tests/helpers/gral";
 import {neo4jHelper} from "../modules/neo4jHelper";
 
-const ITERATIONS = 3;
+const ITERATIONS = 1;
 const WARMUP_ITERATIONS = 0;
 
 const gralEndpoint = config.gral_instances.arangodb_auth;
