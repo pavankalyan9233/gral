@@ -5,3 +5,8 @@
 #############################################
 
 ./scripts/downloadSingleDataset wiki-Talk
+./scripts/downloadSingleDataset kgs
+./scripts/downloadSingleDataset dota-league
+./scripts/downloadSingleDataset datagen-8_0-fb
+./scripts/downloadSingleDataset datagen-8_5-fb
+./scripts/downloadSingleDataset twitter_mpi

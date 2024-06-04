@@ -122,7 +122,9 @@ async function loadGraph(
     "graph_name": graphName,
     "vertex_collections": vertexCollections,
     "edge_collections": edgeCollections,
-    "vertex_attributes": vertexAttributes
+    "vertex_attributes": vertexAttributes,
+    "parallelism": config.import_settings.parallelism,
+    "batch_size": config.import_settings.batchSize,
   };
 
   const response = await axios.post(
