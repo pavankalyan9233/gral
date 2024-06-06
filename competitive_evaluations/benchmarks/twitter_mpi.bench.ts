@@ -8,7 +8,7 @@ const gralEndpoint = config.gral_instances.arangodb_auth;
 const graphName = 'twitter_mpi';
 const benchmarkOptions = {
   time: 0,
-  iterations: 1,
+  iterations: 3,
   warmupTime: 0,
   warmupIterations: 0
 };

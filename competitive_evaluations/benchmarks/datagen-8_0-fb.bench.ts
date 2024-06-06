@@ -6,7 +6,7 @@ import {neo4jHelper} from "../modules/neo4jHelper";
 
 const benchmarkOptions = {
   time: 0,
-  iterations: 2,
+  iterations: 3,
   warmupTime: 0,
   warmupIterations: 0
 };

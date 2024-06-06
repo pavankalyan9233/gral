@@ -9,7 +9,7 @@ const graphName = 'wiki-Talk';
 
 const benchmarkOptions = {
   time: 0,
-  iterations: 1,
+  iterations: 3,
   warmupTime: 0,
   warmupIterations: 0
 };

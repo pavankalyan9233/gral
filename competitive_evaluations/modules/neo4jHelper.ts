@@ -69,6 +69,7 @@ const runPageRank = async (graphName: string, maxIterations: number = 10, dampin
       }
     )
     YIELD nodeId, score
+    RETURN count(*)
     `;
 
   const session = driver.session();
@@ -93,6 +94,7 @@ const runWCC = async (graphName: string) => {
       concurrency: ${AMOUNT_OF_THREADS}
     })
     YIELD nodeId, componentId
+    RETURN count(*)
   `;
 
   const session = driver.session();
@@ -117,6 +119,7 @@ const runSCC = async (graphName: string) => {
       concurrency: ${AMOUNT_OF_THREADS}
     })
     YIELD nodeId, componentId
+    RETURN count(*)
   `;
 
   const session = driver.session();
