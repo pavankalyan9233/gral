@@ -38,6 +38,17 @@ Run the benchmarks for all competitors:
 $ npm run benchmark
 ```
 
+Execute single file example: 
+```bash
+vitest bench --run --bail 1 --maxConcurrency 1 --outputJson twitter_only_three_iterations.json twitter_mpi.bench.ts
+```
+
+Execute all to custom file:
+```bash
+vitest bench --run --bail 1 --maxConcurrency 1 --outputJson myfilename.json
+```
+
+
 ### Helpers
 
 There are some helper scripts in the `scripts` directory:
