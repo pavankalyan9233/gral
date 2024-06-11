@@ -31,6 +31,14 @@ struct CollectionDistribution {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+struct DeploymentType {
+    error: bool,
+    code: i32,
+    mode: String,
+    role: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct ShardDistribution {
     error: bool,
     code: i32,
@@ -159,6 +167,16 @@ async fn handle_arangodb_response(
 
 type ShardMap = HashMap<String, Vec<String>>;
 
+fn compute_faked_shard_map(coll_list: &[String]) -> ShardMap {
+    // not really faked, but to be able to implement this quickly, we need to
+    // simply build a map exposing the collection names instead of shard names.
+    let mut result: ShardMap = HashMap::new();
+    for c in coll_list.iter() {
+        result.insert(c.clone().to_string(), vec![c.clone()]);
+    }
+    result
+}
+
 fn compute_shard_map(sd: &ShardDistribution, coll_list: &[String]) -> Result<ShardMap, String> {
     let mut result: ShardMap = HashMap::new();
     for c in coll_list.iter() {
@@ -216,6 +234,7 @@ async fn get_all_shard_data(
     ca_cert: &[u8],
     shard_map: &ShardMap,
     result_channels: Vec<tokio::sync::mpsc::Sender<Bytes>>,
+    is_cluster: bool,
 ) -> Result<(), String> {
     let begin = SystemTime::now();
 
@@ -231,12 +250,18 @@ async fn get_all_shard_data(
     let mut error_happened = false;
     let mut error: String = "".into();
     for (server, shard_list) in shard_map.iter() {
-        let url = make_url(&format!("/_api/dump/start?dbserver={}", server));
+        let url;
+        if is_cluster {
+            url = make_url(&format!("/_api/dump/start?dbserver={}", server));
+        } else {
+            url = make_url(&"/_api/dump/start".to_string());
+        }
+
         let body = DumpStartBody {
             batch_size: req.batch_size,
             prefetch_count: 5,
             parallelism: req.parallelism,
-            shards: shard_list.clone(),
+            shards: shard_list.clone(), // in case of a single server, this is a collection and not a shard
         };
         let body_v =
             serde_json::to_vec::<DumpStartBody>(&body).expect("could not serialize DumpStartBody");
@@ -265,7 +290,11 @@ async fn get_all_shard_data(
                 });
             }
         }
-        debug!("Started dbserver {}", server);
+        if is_cluster {
+            debug!("Started dbserver {}", server);
+        } else {
+            debug!("Started single server {}", server);
+        }
     }
 
     let client_clone_for_cleanup = client.clone();
@@ -273,10 +302,16 @@ async fn get_all_shard_data(
     let cleanup = |dbservers: Vec<DBServerInfo>| async move {
         debug!("Doing cleanup...");
         for dbserver in dbservers.iter() {
-            let url = make_url(&format!(
-                "/_api/dump/{}?dbserver={}",
-                dbserver.dump_id, dbserver.dbserver
-            ));
+            let url;
+            if is_cluster {
+                url = make_url(&format!(
+                    "/_api/dump/{}?dbserver={}",
+                    dbserver.dump_id, dbserver.dbserver
+                ));
+            } else {
+                url = make_url(&format!("/_api/dump/{}", dbserver.dump_id));
+            }
+
             let resp = client_clone_for_cleanup
                 .delete(url)
                 .bearer_auth(&jwt_token_clone)
@@ -352,7 +387,7 @@ async fn get_all_shard_data(
                         endpoint_clone,
                         database_clone,
                         task_info.dbserver.dump_id,
-                        task_info.dbserver.dbserver,
+                        task_info.dbserver.dbserver, // in case we do have a single server, this value will be empty
                         task_info.current_batch_id
                     );
                     if let Some(last) = task_info.last_batch_id {
@@ -550,8 +585,35 @@ pub async fn fetch_graph_from_arangodb(
         ca_cert = guard.arangodb_cacert.clone();
     }
     if endpoints.is_empty() {
-        return Err("no endpoints given".to_string());
+        return Err(
+            "No ArangoDB endpoints given. Please provide at least one endpoint.".to_string(),
+        );
     }
+
+    let use_tls = endpoints[0].starts_with("https://");
+    let client = build_client(use_tls, &ca_cert)?;
+    let make_url = |path: &str| -> String { endpoints[0].clone() + "/_db/" + &req.database + path };
+
+    // check which environment type of ArangoDB we're using
+    let deployment_url = make_url("/_admin/server/role");
+    let deployment_resp = client
+        .get(deployment_url)
+        .bearer_auth(&jwt_token)
+        .send()
+        .await;
+    let deployment_type = handle_arangodb_response_with_parsed_body::<DeploymentType>(
+        deployment_resp,
+        StatusCode::OK,
+    )
+    .await?;
+    let mut is_cluster = true;
+    if deployment_type.role == "SINGLE" {
+        is_cluster = false;
+        info!("ArangoDB is in single server mode. Connecting...");
+    } else {
+        info!("ArangoDB is in cluster mode. Connecting...");
+    }
+
     let begin = std::time::SystemTime::now();
 
     info!(
@@ -559,17 +621,7 @@ pub async fn fetch_graph_from_arangodb(
         std::time::SystemTime::now().duration_since(begin).unwrap()
     );
 
-    let use_tls = endpoints[0].starts_with("https://");
-    let client = build_client(use_tls, &ca_cert)?;
-
     let make_url = |path: &str| -> String { endpoints[0].clone() + "/_db/" + &req.database + path };
-
-    // First ask for the shard distribution:
-    let url = make_url("/_admin/cluster/shardDistribution");
-    let resp = client.get(url).bearer_auth(&jwt_token).send().await;
-    let shard_dist =
-        handle_arangodb_response_with_parsed_body::<ShardDistribution>(resp, StatusCode::OK)
-            .await?;
 
     let vertex_coll_list;
     let edge_coll_list;
@@ -595,27 +647,41 @@ pub async fn fetch_graph_from_arangodb(
         }
     }
 
-    // Compute which shard we must get from which dbserver, we do vertices
-    // and edges right away to be able to error out early:
-    let vertex_map = compute_shard_map(&shard_dist, &vertex_coll_list)?;
-    let edge_map = compute_shard_map(&shard_dist, &edge_coll_list)?;
+    // First ask for the shard distribution (only in cluster mode):
+    let vertex_map;
+    let edge_map;
+    if is_cluster {
+        let url = make_url("/_admin/cluster/shardDistribution");
+        let client = build_client(use_tls, &ca_cert)?;
+        let resp = client.get(url).bearer_auth(&jwt_token).send().await;
+        let shard_dist =
+            handle_arangodb_response_with_parsed_body::<ShardDistribution>(resp, StatusCode::OK)
+                .await?;
 
-    if vertex_map.is_empty() {
-        error!("No vertex shards found!");
-        return Err("No vertex shards found!".to_string());
-    }
-    if edge_map.is_empty() {
-        error!("No edge shards found!");
-        return Err("No edge shards found!".to_string());
-    }
+        // Compute which shard we must get from which dbserver, we do vertices
+        // and edges right away to be able to error out early:
+        vertex_map = compute_shard_map(&shard_dist, &vertex_coll_list)?;
+        edge_map = compute_shard_map(&shard_dist, &edge_coll_list)?;
 
-    // TODO: also opt out in case zero shards have been found
-    info!(
-        "{:?} Need to fetch data from {} vertex shards and {} edge shards...",
-        std::time::SystemTime::now().duration_since(begin).unwrap(),
-        vertex_map.values().map(|v| v.len()).sum::<usize>(),
-        edge_map.values().map(|v| v.len()).sum::<usize>()
-    );
+        if vertex_map.is_empty() {
+            error!("No vertex shards found!");
+            return Err("No vertex shards found!".to_string());
+        }
+        if edge_map.is_empty() {
+            error!("No edge shards found!");
+            return Err("No edge shards found!".to_string());
+        }
+        // TODO: also opt out in case zero shards have been found
+        info!(
+            "{:?} Need to fetch data from {} vertex shards and {} edge shards...",
+            std::time::SystemTime::now().duration_since(begin).unwrap(),
+            vertex_map.values().map(|v| v.len()).sum::<usize>(),
+            edge_map.values().map(|v| v.len()).sum::<usize>()
+        );
+    } else {
+        vertex_map = compute_faked_shard_map(&vertex_coll_list);
+        edge_map = compute_faked_shard_map(&edge_coll_list);
+    }
 
     // Let's first get the vertices:
     {
@@ -709,7 +775,18 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(&req, &endpoints, &jwt_token, &ca_cert, &vertex_map, senders).await?;
+
+        get_all_shard_data(
+            &req,
+            &endpoints,
+            &jwt_token,
+            &ca_cert,
+            &vertex_map,
+            senders,
+            is_cluster,
+        )
+        .await?;
+
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -819,7 +896,10 @@ pub async fn fetch_graph_from_arangodb(
             });
             consumers.push(consumer);
         }
-        get_all_shard_data(&req, &endpoints, &jwt_token, &ca_cert, &edge_map, senders).await?;
+        get_all_shard_data(
+            &req, &endpoints, &jwt_token, &ca_cert, &edge_map, senders, is_cluster,
+        )
+        .await?;
         info!(
             "{:?} Got all data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
@@ -904,7 +984,9 @@ pub async fn write_result_to_arangodb(
         ca_cert = guard.arangodb_cacert.clone();
     }
     if endpoints.is_empty() {
-        return Err("no endpoints given".to_string());
+        return Err(
+            "No ArangoDB endpoints given. Please provide at least one endpoint.".to_string(),
+        );
     }
     if result_comp_arcs.is_empty() {
         return Err("no result computations given".to_string());
