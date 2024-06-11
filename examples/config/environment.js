@@ -1,6 +1,6 @@
 export const config = {
   arangodb: {
-    endpoint: "http://localhost:8529",
+    endpoint: "http://localhost:10000",
     username: "root",
     password: "",
   },
