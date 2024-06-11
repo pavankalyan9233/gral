@@ -22,6 +22,9 @@ impl VertexIndex {
     pub fn to_u64(self) -> u64 {
         self.0
     }
+    pub fn to_usize(self) -> usize {
+        self.0 as usize
+    }
     pub fn mark_collision(&mut self) {
         *self = VertexIndex(self.0 | MSB64);
     }

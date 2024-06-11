@@ -1,4 +1,4 @@
-use crate::computations::Computation;
+use crate::computations::{Computation, JobRuntime};
 use crate::graph_store::graph::Graph;
 use crate::graph_store::vertex_key_index::VertexIndex;
 use log::info;
@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 pub struct AttributePropagationComputation {
     pub graph: Arc<RwLock<Graph>>,
@@ -19,6 +20,7 @@ pub struct AttributePropagationComputation {
     pub label: Vec<Vec<String>>,
     pub result_position: usize,
     pub label_size_sum: usize,
+    pub runtime: JobRuntime,
 }
 
 impl Computation for AttributePropagationComputation {
@@ -61,6 +63,9 @@ impl Computation for AttributePropagationComputation {
     }
     fn memory_usage(&self) -> usize {
         self.label_size_sum + self.label.len() * std::mem::size_of::<Vec<String>>()
+    }
+    fn get_runtime(&self) -> Duration {
+        self.runtime.get()
     }
 }
 
@@ -548,6 +553,7 @@ mod tests {
             label: vec![vec!["X".to_string()]],
             result_position: 0,
             label_size_sum: 0,
+            runtime: JobRuntime::start(),
         };
         assert!(apc.is_ready());
         let (code, message) = apc.get_error();

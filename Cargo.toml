@@ -37,6 +37,7 @@ parquet = { version = "51.0.0", features = ["arrow", "json", "snap"], default-fe
 prost-wkt = "0.5.1"
 prost-wkt-types = { version = "0.5.1", default-features = false }
 pem = "3.0.4"
+approx = { version = "0.5.1", default-features = false }
 
 [build-dependencies]
 prost-build = { version = "0.12.4", default-features = false }
@@ -44,5 +45,3 @@ prost-wkt-build = "0.5.1"
 tonic = { version = "0.11.0", default-features = false }
 tonic-build = { version = "0.11.0", features = ["prost"], default-features = false }
 
-[dev-dependencies]
-approx = { version = "0.5.1", default-features = false }

@@ -6,7 +6,8 @@ use crate::args::{with_args, GralArgs};
 use crate::auth::{with_auth, Unauthorized};
 use crate::computations::{
     with_computations, AggregationComputation, ComponentsComputation, Computation, Computations,
-    LabelPropagationComputation, LoadComputation, PageRankComputation, StoreComputation,
+    JobRuntime, LabelPropagationComputation, LoadComputation, PageRankComputation,
+    StoreComputation,
 };
 use crate::constants;
 use crate::graph_store::graph::Graph;
@@ -283,6 +284,7 @@ async fn api_wcc(
         number: None,
         error_code: 0,
         error_message: "".to_string(),
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
@@ -302,6 +304,7 @@ async fn api_wcc(
                 comp.error_code = 1;
             }
         }
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -361,6 +364,7 @@ async fn api_scc(
         number: None,
         error_code: 0,
         error_message: "".to_string(),
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
@@ -385,6 +389,7 @@ async fn api_scc(
                 comp.error_code = 1;
             }
         }
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -476,6 +481,7 @@ async fn api_aggregate_components(
         error_code: 0,
         error_message: "".to_string(),
         result: vec![],
+        runtime: JobRuntime::start(),
     }));
     generic_comp_arc = comp_arc.clone();
     let prev_comp_clone = prev_comp.clone();
@@ -493,6 +499,7 @@ async fn api_aggregate_components(
         let mut comp = comp_arc.write().unwrap();
         comp.result = res;
         comp.progress = 1;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -545,6 +552,7 @@ async fn api_python(
         error_code: 0,
         error_message: "".to_string(),
         result: Default::default(),
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
 
@@ -568,6 +576,7 @@ async fn api_python(
                 comp.error_code = 1;
             }
         }
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -628,6 +637,7 @@ async fn api_pagerank(
         steps: 0,
         rank: vec![],
         result_position: 0,
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
@@ -648,6 +658,7 @@ async fn api_pagerank(
             }
         }
         comp.progress = 100;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -708,6 +719,7 @@ async fn api_irank(
         steps: 0,
         rank: vec![],
         result_position: 0,
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     std::thread::spawn(move || {
@@ -727,6 +739,7 @@ async fn api_irank(
             }
         }
         comp.progress = 100;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -792,6 +805,7 @@ async fn api_label_propagation(
         label: vec![],
         result_position: 0,
         label_size_sum: 0,
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     let startlabel = body.start_label_attribute.clone();
@@ -826,6 +840,7 @@ async fn api_label_propagation(
             }
         }
         comp.progress = 100;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -907,6 +922,7 @@ async fn api_attribute_propagation(
         label: vec![],
         result_position: 0,
         label_size_sum: 0,
+        runtime: JobRuntime::start(),
     }));
     let generic_comp_arc: Arc<RwLock<dyn Computation + Send + Sync>> = comp_arc.clone();
     let startlabel = body.start_label_attribute.clone();
@@ -941,6 +957,7 @@ async fn api_attribute_propagation(
             }
         }
         comp.progress = 100;
+        comp.runtime = comp.runtime.stop();
     });
 
     let comp_id: u64;
@@ -1032,6 +1049,7 @@ async fn api_write_result_back_arangodb(
         progress: 0,
         error_code: 0,
         error_message: "".to_string(),
+        runtime: JobRuntime::start(),
     }));
     let comp_id: u64;
     {
@@ -1068,6 +1086,7 @@ async fn api_write_result_back_arangodb(
                         comp.error_message = e;
                     }
                 }
+                comp.runtime = comp.runtime.stop();
             });
     });
 
@@ -1142,6 +1161,7 @@ async fn api_get_job(
                 error_message: j,
                 comp_type: "".to_string(),
                 memory_usage: 0,
+                runtime_in_microseconds: 0,
             })
             .unwrap(),
             StatusCode::NOT_FOUND,
@@ -1154,23 +1174,7 @@ async fn api_get_job(
         None => Ok(not_found_err(format!("Could not find jobId {}", job_id))),
         Some(comp_arc) => {
             let comp = comp_arc.read().unwrap();
-            let graph_arc = comp.get_graph();
-            let graph = graph_arc.read().unwrap();
-
-            // Write response:
-            let (error_code, error_message) = comp.get_error();
-            let response = GraphAnalyticsEngineJob {
-                job_id,
-                graph_id: graph.graph_id,
-                total: comp.get_total(),
-                progress: comp.get_progress(),
-                error: error_code != 0,
-                error_code,
-                error_message,
-                source_job: "".to_string(),
-                comp_type: comp.algorithm_name(),
-                memory_usage: comp.memory_usage() as u64,
-            };
+            let response = comp.job_info(job_id);
             Ok(warp::reply::with_status(
                 serde_json::to_vec(&response).expect("Should be serializable"),
                 StatusCode::OK,
@@ -1350,24 +1354,7 @@ async fn api_list_jobs(
     let mut response: Vec<GraphAnalyticsEngineJob> = vec![];
     for (job_id, comp_arc) in comps.list.iter() {
         let comp = comp_arc.read().unwrap();
-        let graph_arc = comp.get_graph();
-        let graph = graph_arc.read().unwrap();
-
-        // Write response:
-        let (error_code, error_message) = comp.get_error();
-        let j = GraphAnalyticsEngineJob {
-            job_id: *job_id,
-            graph_id: graph.graph_id,
-            total: 1,
-            progress: if comp.is_ready() { 1 } else { 0 },
-            error: error_code != 0,
-            error_code,
-            error_message,
-            source_job: "".to_string(),
-            comp_type: comp.algorithm_name(),
-            memory_usage: comp.memory_usage() as u64,
-        };
-        response.push(j);
+        response.push(comp.job_info(*job_id));
     }
     Ok(serde_json::to_vec(&response).expect("Should be serializable"))
 }
@@ -1463,6 +1450,7 @@ async fn api_get_arangodb_graph(
         progress: 0,
         error_code: 0,
         error_message: "".to_string(),
+        runtime: JobRuntime::start(),
     }));
     let comp_id: u64;
     {
@@ -1501,6 +1489,7 @@ async fn api_get_arangodb_graph(
                         // Note that the graph will still be attached to
                         // the computation! Once the computation is
                         // deleted, the graph will be freed!
+                        comp.runtime = comp.runtime.stop();
                     }
                 }
             });
