@@ -250,12 +250,11 @@ async fn get_all_shard_data(
     let mut error_happened = false;
     let mut error: String = "".into();
     for (server, shard_list) in shard_map.iter() {
-        let url;
-        if is_cluster {
-            url = make_url(&format!("/_api/dump/start?dbserver={}", server));
+        let url = if is_cluster {
+            make_url(&format!("/_api/dump/start?dbserver={}", server))
         } else {
-            url = make_url(&"/_api/dump/start".to_string());
-        }
+            make_url("/_api/dump/start")
+        };
 
         let body = DumpStartBody {
             batch_size: req.batch_size,
@@ -302,15 +301,14 @@ async fn get_all_shard_data(
     let cleanup = |dbservers: Vec<DBServerInfo>| async move {
         debug!("Doing cleanup...");
         for dbserver in dbservers.iter() {
-            let url;
-            if is_cluster {
-                url = make_url(&format!(
+            let url = if is_cluster {
+                make_url(&format!(
                     "/_api/dump/{}?dbserver={}",
                     dbserver.dump_id, dbserver.dbserver
-                ));
+                ))
             } else {
-                url = make_url(&format!("/_api/dump/{}", dbserver.dump_id));
-            }
+                make_url(&format!("/_api/dump/{}", dbserver.dump_id))
+            };
 
             let resp = client_clone_for_cleanup
                 .delete(url)
