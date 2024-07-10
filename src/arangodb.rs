@@ -235,6 +235,7 @@ async fn get_all_shard_data(
     shard_map: &ShardMap,
     result_channels: Vec<tokio::sync::mpsc::Sender<Bytes>>,
     is_cluster: bool,
+    is_edge: bool,
 ) -> Result<(), String> {
     let begin = SystemTime::now();
 
@@ -250,9 +251,21 @@ async fn get_all_shard_data(
     let mut error_happened = false;
     let mut error: String = "".into();
     for (server, shard_list) in shard_map.iter() {
+        let mut local_projections = HashMap::new();
+
         let url = if is_cluster {
             make_url(&format!("/_api/dump/start?dbserver={}", server))
         } else {
+            // server == collection in singleserver context
+            if is_edge {
+                info!("Edge mode");
+                local_projections.insert("_from".to_string(), vec!["_from".to_string()]);
+                local_projections.insert("_to".to_string(), vec!["_to".to_string()]);
+            } else {
+                info!("Vertex mode");
+                local_projections.insert("_id".to_string(), vec!["_id".to_string()]);
+            }
+
             make_url("/_api/dump/start")
         };
 
@@ -261,6 +274,7 @@ async fn get_all_shard_data(
             prefetch_count: 5,
             parallelism: req.parallelism,
             shards: shard_list.clone(), // in case of a single server, this is a collection and not a shard
+            projections: local_projections.clone(),
         };
         let body_v =
             serde_json::to_vec::<DumpStartBody>(&body).expect("could not serialize DumpStartBody");
@@ -288,11 +302,6 @@ async fn get_all_shard_data(
                     dump_id: id.to_owned(),
                 });
             }
-        }
-        if is_cluster {
-            debug!("Started dbserver {}", server);
-        } else {
-            debug!("Started single server {}", server);
         }
     }
 
@@ -461,6 +470,7 @@ struct DumpStartBody {
     prefetch_count: u32,
     parallelism: u32,
     shards: Vec<String>,
+    projections: HashMap<String, Vec<String>>,
 }
 
 fn collection_name_from_id(id: &str) -> String {
@@ -782,11 +792,12 @@ pub async fn fetch_graph_from_arangodb(
             &vertex_map,
             senders,
             is_cluster,
+            false,
         )
         .await?;
 
         info!(
-            "{:?} Got all data, processing...",
+            "{:?} Got all <VERTEX> data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
         );
         for c in consumers {
@@ -895,11 +906,11 @@ pub async fn fetch_graph_from_arangodb(
             consumers.push(consumer);
         }
         get_all_shard_data(
-            &req, &endpoints, &jwt_token, &ca_cert, &edge_map, senders, is_cluster,
+            &req, &endpoints, &jwt_token, &ca_cert, &edge_map, senders, is_cluster, true,
         )
         .await?;
         info!(
-            "{:?} Got all data, processing...",
+            "{:?} Got all <EDGE> data, processing...",
             std::time::SystemTime::now().duration_since(begin).unwrap()
         );
         for c in consumers {
