@@ -149,7 +149,6 @@ async function dropGraph(
     url, buildHeaders(jwt)
   );
   assert(response.status === 200);
-  print(refetchInterval);
 
   // TODO: DELETE does not return a job id, but documented like this.
   // const body = response.data;
@@ -190,7 +189,7 @@ async function runPagerank(jwt: string, gralEndpoint: string, graphId: number, m
   );
   const body = response.data;
 
-  const jobResponse = await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
+  let jobResponse = await waitForJobToBeFinished(gralEndpoint, jwt, body.job_id);
   if (deleteJob) {
     // required as job currently holds mutex to the instantiated graph itself
     // this will free used memory
