@@ -227,7 +227,6 @@ struct DBServerInfo {
     dump_id: String,
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn get_all_shard_data(
     req: &GraphAnalyticsEngineLoadDataRequest,
     endpoints: &[String],

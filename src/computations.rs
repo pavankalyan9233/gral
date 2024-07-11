@@ -5,6 +5,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex, RwLock};
+use log::error;
 use std::time::{Duration, Instant};
 use warp::Filter;
 
@@ -208,7 +209,8 @@ impl Computation for LoadComputation {
     fn get_graph(&self) -> Arc<RwLock<Graph>> {
         let vec_string: Vec<String> = vec![];
         let graph_arc: Arc<RwLock<Graph>> = Arc::new(RwLock::new(Graph::new(false, vec_string)));
-        graph_arc
+        error!("dummy... workaround");
+        return graph_arc;
     }
     fn get_total(&self) -> u32 {
         self.total
