@@ -66,22 +66,22 @@ describe.sequential(`Drop Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     await gral.dropGraph(jwt, gralEndpoint, wikiTalkGraphId);
-  }, loadDropGraphOptions);
+  }, benchmarkOptions);
 
   bench('Neo4j', async () => {
     await neo4jHelper.dropGraph(graphName);
-  }, loadDropGraphOptions);
+  }, benchmarkOptions);
 });
 
 describe.sequential(`Load Graph with Attributes: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     wikiTalkGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], ['_key'], 50);
-  }, loadDropGraphOptions);
+  }, benchmarkOptions);
 
   bench('Neo4j', async () => {
     await neo4jHelper.createGraph(graphName, ["customId"]);
-  }, loadDropGraphOptions);
+  }, benchmarkOptions);
 });
 
 describe.sequential(`Label Propagation, Graph: ${graphName}`, () => {
@@ -101,9 +101,9 @@ describe.sequential(`Drop Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     await gral.dropGraph(jwt, gralEndpoint, wikiTalkGraphId);
-  }, loadDropGraphOptions);
+  }, benchmarkOptions);
 
   bench('Neo4j', async () => {
     await neo4jHelper.dropGraph(graphName);
-  }, loadDropGraphOptions);
+  }, benchmarkOptions);
 });
