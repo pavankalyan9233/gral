@@ -14,6 +14,13 @@ const benchmarkOptions = {
   warmupIterations: 0
 };
 
+const loadDropGraphOptions = {
+  time: 0,
+  iterations: 1,
+  warmupTime: 0,
+  warmupIterations: 0
+};
+
 let wikiTalkGraphId = -1;
 
 describe.sequential(`Load Graph: ${graphName}`, () => {
@@ -21,12 +28,12 @@ describe.sequential(`Load Graph: ${graphName}`, () => {
     const jwt = await arangodb.getArangoJWT();
     console.log("Creating dump ARANGO graph")
     wikiTalkGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], [], 50);
-  }, benchmarkOptions);
+  }, loadDropGraphOptions);
 
   bench('Neo4j', async () => {
     console.log("Creating dump neo graph")
     await neo4jHelper.createGraph(graphName);
-  }, benchmarkOptions);
+  }, loadDropGraphOptions);
 },);
 
 describe.sequential(`PageRank, Graph: ${graphName}`, () => {
@@ -66,22 +73,22 @@ describe.sequential(`Drop Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     await gral.dropGraph(jwt, gralEndpoint, wikiTalkGraphId);
-  }, benchmarkOptions);
+  }, loadDropGraphOptions);
 
   bench('Neo4j', async () => {
     await neo4jHelper.dropGraph(graphName);
-  }, benchmarkOptions);
+  }, loadDropGraphOptions);
 });
 
 describe.sequential(`Load Graph with Attributes: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     wikiTalkGraphId = await gral.loadGraph(jwt, gralEndpoint, graphName, [], [], ['_key'], 50);
-  }, benchmarkOptions);
+  }, loadDropGraphOptions);
 
   bench('Neo4j', async () => {
     await neo4jHelper.createGraph(graphName, ["customId"]);
-  }, benchmarkOptions);
+  }, loadDropGraphOptions);
 });
 
 describe.sequential(`Label Propagation, Graph: ${graphName}`, () => {
@@ -101,9 +108,9 @@ describe.sequential(`Drop Graph: ${graphName}`, () => {
   bench('GRAL', async () => {
     const jwt = await arangodb.getArangoJWT();
     await gral.dropGraph(jwt, gralEndpoint, wikiTalkGraphId);
-  }, benchmarkOptions);
+  }, loadDropGraphOptions);
 
   bench('Neo4j', async () => {
     await neo4jHelper.dropGraph(graphName);
-  }, benchmarkOptions);
+  }, loadDropGraphOptions);
 });
