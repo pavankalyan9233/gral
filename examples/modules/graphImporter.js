@@ -390,7 +390,7 @@ export class GraphImporter {
         to: [vertexCollectionName],
       }];
 
-      await graph.create(edgeDefinitions, {});
+      await graph.create(edgeDefinitions, {replicationFactor: 1, numberOfShards: 3});
 
       console.log(`Graph ${this.graphName} created with edge collection ${edgeCollectionName} and vertex collection ${vertexCollectionName}`);
     } else {
